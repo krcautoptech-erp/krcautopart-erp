@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Receipt Tracking Mockup</title>
+  <style>
+    :root { --red:#be0f1c; --red-soft:#fff7f7; --line:#e6b6b9; --ink:#171717; --muted:#6d6d6d; --panel:#fff; }
+    * { box-sizing:border-box; }
+    html,body { width:100%; height:100%; margin:0; }
+    body { font-family:"Leelawadee UI","Noto Sans Thai",Tahoma,sans-serif; color:var(--ink); background:#4e4e4e; font-size:14px; }
+    .app { height:100vh; background:linear-gradient(120deg,#d9d9d9,#f5f5f5 48%,#d6d6d6); position:relative; overflow:hidden; }
+    .app::before { content:""; position:absolute; inset:0; background:rgba(20,20,20,.62); backdrop-filter:blur(3px); }
+    .shell { position:absolute; inset:0; display:grid; grid-template-columns:190px 1fr; opacity:.52; }
+    .sidebar { background:#14191f; color:#fff; padding:26px 18px; }
+    .ghost-logo { font-size:27px; font-weight:800; margin-bottom:46px; }.ghost-logo b{color:#ed1c2c}.ghost-line{height:13px;background:#444b52;margin:19px 0;border-radius:2px}.main{background:#fff}.top{height:66px;border-bottom:1px solid #ddd}.ghost-content{padding:35px}.ghost-title{height:34px;width:300px;background:#ddd;margin-bottom:28px}.ghost-box{height:600px;border:1px solid #ddd}
+    .modal { position:absolute; width:1420px; height:824px; left:50%; top:50%; transform:translate(-50%,-50%); background:var(--panel); border:1px solid #bf555d; box-shadow:0 28px 80px rgba(0,0,0,.34); display:flex; flex-direction:column; overflow:hidden; }
+    .modal-head { height:82px; display:flex; align-items:center; gap:18px; padding:0 24px; border-bottom:1px solid var(--line); }
+    .brand { width:62px; height:44px; display:grid; place-items:center; background:var(--red); color:#fff; font-weight:800; font-size:16px; line-height:17px; letter-spacing:.4px; text-align:center; }
+    .title h1 { margin:0; font-size:25px; line-height:1.25; }.title p{margin:3px 0 0;color:#444;font-size:14px}.close{margin-left:auto;font-size:34px;font-weight:200;line-height:1}
+    .steps { height:70px; display:grid; grid-template-columns:1fr 1fr 1fr; padding:0 160px; border-bottom:1px solid var(--line); }
+    .step { display:flex; justify-content:center; align-items:center; gap:12px; color:#777; font-size:16px; position:relative; }
+    .step.active { color:#111; font-weight:700; }.step.done{color:#444}.step.active::after{content:"";position:absolute;left:8%;right:8%;bottom:0;height:3px;background:var(--red)}
+    .num { width:34px;height:34px;border:1px solid #999;border-radius:50%;display:grid;place-items:center;font-weight:700;background:#fff }.active .num,.done .num{background:var(--red);border-color:var(--red);color:#fff}
+    .body { flex:1; min-height:0; overflow:hidden; }
+    .section { padding:14px 20px; border-bottom:1px solid var(--line); }
+    .section-title { display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;margin-bottom:11px}.section-title b{color:var(--red);font-size:15px}.hint{font-size:12px;color:#666;font-weight:400}
+    .doc-grid { display:grid;grid-template-columns:175px 200px 1.55fr 220px 185px 220px;gap:12px; }
+    .field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}.fieldbox{height:39px;border:1px solid var(--line);padding:9px 11px;background:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.supplier .fieldbox{white-space:normal;overflow:visible;line-height:19px;height:39px}.readonly{color:#222;font-weight:600}.fieldbox.select::after{content:"⌄";float:right;font-size:18px;line-height:15px}.auto{color:var(--red);font-weight:700}
+    .items { padding:13px 20px 10px; }
+    table { border-collapse:collapse;width:100%;table-layout:fixed; }.main-table th{height:34px;background:#f4f4f4;border:1px solid #d4d4d4;font-size:12px;text-align:center}.main-table td{border:1px solid #d9d9d9;padding:7px 9px;vertical-align:middle}.main-table .row{height:53px}.center{text-align:center}.code{font-weight:700;color:var(--red)}.name{line-height:18px;font-weight:600;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.qtybox{border:1px solid #cfcfcf;height:34px;display:grid;place-items:center;font-weight:700;background:#fff}.track-btn{border:1px solid var(--red);color:var(--red);background:#fff;height:32px;padding:0 12px;font-weight:700}.chev{font-size:22px;color:#555}.active-row td{border-bottom:0}
+    .tracking td { padding:0;border-top:0;background:#fff; }.tracking-panel{border-left:3px solid var(--red);padding:11px 14px 12px;margin:0 0 0 0;background:#fff}.track-head{display:flex;align-items:center;margin-bottom:8px}.track-head strong{font-size:14px}.track-head span{margin-left:8px;color:#666;font-size:12px}.split{margin-left:auto;border:1px solid var(--red);color:var(--red);background:#fff;height:30px;padding:0 12px;font-weight:700}.nested th{background:#fafafa;border:1px solid #ddd;height:29px;font-size:11px}.nested td{border:1px solid #ddd!important;height:34px;padding:5px 8px;background:#fff}.nested input{width:100%;height:25px;border:0;background:#fff;font:inherit;padding:2px 4px;color:#111}.trash{color:var(--red);font-size:17px}.sum{text-align:right;padding-top:8px;font-size:12px;font-weight:700}.sum b{color:var(--red)}
+    .note { display:grid;grid-template-columns:110px 1fr;align-items:center;padding:8px 20px 10px;gap:10px}.note label{font-weight:700}.note-box{height:35px;border:1px solid var(--line);padding:8px 10px;color:#777}
+    .footer { height:72px;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:12px;background:#fff}.summary{font-size:15px;font-weight:700}.summary b{color:var(--red);font-size:18px}.actions{margin-left:auto;display:flex;gap:10px}.btn{height:42px;padding:0 27px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:14px}.btn.outline{border-color:var(--red);color:var(--red)}.btn.primary{background:var(--red);border-color:var(--red);color:#fff;padding:0 32px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="shell"><aside class="sidebar"><div class="ghost-logo"><b>KRC</b> ERP</div><div class="ghost-line"></div><div class="ghost-line"></div><div class="ghost-line"></div><div class="ghost-line"></div><div class="ghost-line"></div></aside><main class="main"><div class="top"></div><div class="ghost-content"><div class="ghost-title"></div><div class="ghost-box"></div></div></main></div>
+    <article class="modal">
+      <header class="modal-head"><div class="brand">KRC<br>ERP</div><div class="title"><h1>รับสินค้าใหม่</h1><p>รับสินค้าตามใบสั่งซื้อและแยกข้อมูลติดตามรายรายการ</p></div><div class="close">×</div></header>
+      <nav class="steps"><div class="step done"><span class="num">✓</span>เลือก PO</div><div class="step active"><span class="num">02</span>ตรวจรายการรับ</div><div class="step"><span class="num">03</span>บันทึกและสร้าง Lot</div></nav>
+      <div class="body">
+        <section class="section">
+          <div class="section-title"><b>01</b> เอกสารอ้างอิง</div>
+          <div class="doc-grid">
+            <div class="field"><label>เลขที่ GR</label><div class="fieldbox readonly auto">GR26080001</div></div>
+            <div class="field"><label>อ้างอิง PO</label><div class="fieldbox readonly">PO26080001</div></div>
+            <div class="field supplier"><label>ผู้ขาย</label><div class="fieldbox readonly">ห้างหุ้นส่วนจำกัด เพ็ชรดี เอ็นจิเนียริ่ง</div></div>
+            <div class="field"><label>เลขที่ใบส่งของ</label><div class="fieldbox">DN-2569-001</div></div>
+            <div class="field"><label>วันที่รับสินค้า</label><div class="fieldbox">02/08/2026</div></div>
+            <div class="field"><label>คลังรับเข้า</label><div class="fieldbox select">คลังวัตถุดิบ</div></div>
+          </div>
+        </section>
+        <section class="items">
+          <div class="section-title"><b>02</b> รายการรับ <span class="hint">ข้อมูลการติดตามแยกตามวัตถุดิบแต่ละรายการ</span></div>
+          <table class="main-table">
+            <colgroup><col style="width:5%"><col style="width:9%"><col style="width:38%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:16%"><col style="width:4%"></colgroup>
+            <thead><tr><th>ลำดับ</th><th>รหัสวัตถุดิบ</th><th>ชื่อวัตถุดิบ / รายละเอียด</th><th>จำนวนสั่งซื้อ</th><th>จำนวนรับ</th><th>หน่วย</th><th>การติดตาม</th><th></th></tr></thead>
+            <tbody>
+              <tr class="row active-row"><td class="center">1</td><td class="code center">RM001</td><td><div class="name">Hot Rolled Steel Sheet (Pickled and Oiled) SPHC-P/O 2.60 × 93 × 1,220 มม.</div></td><td class="center">200</td><td><div class="qtybox">200</div></td><td class="center">แผ่น</td><td class="center"><button class="track-btn">2 Lot / Coil</button></td><td class="center chev">⌃</td></tr>
+              <tr class="tracking"><td colspan="8"><div class="tracking-panel"><div class="track-head"><strong>ข้อมูลการติดตาม RM001</strong><span>แยกตาม Lot หรือ Coil ที่ได้รับจริง</span><button class="split">＋ แยก Lot / Coil</button></div>
+                <table class="nested"><colgroup><col style="width:5%"><col style="width:20%"><col style="width:20%"><col style="width:18%"><col style="width:14%"><col style="width:18%"><col style="width:5%"></colgroup><thead><tr><th>ลำดับ</th><th>Internal Lot</th><th>Supplier Lot</th><th>Coil No.</th><th>จำนวนรับ</th><th>น้ำหนักจริง (กก.)</th><th>จัดการ</th></tr></thead><tbody><tr><td class="center">1</td><td><input value="LOT260802001"></td><td><input value="SUP-LOT-0759"></td><td><input value="CWC0759B"></td><td><input value="100"></td><td><input value="232.000"></td><td class="center trash">♲</td></tr><tr><td class="center">2</td><td><input value="LOT260802002"></td><td><input value="SUP-LOT-0760"></td><td><input value="CWC0760A"></td><td><input value="100"></td><td><input value="234.000"></td><td class="center trash">♲</td></tr></tbody></table><div class="sum">รวม <b>200</b> แผ่น&nbsp;&nbsp;•&nbsp;&nbsp;<b>466.000</b> กก.</div>
+              </div></td></tr>
+              <tr class="row"><td class="center">2</td><td class="code center">RM002</td><td><div class="name">Cold Rolled Steel Sheet SPCC 1.20 × 1,250 × 2,500 มม.</div></td><td class="center">100</td><td><div class="qtybox">100</div></td><td class="center">แผ่น</td><td class="center"><button class="track-btn">1 Lot</button></td><td class="center chev">⌄</td></tr>
+              <tr class="row"><td class="center">3</td><td class="code center">RM003</td><td><div class="name">Steel Coil SS400 3.00 × 1,000 มม.</div></td><td class="center">2</td><td><div class="qtybox">2</div></td><td class="center">ม้วน</td><td class="center"><button class="track-btn">2 Coil</button></td><td class="center chev">⌄</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <div class="note"><label>หมายเหตุ</label><div class="note-box">ระบุหมายเหตุการรับสินค้าเพิ่มเติม (ถ้ามี)</div></div>
+      </div>
+      <footer class="footer"><div class="summary">รวม <b>3</b> รายการ&nbsp;&nbsp;•&nbsp;&nbsp;<b>5</b> Lot / Coil&nbsp;&nbsp;•&nbsp;&nbsp;รับทั้งหมด <b>302</b> หน่วย</div><div class="actions"><button class="btn">ยกเลิก</button><button class="btn outline">บันทึกร่าง</button><button class="btn primary">บันทึกการรับสินค้า</button></div></footer>
+    </article>
+  </div>
+</body>
+</html>

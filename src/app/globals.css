@@ -1,26 +1,351 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Noto Sans Thai";
+  src: url("/fonts/NotoSansThai-Regular.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans Thai";
+  src: url("/fonts/NotoSansThai-Bold.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background-color: #ffffff;
+  --on-surface-color: #000000;
+  --surface-container-lowest-color: #ffffff;
+  --surface-container-low-color: #f3f3f3;
+  --surface-container-color: #eeeeee;
+  --surface-container-high-color: #e8e8e8;
+  --surface-container-highest-color: #e2e2e2;
+  --outline-variant-color: #e4beba;
+  --outline-color: #8f6f6c;
+  --secondary-color: #000000;
+  --on-surface-variant-color: #000000;
+  --primary-color: #af101a;
+  --on-primary-color: #ffffff;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --background-color: #141212;
+  --on-surface-color: #ffffff;
+  --surface-container-lowest-color: #1c1a1a;
+  --surface-container-low-color: #201e1e;
+  --surface-container-color: #2b2828;
+  --surface-container-high-color: #363333;
+  --surface-container-highest-color: #423837;
+  --outline-variant-color: #534341;
+  --outline-color: #a08c8a;
+  --secondary-color: #ffffff;
+  --on-surface-variant-color: #ffffff;
+  --primary-color: #af101a;
+  --on-primary-color: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-on-primary-container: #fff2f0;
+  --color-error: #ba1a1a;
+  --color-on-background: var(--on-surface-color);
+  --color-surface-container-highest: var(--surface-container-highest-color);
+  --color-on-primary-fixed-variant: #930010;
+  --color-on-primary: var(--on-primary-color);
+  --color-background: var(--background-color);
+  --color-outline: var(--outline-color);
+  --color-on-tertiary-fixed: #001f2a;
+  --color-surface-dim: #dadada;
+  --color-surface-container-low: var(--surface-container-low-color);
+  --color-secondary-fixed-dim: #c6c6c7;
+  --color-on-secondary: #ffffff;
+  --color-primary-fixed: #ffdad6;
+  --color-on-secondary-container: var(--secondary-color);
+  --color-surface-container-high: var(--surface-container-high-color);
+  --color-error-container: #ffdad6;
+  --color-surface-container-lowest: var(--surface-container-lowest-color);
+  --color-surface-container: var(--surface-container-color);
+  --color-on-tertiary-fixed-variant: #004d65;
+  --color-on-error-container: #93000a;
+  --color-tertiary-fixed-dim: #7bd1f8;
+  --color-primary-fixed-dim: #af101a;
+  --color-tertiary-fixed: #bee9ff;
+  --color-inverse-on-surface: #f1f1f1;
+  --color-on-surface-variant: var(--on-surface-variant-color);
+  --color-on-surface: var(--on-surface-color);
+  --color-secondary-fixed: #e2e2e2;
+  --color-inverse-surface: #2f3131;
+  --color-outline-variant: var(--outline-variant-color);
+  --color-primary-container: #d32f2f;
+  --color-primary: var(--primary-color);
+  --color-tertiary-container: #00799c;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary-fixed: #410003;
+  --color-inverse-primary: #af101a;
+  --color-secondary: var(--secondary-color);
+  --color-secondary-container: #dfe0e0;
+  --color-surface-tint: #ba1a20;
+  --color-on-error: #ffffff;
+  --color-on-tertiary-container: #e9f7ff;
+  --color-on-secondary-fixed: var(--on-surface-color);
+  --color-on-secondary-fixed-variant: var(--secondary-color);
+  --color-tertiary: #005f7b;
+  --color-surface-variant: #e2e2e2;
+  --color-surface: var(--background-color);
+  --color-surface-bright: var(--background-color);
+
+  --radius-default: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+
+  --max-width-xs: 20rem;
+  --max-width-sm: 24rem;
+  --max-width-md: 28rem;
+  --max-width-lg: 32rem;
+  --max-width-xl: 36rem;
+  --max-width-2xl: 42rem;
+  --max-width-3xl: 48rem;
+  --max-width-4xl: 56rem;
+  --max-width-5xl: 64rem;
+  --max-width-6xl: 72rem;
+  --max-width-7xl: 80rem;
+
+  --spacing-md: 16px;
+  --spacing-gutter: 16px;
+  --spacing-container-margin: 24px;
+  --spacing-xl: 32px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-lg: 24px;
+  --spacing-base: 4px;
+
+  --font-label-md: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-headline-lg-mobile: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-body-md: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-headline-lg: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-body-lg: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-headline-xl: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-headline-md: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  --font-label-sm: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+
+  --text-label-md: 12px;
+  --text-label-md--line-height: 16px;
+  --text-label-md--letter-spacing: 0.05em;
+  --text-label-md--font-weight: 600;
+
+  --text-headline-lg-mobile: 20px;
+  --text-headline-lg-mobile--line-height: 28px;
+  --text-headline-lg-mobile--font-weight: 600;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 500;
+
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-lg--letter-spacing: -0.01em;
+  --text-headline-lg--font-weight: 600;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 500;
+
+  --text-headline-xl: 32px;
+  --text-headline-xl--line-height: 40px;
+  --text-headline-xl--letter-spacing: -0.02em;
+  --text-headline-xl--font-weight: 700;
+
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 28px;
+  --text-headline-md--font-weight: 600;
+
+  --text-label-sm: 11px;
+  --text-label-sm--line-height: 14px;
+  --text-label-sm--font-weight: 500;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* Global fix for Thai vowel/tone mark clipping (สระบน / วรรณยุกต์) across all tables, line-clamp, and badges */
+table td,
+table th {
+  line-height: 1.5;
+}
+
+[class*="line-clamp-"],
+.line-clamp-1,
+.line-clamp-2,
+.line-clamp-3,
+.line-clamp-4 {
+  padding-top: 3px;
+  margin-top: -3px;
+  padding-bottom: 3px;
+  margin-bottom: -3px;
+  line-height: 1.55 !important;
+}
+
+.truncate {
+  padding-top: 2px;
+  margin-top: -2px;
+  padding-bottom: 2px;
+  margin-bottom: -2px;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Custom scrollbar for ERP density */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #af101a;
+  border-radius: 10px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #1c1a1a;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #af101a;
+}
+
+.modal-active {
+  display: flex !important;
+}
+
+/* Shared screen data-table standard, based on /purchase/pr. */
+.erp-data-table-frame {
+  overflow: hidden;
+  border: 1px solid var(--outline-variant-color);
+  border-radius: 8px;
+  background: var(--surface-container-lowest-color);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.erp-data-table-scroll { width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.erp-data-table,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) { width: 100%; border-collapse: collapse; table-layout: fixed; text-align: left; }
+.erp-data-table > thead,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > thead { height: 34px; background: #f9fafb; color: #000; font-size: 11px; font-weight: 700; }
+.dark .erp-data-table > thead,
+.dark main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > thead { background: rgb(255 255 255 / 0.05); color: #fff; }
+.erp-data-table > thead th,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > thead th { min-height: 36px; padding: 4px 14px; border-bottom: 1px solid var(--outline-variant-color); vertical-align: middle; white-space: nowrap; line-height: 1.45; }
+.erp-data-table > tbody,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > tbody { color: var(--on-surface-color); font-size: 13px; font-weight: 600; }
+.erp-data-table > tbody > tr,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > tbody > tr { min-height: 38px; border-bottom: 1px solid var(--outline-variant-color); background: var(--surface-container-lowest-color); transition: background-color 150ms; }
+.erp-data-table > tbody > tr:last-child,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > tbody > tr:last-child { border-bottom: 0; }
+.erp-data-table > tbody > tr:hover,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > tbody > tr:hover { background: color-mix(in srgb, var(--surface-container-low-color) 50%, transparent); }
+.erp-data-table > tbody td,
+main table:not(.pr-document-table):not(.po-document-table):not(.gr-table):not(.gr-ref-table) > tbody td { padding: 4px 14px; vertical-align: middle; line-height: 1.5; }
+.erp-data-table-empty { height: 112px; text-align: center; color: var(--secondary-color); font-weight: 500; }
+
+.item-catalog-table {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+}
+
+/* Finished-goods columns must never overlap one another. */
+.product-data-table > thead,
+.product-data-table > thead > tr { height: 48px; }
+.product-data-table > thead th {
+  overflow: hidden;
+  padding-inline: 10px;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 16px;
+}
+.product-data-table > tbody td {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+/* Normalize legacy active/inactive cells while they delegate to StatusBadge. */
+main table :is(span, button)[class*="bg-emerald-700"][class*="font-bold"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 22px !important;
+  border: 1px solid rgb(5 150 105) !important;
+  border-radius: 3px !important;
+  background: rgb(5 150 105) !important;
+  padding: 0 8px !important;
+  color: white !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+main table :is(span, button)[class*="bg-neutral-500"][class*="font-bold"],
+main table button[class*="bg-amber-100"][class*="font-bold"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 22px !important;
+  border: 1px solid rgb(220 38 38) !important;
+  border-radius: 3px !important;
+  background: rgb(220 38 38) !important;
+  padding: 0 8px !important;
+  color: white !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+/* Blueprint grid backgrounds and CAD dimension line styling */
+.blueprint-bg {
+  background-color: #f9f9f9;
+  background-image: linear-gradient(#e0e0e0 1px, transparent 1px), linear-gradient(90deg, #e0e0e0 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.dark .blueprint-bg {
+  background-color: #1a1818;
+  background-image: linear-gradient(#2d2929 1px, transparent 1px), linear-gradient(90deg, #2d2929 1px, transparent 1px);
+}
+.dimension-line {
+  position: absolute;
+  border: 1px solid #af101a;
+  opacity: 0.6;
+}
+.dimension-line::before, .dimension-line::after {
+  content: '';
+  position: absolute;
+  background: #af101a;
+  width: 1px;
+  height: 8px;
+  top: -4px;
+}
+.dimension-line-h::before { left: 0; }
+.dimension-line-h::after { right: 0; }
+.dimension-line-v::before { top: 0; width: 8px; height: 1px; left: -4px; }
+.dimension-line-v::after { bottom: 0; width: 8px; height: 1px; left: -4px; }
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+

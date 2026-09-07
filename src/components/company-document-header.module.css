@@ -1,0 +1,148 @@
+.header {
+  --document-logo-width: 34mm;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  height: 30mm;
+  grid-template-columns:
+    var(--document-logo-width)
+    minmax(0, 1fr)
+    62mm;
+  align-items: center;
+  column-gap: 3mm;
+  border-bottom: 0.75mm solid #d31220;
+  padding: 0 0 3mm;
+  color: #000;
+  font-family: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+}
+
+.companyOnly {
+  grid-template-columns: var(--document-logo-width) minmax(0, 1fr);
+}
+
+.brand {
+  display: flex;
+  width: var(--document-logo-width);
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+  max-height: 22mm;
+  object-fit: contain;
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.8mm;
+  line-height: 1.4;
+}
+
+.identity strong {
+  overflow: hidden;
+  color: #000;
+  font-size: 11.5pt;
+  font-weight: 700;
+  line-height: 1.4;
+  padding-block: 0.12em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #000;
+  font-size: 7.8pt;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding-block: 0.08em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.summary {
+  display: flex;
+  align-self: stretch;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 0.25mm solid #777;
+  padding-left: 4mm;
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 1.5mm;
+  padding-bottom: 1.5mm;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.title b {
+  color: #000;
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+.title span {
+  color: #000;
+  font-size: 8pt;
+  font-weight: 700;
+}
+
+.meta {
+  display: grid;
+  align-content: center;
+  gap: 1.2mm;
+  margin: 0;
+}
+
+.meta > div {
+  display: grid;
+  grid-template-columns: 18mm 1fr;
+  align-items: baseline;
+  gap: 1.5mm;
+}
+
+.meta dt,
+.meta dd {
+  margin: 0;
+  color: #000;
+  font-size: 7.5pt;
+  line-height: 1.2;
+}
+
+.meta dt {
+  font-weight: 600;
+}
+
+.meta dd {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact .identity {
+  gap: 0.5mm;
+}
+
+.compact .identity strong {
+  font-size: 11pt;
+}
+
+.compact .identity span {
+  font-size: 7.4pt;
+}
+
+.standard .identity span {
+  -webkit-line-clamp: 2;
+}

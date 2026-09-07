@@ -1,0 +1,39 @@
+export type PurchaseRequisitionDecision = "approved" | "rejected";
+
+export type PurchaseRequisitionDecisionInput = {
+  decision: PurchaseRequisitionDecision;
+  note: string;
+  requisitionId: number;
+};
+
+export function validatePurchaseRequisitionDecision(
+  input: PurchaseRequisitionDecisionInput,
+) {
+  if (
+    !Number.isSafeInteger(input.requisitionId) ||
+    input.requisitionId <= 0
+  ) {
+    return {
+      error: "ไม่พบใบขอซื้อที่ต้องการดำเนินการ",
+      success: false as const,
+    };
+  }
+
+  const note = input.note.trim();
+
+  if (input.decision === "rejected" && !note) {
+    return {
+      error: "กรุณาระบุเหตุผลที่ปฏิเสธใบขอซื้อ",
+      success: false as const,
+    };
+  }
+
+  if (note.length > 500) {
+    return {
+      error: "หมายเหตุต้องไม่เกิน 500 ตัวอักษร",
+      success: false as const,
+    };
+  }
+
+  return { success: true as const };
+}
