@@ -16,7 +16,7 @@ export function validateCountEntry(entry: CountEntry) {
   const quantity = entry.countedQty;
   if (quantity === null) return null;
   if (!Number.isFinite(quantity) || quantity < 0) return "จำนวนตรวจนับต้องไม่น้อยกว่า 0";
-  if (Math.abs(quantity * quantityScale - Math.round(quantity * quantityScale)) >= 1e-7) {
+  if (Number(quantity.toFixed(4)) !== quantity) {
     return "จำนวนตรวจนับต้องมีทศนิยมไม่เกิน 4 ตำแหน่ง";
   }
   return null;

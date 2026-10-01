@@ -14,7 +14,7 @@ test("calculates four-decimal lot differences without floating drift", () => {
 });
 
 test("rejects negative, non-finite, and more-than-four-decimal counts", () => {
-  for (const countedQty of [-1, Infinity, -Infinity, NaN, 1.00001]) {
+  for (const countedQty of [-1, Infinity, -Infinity, NaN, 1.00001, 1.000000000001, 0.000000000001]) {
     assert.notEqual(validateCountEntry({ systemQty: 1, countedQty }), null);
   }
   assert.equal(validateCountEntry({ systemQty: 1, countedQty: 1.0001 }), null);
