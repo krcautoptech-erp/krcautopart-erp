@@ -34,3 +34,23 @@ test("rejects missing keys and unsafe VAPID subjects", () => {
     /VAPID_SUBJECT/,
   );
 });
+
+test("falls back to the public Vercel production URL when the configured subject is invalid", () => {
+  const config = resolveVapidConfiguration({
+    VAPID_PRIVATE_KEY: privateKey,
+    VAPID_SUBJECT: "krcautop.tech@gmail.com",
+    VERCEL_PROJECT_PRODUCTION_URL: "krcautopart.vercel.app",
+  });
+
+  assert.equal(config.subject, "https://krcautopart.vercel.app");
+});
+
+test("does not send Apple a local-only contact subject", () => {
+  const config = resolveVapidConfiguration({
+    VAPID_PRIVATE_KEY: privateKey,
+    VAPID_SUBJECT: "mailto:erp@krc.local",
+    VERCEL_PROJECT_PRODUCTION_URL: "https://krcautopart.vercel.app/",
+  });
+
+  assert.equal(config.subject, "https://krcautopart.vercel.app");
+});
