@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush, { type PushSubscription } from "web-push";
 
 import { createAdminClient } from "@/utils/supabase/admin";
+import { resolveVapidConfiguration } from "@/lib/vapid-config";
 
 type PushTarget = {
   action_url: string | null;
@@ -23,12 +24,22 @@ export type PushEvent = {
   eventKey: "approved" | "assigned" | "cancelled" | "rejected" | "submitted";
 };
 
+let hasWarnedAboutVapidMismatch = false;
+
 function configureWebPush() {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT;
-  if (!publicKey || !privateKey || !subject) return false;
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  let config;
+  try {
+    config = resolveVapidConfiguration(process.env);
+  } catch {
+    return false;
+  }
+  if (!config.publicKeyMatchesEnvironment && !hasWarnedAboutVapidMismatch) {
+    console.warn(
+      "NEXT_PUBLIC_VAPID_PUBLIC_KEY does not match VAPID_PRIVATE_KEY; using the public key derived from the server key.",
+    );
+    hasWarnedAboutVapidMismatch = true;
+  }
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
   return true;
 }
 

@@ -83,6 +83,25 @@ test("does not download again when the user cancels the share sheet", async () =
   assert.equal(downloaded, false);
 });
 
+test("keeps a prepared mobile PDF for a second user gesture when sharing needs activation", async () => {
+  let downloaded = false;
+  const result = await deliverPdfBlob(
+    new Blob(["pdf"], { type: "application/pdf" }),
+    "PO-READY.pdf",
+    adapter({
+      download: async () => {
+        downloaded = true;
+        return "downloaded";
+      },
+      isMobileShareDevice: true,
+      share: async () => "share-ready",
+    }),
+  );
+
+  assert.equal(result, "share-ready");
+  assert.equal(downloaded, false);
+});
+
 test("recognizes iPhone, Android and iPadOS without treating Windows touch PCs as mobile", () => {
   assert.equal(isMobilePdfShareDevice({ maxTouchPoints: 5, platform: "iPhone", userAgent: "iPhone" }), true);
   assert.equal(isMobilePdfShareDevice({ maxTouchPoints: 5, platform: "Linux armv8", userAgent: "Android" }), true);

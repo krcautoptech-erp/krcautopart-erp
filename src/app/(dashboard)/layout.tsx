@@ -8,6 +8,7 @@ import {
 import { getPublicCompanyBranding } from "@/lib/company-settings.server";
 import { createClient } from "@/utils/supabase/server";
 import { UnsavedChangesProvider } from "@/components/unsaved-changes";
+import { resolveVapidConfiguration } from "@/lib/vapid-config";
 
 export default async function DashboardLayout({
   children,
@@ -23,6 +24,14 @@ export default async function DashboardLayout({
   let unreadNotificationCount = 0;
   let isOwner = false;
   let permissionCodes: string[] = [];
+  let vapidPublicKey: string | null = null;
+  try {
+    vapidPublicKey = resolveVapidConfiguration(process.env).publicKey;
+  } catch (error) {
+    console.error("Web Push configuration is unavailable:", {
+      message: error instanceof Error ? error.message : "invalid_configuration",
+    });
+  }
 
   if (user) {
     const [feedResult, unreadResult, ownerResult, permissionsResult] = await Promise.all([
@@ -95,6 +104,7 @@ export default async function DashboardLayout({
       isOwner={isOwner}
       permissionCodes={permissionCodes}
       userId={user?.id ?? null}
+      vapidPublicKey={vapidPublicKey}
     >
       {children}
       <BackToTopButton />

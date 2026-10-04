@@ -33,6 +33,7 @@ type NotificationInboxProps = {
   items: AppNotification[];
   nowIso: string;
   totalItems: number;
+  vapidPublicKey: string | null;
 };
 
 function formatTime(value: string) {
@@ -133,6 +134,7 @@ export function NotificationInbox({
   items: initialItems,
   nowIso,
   totalItems,
+  vapidPublicKey,
 }: NotificationInboxProps) {
   const router = useRouter();
   const [locallyReadIds, setLocallyReadIds] = useState<number[]>([]);
@@ -213,7 +215,7 @@ export function NotificationInbox({
           </p>
         </div>
         <div className="w-full sm:max-w-[360px]">
-          <PushNotificationControl />
+          <PushNotificationControl publicKey={vapidPublicKey} />
         </div>
       </div>
 

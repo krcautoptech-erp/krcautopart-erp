@@ -43,6 +43,7 @@ type AppShellProps = {
   isOwner: boolean;
   permissionCodes: string[];
   userId: string | null;
+  vapidPublicKey: string | null;
 };
 
 function useIsDesktop(): boolean {
@@ -64,6 +65,7 @@ export function AppShell({
   isOwner,
   permissionCodes,
   userId,
+  vapidPublicKey,
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -173,7 +175,7 @@ export function AppShell({
     <CompanyBrandingProvider branding={branding}>
     <PermissionProvider codes={permissionCodes} isOwner={isOwner}>
     <div className="bg-background text-on-surface min-h-screen">
-      <PushSubscriptionSynchronizer />
+      <PushSubscriptionSynchronizer publicKey={vapidPublicKey} />
       {/* SideNavBar (Fixed Left) */}
       <aside className={`w-[208px] h-screen fixed left-0 top-0 bg-surface-container-lowest dark:bg-surface-container-lowest border-r border-outline-variant flex flex-col px-2 py-4 z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="mb-5 flex w-full justify-center">

@@ -1,6 +1,10 @@
-export type PdfDeliveryResult = "shared" | "downloaded" | "cancelled";
+export const PDF_SHARE_READY_EVENT = "krc:pdf-share-ready";
 
-type PdfShareResult = "shared" | "cancelled" | "unsupported";
+export type PdfDeliveryResult = "shared" | "downloaded" | "cancelled" | "share-ready";
+
+type PdfShareResult = "shared" | "cancelled" | "unsupported" | "share-ready";
+
+let pendingShare: { blob: Blob; filename: string; data: ShareData } | null = null;
 
 export type PdfDeliveryAdapter = {
   download: (blob: Blob, filename: string) => Promise<"downloaded">;
@@ -25,7 +29,9 @@ export async function deliverPdfBlob(
 ): Promise<PdfDeliveryResult> {
   if (adapter.isMobileShareDevice && adapter.share) {
     const shared = await adapter.share(blob, filename);
-    if (shared === "shared" || shared === "cancelled") return shared;
+    if (shared === "shared" || shared === "cancelled" || shared === "share-ready") {
+      return shared;
+    }
   }
 
   return adapter.download(blob, filename);
@@ -54,11 +60,43 @@ async function sharePdfBlob(blob: Blob, filename: string): Promise<PdfShareResul
 
   try {
     await navigator.share(shareData);
+    pendingShare = null;
     return "shared";
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
+    if (error instanceof DOMException && error.name === "AbortError") {
+      pendingShare = null;
+      return "cancelled";
+    }
+    if (
+      error instanceof DOMException &&
+      (error.name === "NotAllowedError" || error.name === "SecurityError")
+    ) {
+      pendingShare = { blob, filename, data: shareData };
+      window.dispatchEvent(new Event(PDF_SHARE_READY_EVENT));
+      return "share-ready";
+    }
     console.warn("Unable to open the PDF share sheet; downloading instead.", error);
+    pendingShare = null;
     return "unsupported";
+  }
+}
+
+export async function retryPendingPdfShare(): Promise<PdfDeliveryResult> {
+  const prepared = pendingShare;
+  if (!prepared) return "cancelled";
+
+  try {
+    await navigator.share(prepared.data);
+    pendingShare = null;
+    return "shared";
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      pendingShare = null;
+      return "cancelled";
+    }
+    console.warn("Unable to retry the PDF share sheet; downloading instead.", error);
+    pendingShare = null;
+    return downloadPdfBlob(prepared.blob, prepared.filename);
   }
 }
 

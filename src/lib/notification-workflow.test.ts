@@ -70,3 +70,15 @@ test("invalid VAPID subscriptions are retired instead of retried forever", () =>
   assert.match(client, /unsubscribe\(\)/);
   assert.match(appShell, /PushSubscriptionSynchronizer/);
 });
+
+test("browser and push sender share one server-derived VAPID identity", () => {
+  const layout = readFileSync(join(root, "src/app/(dashboard)/layout.tsx"), "utf8");
+  const client = readFileSync(join(root, "src/components/push-notification-control.tsx"), "utf8");
+  const appShell = readFileSync(join(root, "src/components/app-shell.tsx"), "utf8");
+  const installedWebPush = readFileSync(join(root, "node_modules/web-push/src/web-push-lib.js"), "utf8");
+  assert.match(layout, /resolveVapidConfiguration/);
+  assert.match(layout, /vapidPublicKey=/);
+  assert.match(appShell, /vapidPublicKey/);
+  assert.doesNotMatch(client, /NEXT_PUBLIC_VAPID_PUBLIC_KEY/);
+  assert.doesNotMatch(installedWebPush, /url\.parse\(/);
+});

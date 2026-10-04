@@ -16,6 +16,10 @@ import {
   Info,
   X,
 } from "lucide-react";
+import {
+  PDF_SHARE_READY_EVENT,
+  retryPendingPdfShare,
+} from "@/lib/pdf-delivery";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -114,6 +118,27 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     return () => {
       globalToastHandler = null;
     };
+  }, [showToast]);
+
+  useEffect(() => {
+    const handlePdfShareReady = () => {
+      showToast(
+        "ไฟล์ PDF พร้อมแล้ว แตะเพื่อเปิดเมนูแชร์ของมือถือ",
+        "info",
+        {
+          duration: 15_000,
+          title: "พร้อมแชร์ PDF",
+          action: {
+            label: "แชร์ตอนนี้",
+            onClick: () => {
+              void retryPendingPdfShare();
+            },
+          },
+        },
+      );
+    };
+    window.addEventListener(PDF_SHARE_READY_EVENT, handlePdfShareReady);
+    return () => window.removeEventListener(PDF_SHARE_READY_EVENT, handlePdfShareReady);
   }, [showToast]);
 
   const success = useCallback(

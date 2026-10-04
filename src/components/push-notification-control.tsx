@@ -75,8 +75,11 @@ async function persistSubscription(subscription: PushSubscription) {
   );
 }
 
-export function PushSubscriptionSynchronizer() {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+export function PushSubscriptionSynchronizer({
+  publicKey,
+}: {
+  publicKey: string | null;
+}) {
 
   useEffect(() => {
     if (
@@ -118,8 +121,11 @@ export function PushSubscriptionSynchronizer() {
   return null;
 }
 
-export function PushNotificationControl() {
-  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+export function PushNotificationControl({
+  publicKey,
+}: {
+  publicKey: string | null;
+}) {
   const [state, setState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -210,6 +216,10 @@ export function PushNotificationControl() {
     setMessage("");
     startTransition(async () => {
       try {
+        if (!publicKey) {
+          setState("unsupported");
+          return;
+        }
         if (isIosDevice() && !isStandalone()) {
           setState("install-required");
           return;

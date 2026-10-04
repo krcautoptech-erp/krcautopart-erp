@@ -11,6 +11,7 @@ import {
   type AppNotification,
 } from "@/lib/notifications";
 import { createClient } from "@/utils/supabase/server";
+import { resolveVapidConfiguration } from "@/lib/vapid-config";
 
 import { NotificationInbox } from "./notification-inbox";
 
@@ -111,6 +112,12 @@ export default async function NotificationsPage({
   const items = ((result.data ?? []) as unknown as NotificationQueryRow[])
     .map(toAppNotification)
     .filter((item): item is AppNotification => Boolean(item));
+  let vapidPublicKey: string | null = null;
+  try {
+    vapidPublicKey = resolveVapidConfiguration(process.env).publicKey;
+  } catch {
+    // The control will report unsupported until server configuration is complete.
+  }
 
   return (
     <NotificationInbox
@@ -119,6 +126,7 @@ export default async function NotificationsPage({
       items={items}
       nowIso={new Date().toISOString()}
       totalItems={result.count ?? 0}
+      vapidPublicKey={vapidPublicKey}
     />
   );
 }

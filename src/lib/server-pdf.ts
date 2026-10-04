@@ -1,10 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Browser, LaunchOptions } from "puppeteer-core";
-import {
-  isServerlessPdfRuntime,
-  resolveChromiumPackUrl,
-} from "./server-pdf-runtime.ts";
+import { isServerlessPdfRuntime } from "./server-pdf-runtime.ts";
 
 const POSSIBLE_EXECUTABLES = [
   process.env.CHROME_PATH,
@@ -143,12 +140,8 @@ async function launchPdfBrowser(): Promise<Browser> {
   let launchOptions: LaunchOptions;
 
   if (isServerlessPdfRuntime(process.env)) {
-    const [{ default: chromium }, packUrl] = await Promise.all([
-      import("@sparticuz/chromium-min"),
-      Promise.resolve(resolveChromiumPackUrl(process.env)),
-    ]);
-
-    serverlessExecutablePathPromise ??= chromium.executablePath(packUrl);
+    const { default: chromium } = await import("@sparticuz/chromium");
+    serverlessExecutablePathPromise ??= chromium.executablePath();
     launchOptions = {
       args: chromium.args,
       executablePath: await serverlessExecutablePathPromise,
@@ -173,8 +166,8 @@ async function launchPdfBrowser(): Promise<Browser> {
 
 /**
  * Renders HTML to a high-fidelity vector PDF buffer. Local development uses the
- * installed Chrome/Edge while serverless production uses a deployment-hosted
- * Chromium pack, keeping the function bundle below the provider limit.
+ * installed Chrome/Edge while serverless production uses the packaged
+ * Chromium binary. This avoids fetching a protected deployment asset at runtime.
  */
 export async function renderHtmlToPdfBuffer(
   html: string,
