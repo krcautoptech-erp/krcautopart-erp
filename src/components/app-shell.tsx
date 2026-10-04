@@ -15,6 +15,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { createClient } from "@/utils/supabase/client";
 import { getWorkspaceTabForPath } from "@/components/workspace-tabs";
 import { NotificationBell } from "@/components/notification-bell";
+import { PushSubscriptionSynchronizer } from "@/components/push-notification-control";
 import { CompanyBrandingProvider, CompanyLogo } from "@/components/company-logo";
 import type { CompanyBranding } from "@/lib/company-settings";
 import type { AppNotification } from "@/lib/notifications";
@@ -172,6 +173,7 @@ export function AppShell({
     <CompanyBrandingProvider branding={branding}>
     <PermissionProvider codes={permissionCodes} isOwner={isOwner}>
     <div className="bg-background text-on-surface min-h-screen">
+      <PushSubscriptionSynchronizer />
       {/* SideNavBar (Fixed Left) */}
       <aside className={`w-[208px] h-screen fixed left-0 top-0 bg-surface-container-lowest dark:bg-surface-container-lowest border-r border-outline-variant flex flex-col px-2 py-4 z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="mb-5 flex w-full justify-center">

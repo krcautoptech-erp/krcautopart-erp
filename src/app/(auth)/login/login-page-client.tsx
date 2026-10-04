@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { CircleHelp, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 
 import { CompanyLogo } from "@/components/company-logo";
@@ -53,19 +54,19 @@ export function LoginPageClient({
           <div className="flex-grow" />
           <button
             aria-label="สลับโหมดสี"
-            className="material-symbols-outlined cursor-pointer text-secondary transition-colors hover:text-primary dark:text-on-surface"
+            className="cursor-pointer text-secondary transition-colors hover:text-primary dark:text-on-surface"
             onClick={toggleDarkMode}
             type="button"
           >
-            {isDarkMode ? "light_mode" : "dark_mode"}
+            {isDarkMode ? <Sun aria-hidden="true" size={22} /> : <Moon aria-hidden="true" size={22} />}
           </button>
           <button
             aria-label="เปิดคู่มือเข้าสู่ระบบ"
-            className="material-symbols-outlined ml-md cursor-pointer text-secondary transition-colors hover:text-primary dark:text-on-surface"
+            className="ml-md cursor-pointer text-secondary transition-colors hover:text-primary dark:text-on-surface"
             onClick={() => setIsHelpOpen(true)}
             type="button"
           >
-            help
+            <CircleHelp aria-hidden="true" size={22} />
           </button>
         </header>
 

@@ -36,11 +36,17 @@ function pushErrorDetails(error: unknown) {
   if (typeof error !== "object" || error === null) {
     return { message: "push_delivery_failed", statusCode: 0 };
   }
-  return {
-    message:
+  const message =
       "message" in error && typeof error.message === "string"
         ? error.message
-        : "push_delivery_failed",
+        : "push_delivery_failed";
+  const responseBody =
+    "body" in error && typeof error.body === "string"
+      ? error.body.slice(0, 400)
+      : "";
+  return {
+    message: responseBody || message,
+    responseBody,
     statusCode:
       "statusCode" in error && Number.isFinite(Number(error.statusCode))
         ? Number(error.statusCode)
@@ -109,6 +115,7 @@ async function sendTargets(supabase: SupabaseClient, targets: PushTarget[]) {
         console.error("Unable to send Web Push notification:", {
           deliveryId: target.delivery_id,
           notificationId: target.notification_id,
+          providerResponse: details.responseBody || undefined,
           statusCode: details.statusCode,
         });
         return false;

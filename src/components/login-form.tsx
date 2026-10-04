@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState, useEffect } from "react";
+import { AlertCircle, ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 
 export function LoginForm() {
@@ -32,7 +33,7 @@ export function LoginForm() {
     <form action={formAction} onSubmit={handleSubmit} className="space-y-lg">
       {state?.error && (
         <div className="bg-error-container text-on-error-container p-sm rounded border border-error/20 font-body-md flex items-center gap-sm animate-in fade-in duration-200">
-          <span className="material-symbols-outlined text-[20px] text-error">error</span>
+          <AlertCircle aria-hidden="true" className="shrink-0 text-error" size={20} />
           <span>{state.error}</span>
         </div>
       )}
@@ -43,9 +44,7 @@ export function LoginForm() {
           User ID / รหัสผู้ใช้งาน
         </label>
         <div className="relative group focus-within:ring-1 focus-within:ring-primary">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
-            person
-          </span>
+          <UserRound aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary transition-colors group-focus-within:text-primary" size={20} />
           <input
             name="userId"
             autoComplete="username"
@@ -67,9 +66,7 @@ export function LoginForm() {
           Password / รหัสผ่าน
         </label>
         <div className="relative group focus-within:ring-1 focus-within:ring-primary">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary group-focus-within:text-primary transition-colors">
-            lock
-          </span>
+          <LockKeyhole aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary transition-colors group-focus-within:text-primary" size={20} />
           <input
             name="password"
             autoComplete="current-password"
@@ -82,11 +79,11 @@ export function LoginForm() {
           />
           <button
             onClick={() => setShowPassword(!showPassword)}
-            className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-on-surface dark:hover:text-white cursor-pointer"
+            className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-secondary hover:text-on-surface dark:hover:text-white"
             type="button"
             title={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
           >
-            {showPassword ? "visibility_off" : "visibility"}
+            {showPassword ? <EyeOff aria-hidden="true" size={20} /> : <Eye aria-hidden="true" size={20} />}
           </button>
         </div>
       </div>
@@ -117,9 +114,7 @@ export function LoginForm() {
       >
         <span>{isPending ? "Logging in..." : "Login / เข้าสู่ระบบ"}</span>
         {!isPending && (
-          <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">
-            arrow_forward
-          </span>
+          <ArrowRight aria-hidden="true" className="transition-transform group-hover:translate-x-1" size={20} />
         )}
       </button>
     </form>

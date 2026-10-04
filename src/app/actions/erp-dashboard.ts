@@ -231,7 +231,7 @@ export async function getErpDashboardAction(
     permissions.issue
       ? supabase
           .from("stock_issues")
-          .select("id,issue_number,status,document_date,issued_to_name")
+          .select("id,issue_number,status,document_date,requester_name")
           .in("status", ["draft", "pending_approval"])
           .order("created_at", { ascending: false })
           .limit(5)
@@ -484,7 +484,7 @@ export async function getErpDashboardAction(
       number: s(item.issue_number),
       task: "จัดเตรียมใบเบิกสินค้า",
       due: s(item.document_date),
-      owner: s(item.issued_to_name),
+      owner: s(item.requester_name),
       status: s(item.status),
       href: "/inventory/issues",
       tab: "issue",

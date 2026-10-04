@@ -235,6 +235,15 @@ body {
   text-rendering: auto;
 }
 
+/* iOS zooms the whole viewport when a focused control is smaller than 16px. */
+@media (max-width: 760px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Keep native select popups legible in both themes, including Windows/Chromium. */
 select option,
 select optgroup {

@@ -56,3 +56,17 @@ test("push delivery queue is private, retryable, and stock-count permission scop
   assert.match(worker, /AbortSignal\.timeout\(20_000\)/);
   assert.match(worker, /authorization: `Bearer \$\{secret\}`/);
 });
+
+test("invalid VAPID subscriptions are retired instead of retried forever", () => {
+  const migration = readFileSync(
+    join(root, "supabase/migrations/20261004110916_retire_invalid_web_push_subscriptions.sql"),
+    "utf8",
+  );
+  const client = readFileSync(join(root, "src/components/push-notification-control.tsx"), "utf8");
+  const appShell = readFileSync(join(root, "src/components/app-shell.tsx"), "utf8");
+  assert.match(migration, /p_status_code in \(401, 403, 404, 410\)/);
+  assert.match(migration, /push_subscription_vapid_rejected/);
+  assert.match(client, /subscriptionUsesVapidKey/);
+  assert.match(client, /unsubscribe\(\)/);
+  assert.match(appShell, /PushSubscriptionSynchronizer/);
+});

@@ -12,12 +12,15 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { PdfExportIcon } from "@/components/pdf-export-button";
+import { calculateAnchoredScroll } from "@/lib/document-preview-zoom";
 import styles from "./document-preview-shell.module.css";
 
 const PX_PER_MM = 96 / 25.4;
@@ -77,11 +80,18 @@ export function DocumentPreviewShell({
   totalPages = 1,
 }: DocumentPreviewShellProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
   const dragRef = useRef<{ left: number; top: number; x: number; y: number } | null>(null);
   const fitScaleRef = useRef(0.7);
+  const scaleRef = useRef(0.7);
   const [scale, setScale] = useState(0.7);
+  const [contentSize, setContentSize] = useState(() => ({
+    height: paperHeightMm * PX_PER_MM * totalPages + Math.max(0, totalPages - 1) * 18,
+    width: paperWidthMm * PX_PER_MM,
+  }));
   const [zoomOpen, setZoomOpen] = useState(false);
 
   const fitToPage = useCallback(() => {
@@ -94,9 +104,25 @@ export function DocumentPreviewShell({
     const heightScale = (canvas.clientHeight - verticalPadding) / (paperHeightMm * PX_PER_MM);
     const nextScale = clampScale(Math.min(widthScale, heightScale, mobile ? 0.72 : 0.82));
     fitScaleRef.current = nextScale;
+    scaleRef.current = nextScale;
     setScale(nextScale);
     canvas.scrollTo({ left: 0, top: 0 });
   }, [paperHeightMm, paperWidthMm]);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => {
+      setContentSize({
+        height: Math.max(content.scrollHeight, paperHeightMm * PX_PER_MM),
+        width: Math.max(content.scrollWidth, paperWidthMm * PX_PER_MM),
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [children, paperHeightMm, paperWidthMm]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(fitToPage);
@@ -115,9 +141,36 @@ export function DocumentPreviewShell({
     };
   }, []);
 
-  const updateScale = (next: number) => {
-    setScale(clampScale(Math.round(next * 100) / 100));
-  };
+  const updateScale = useCallback((next: number, anchor?: { x: number; y: number }) => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    const currentScale = scaleRef.current;
+    const nextScale = clampScale(Math.round(next * 100) / 100);
+    if (!canvas || !stage || Math.abs(nextScale - currentScale) < 0.001) return;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const anchorClientX = anchor?.x ?? canvasRect.left + canvas.clientWidth / 2;
+    const anchorClientY = anchor?.y ?? canvasRect.top + canvas.clientHeight / 2;
+    const stageRect = stage.getBoundingClientRect();
+    const logicalPoint = calculateAnchoredScroll({
+      anchorClientX,
+      anchorClientY,
+      currentScale,
+      stageLeft: stageRect.left,
+      stageTop: stageRect.top,
+    });
+
+    scaleRef.current = nextScale;
+    setScale(nextScale);
+    window.requestAnimationFrame(() => {
+      const nextStage = stageRef.current;
+      const nextCanvas = canvasRef.current;
+      if (!nextStage || !nextCanvas) return;
+      const nextRect = nextStage.getBoundingClientRect();
+      nextCanvas.scrollLeft += nextRect.left + logicalPoint.logicalX * nextScale - anchorClientX;
+      nextCanvas.scrollTop += nextRect.top + logicalPoint.logicalY * nextScale - anchorClientY;
+    });
+  }, []);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") return;
@@ -146,7 +199,10 @@ export function DocumentPreviewShell({
     const points = [...pointersRef.current.values()];
     if (points.length === 2 && pinchRef.current) {
       const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-      updateScale(pinchRef.current.scale * (distance / Math.max(1, pinchRef.current.distance)));
+      updateScale(
+        pinchRef.current.scale * (distance / Math.max(1, pinchRef.current.distance)),
+        { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
+      );
       return;
     }
     if (points.length === 1 && dragRef.current && canvasRef.current && scale > fitScaleRef.current + 0.01) {
@@ -232,7 +288,22 @@ export function DocumentPreviewShell({
       >
         {extraActions ? <div className={styles.extraActions}>{extraActions}</div> : null}
         {statusDescription ? <p className={styles.srOnly}>{statusDescription}</p> : null}
-        <div className={styles.documentStage} style={{ zoom: scale }}>{children}</div>
+        <div
+          className={styles.documentStage}
+          ref={stageRef}
+          style={{ height: contentSize.height * scale, width: contentSize.width * scale }}
+        >
+          <div
+            className={styles.documentContent}
+            ref={contentRef}
+            style={{
+              "--preview-scale": scale,
+              transform: `scale(${scale})`,
+            } as CSSProperties}
+          >
+            {children}
+          </div>
+        </div>
       </main>
 
       <nav aria-label="คำสั่งตัวอย่างเอกสาร" className={styles.mobileDock}>

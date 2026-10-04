@@ -23,6 +23,10 @@ const dashboardView = readFileSync(
   ),
   "utf8",
 );
+const dashboardAction = readFileSync(
+  new URL("../app/actions/erp-dashboard.ts", import.meta.url),
+  "utf8",
+);
 
 test("dashboard fulfillment follows ERP receiving rules", () => {
   assert.equal(
@@ -80,4 +84,9 @@ test("mobile dashboard replaces wide operational tables with readable cards", ()
     dashboardStyles,
     /@media \(max-width: 640px\)[\s\S]*?\.mobileList\s*\{\s*display:\s*grid/,
   );
+});
+
+test("dashboard stock issue tasks only query columns present in the schema", () => {
+  assert.doesNotMatch(dashboardAction, /issued_to_name/);
+  assert.match(dashboardAction, /requester_name/);
 });

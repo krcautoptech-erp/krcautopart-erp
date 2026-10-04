@@ -5,6 +5,10 @@ import {
   deactivatePushSubscriptionAction,
   registerPushSubscriptionAction,
 } from "@/app/actions/push-notifications";
+import {
+  decodeVapidPublicKey,
+  subscriptionUsesVapidKey,
+} from "@/lib/push-subscription";
 
 type PushState =
   | "checking"
@@ -13,13 +17,6 @@ type PushState =
   | "install-required"
   | "denied"
   | "unsupported";
-
-function decodeVapidPublicKey(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = window.atob(base64);
-  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
-}
 
 function isIosDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
@@ -33,6 +30,92 @@ function isStandalone() {
         (window.navigator as Navigator & { standalone?: boolean }).standalone,
       ))
   );
+}
+
+async function ensureCurrentSubscription(
+  registration: ServiceWorkerRegistration,
+  existing: PushSubscription | null,
+  publicKey: string,
+  createWhenMissing: boolean,
+) {
+  const applicationServerKey = decodeVapidPublicKey(publicKey);
+  let subscription = existing;
+  if (
+    subscription &&
+    !subscriptionUsesVapidKey(
+      subscription.options.applicationServerKey,
+      applicationServerKey,
+    )
+  ) {
+    const staleEndpoint = subscription.endpoint;
+    await subscription.unsubscribe();
+    await deactivatePushSubscriptionAction(staleEndpoint);
+    subscription = null;
+  }
+  if (!subscription && createWhenMissing) {
+    subscription = await registration.pushManager.subscribe({
+      applicationServerKey,
+      userVisibleOnly: true,
+    });
+  }
+  return subscription;
+}
+
+async function persistSubscription(subscription: PushSubscription) {
+  const json = subscription.toJSON();
+  if (!json.keys?.auth || !json.keys.p256dh) {
+    throw new Error("PUSH_KEYS_MISSING");
+  }
+  return registerPushSubscriptionAction(
+    {
+      endpoint: subscription.endpoint,
+      keys: { auth: json.keys.auth, p256dh: json.keys.p256dh },
+    },
+    navigator.userAgent,
+  );
+}
+
+export function PushSubscriptionSynchronizer() {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+  useEffect(() => {
+    if (
+      !publicKey ||
+      Notification.permission !== "granted" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      (isIosDevice() && !isStandalone())
+    ) return;
+
+    let active = true;
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
+        const existing = await registration.pushManager.getSubscription();
+        const subscription = await ensureCurrentSubscription(
+          registration,
+          existing,
+          publicKey,
+          true,
+        );
+        if (!subscription || !active) return;
+        const result = await persistSubscription(subscription);
+        if (!result.success) {
+          console.warn("Unable to synchronize Web Push subscription");
+        }
+      } catch {
+        if (active) console.warn("Unable to synchronize Web Push subscription");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [publicKey]);
+
+  return null;
 }
 
 export function PushNotificationControl() {
@@ -72,7 +155,15 @@ export function PushNotificationControl() {
 
     navigator.serviceWorker
       .register("/sw.js", { scope: "/", updateViaCache: "none" })
-      .then((registration) => registration.pushManager.getSubscription())
+      .then(async (registration) => {
+        const existing = await registration.pushManager.getSubscription();
+        return ensureCurrentSubscription(
+          registration,
+          existing,
+          publicKey,
+          Notification.permission === "granted",
+        );
+      })
       .then(async (subscription) => {
         if (!active) {
           return;
@@ -135,28 +226,14 @@ export function PushNotificationControl() {
           updateViaCache: "none",
         });
         const existing = await registration.pushManager.getSubscription();
-        const subscription =
-          existing ??
-          (await registration.pushManager.subscribe({
-            applicationServerKey: decodeVapidPublicKey(publicKey),
-            userVisibleOnly: true,
-          }));
-        const json = subscription.toJSON();
-
-        if (!json.keys?.auth || !json.keys.p256dh) {
-          throw new Error("PUSH_KEYS_MISSING");
-        }
-
-        const result = await registerPushSubscriptionAction(
-          {
-            endpoint: subscription.endpoint,
-            keys: {
-              auth: json.keys.auth,
-              p256dh: json.keys.p256dh,
-            },
-          },
-          navigator.userAgent,
+        const subscription = await ensureCurrentSubscription(
+          registration,
+          existing,
+          publicKey,
+          true,
         );
+        if (!subscription) throw new Error("PUSH_SUBSCRIPTION_MISSING");
+        const result = await persistSubscription(subscription);
 
         if (!result.success) {
           setMessage(result.error);

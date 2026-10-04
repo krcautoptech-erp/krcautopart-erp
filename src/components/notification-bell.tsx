@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
+  getNotificationBellAction,
 } from "@/app/actions/notifications";
 import { notificationTypeIcon } from "@/lib/notification-inbox";
 import type { AppNotification } from "@/lib/notifications";
@@ -58,17 +59,19 @@ export function NotificationBell({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<"all" | "unread">("all");
+  const [serverItems, setServerItems] = useState(initialNotifications);
+  const [serverUnreadCount, setServerUnreadCount] = useState(initialUnreadCount);
   const [locallyReadIds, setLocallyReadIds] = useState<number[]>([]);
   const [isPending, startTransition] = useTransition();
-  const items = initialNotifications.map((item) =>
+  const items = serverItems.map((item) =>
     locallyReadIds.includes(item.id) && !item.readAt
       ? { ...item, readAt: new Date().toISOString() }
       : item,
   );
-  const locallyReadUnreadCount = initialNotifications.filter(
+  const locallyReadUnreadCount = serverItems.filter(
     (item) => !item.readAt && locallyReadIds.includes(item.id),
   ).length;
-  const unreadCount = Math.max(0, initialUnreadCount - locallyReadUnreadCount);
+  const unreadCount = Math.max(0, serverUnreadCount - locallyReadUnreadCount);
   const visibleItems = (
     view === "unread" ? items.filter((item) => !item.readAt) : items
   ).slice(0, 7);
@@ -93,6 +96,13 @@ export function NotificationBell({
     };
   }, []);
 
+  const refreshBell = useCallback(async () => {
+    const result = await getNotificationBellAction();
+    setServerItems(result.notifications);
+    setServerUnreadCount(result.unreadCount);
+    setLocallyReadIds([]);
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -105,14 +115,27 @@ export function NotificationBell({
           schema: "public",
           table: "notification_recipients",
         },
-        () => router.refresh(),
+        () => void refreshBell(),
       )
       .subscribe();
 
+    const handleFocus = () => void refreshBell();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void refreshBell();
+    };
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshBell();
+    }, 60_000);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
       void supabase.removeChannel(channel);
     };
-  }, [router, userId]);
+  }, [refreshBell, userId]);
 
   const handleOpenNotification = (item: AppNotification) => {
     setIsOpen(false);
@@ -138,7 +161,7 @@ export function NotificationBell({
       Array.from(
         new Set([
           ...current,
-          ...initialNotifications
+          ...serverItems
             .filter((item) => !item.readAt)
             .map((item) => item.id),
         ]),
