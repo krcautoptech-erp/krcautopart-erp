@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useMemo, useState, useTransition } from "react";
+import React, { useEffect, useMemo, useState, useTransition } from "react";
 import { PlusCircle } from "lucide-react";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { ActiveStatusBadge } from "@/components/status-badge";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "@/components/toast";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 import {
   createVendorSettingAction,
   deleteVendorSettingAction,
@@ -162,14 +163,6 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function getStatusClass(status: VendorSettingStatus) {
-  if (status === STATUS_ACTIVE) {
-    return "text-emerald-600 dark:text-emerald-400";
-  }
-
-  return "text-secondary";
-}
-
 function escapeSpreadsheetXml(value: string | number) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -303,9 +296,13 @@ export function VendorSettingsPanel({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editingRecord, setEditingRecord] = useState<VendorSettingRecord | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<VendorSettingRecord | null>(null);
-  const [errorMessage, setErrorMessage] = useState(initialError ?? "");
-  const [successMessage, setSuccessMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (initialError) {
+      toast.error("ไม่สามารถโหลดข้อมูลได้", initialError);
+    }
+  }, [initialError]);
 
   const config = CATEGORY_CONFIG[activeCategory];
   const records = data[activeCategory];
@@ -344,7 +341,6 @@ export function VendorSettingsPanel({
   const openAddModal = () => {
     setDraft(EMPTY_DRAFT);
     setEditingRecord(null);
-    setErrorMessage("");
     setIsEditorOpen(true);
 
     if (!shouldAutoGenerateCode(config)) {
@@ -356,7 +352,7 @@ export function VendorSettingsPanel({
       const result = await reserveVendorSettingCodeAction(category);
 
       if ("error" in result) {
-        setErrorMessage(result.error);
+        toast.error("สร้างรหัสอัตโนมัติไม่สำเร็จ", result.error);
         return;
       }
 
@@ -367,7 +363,6 @@ export function VendorSettingsPanel({
   const openEditModal = (record: VendorSettingRecord) => {
     setDraft(buildDraftFromRecord(record));
     setEditingRecord(record);
-    setErrorMessage("");
     setIsEditorOpen(true);
   };
 
@@ -551,7 +546,16 @@ export function VendorSettingsPanel({
           </div>
         </div>
 
-        <div className="flex flex-col gap-md bg-surface-container-lowest p-lg md:flex-row md:items-center md:justify-between">
+        <div className="bg-surface-container-lowest p-lg md:hidden">
+          <MobileListFilters
+            activeCount={statusFilter === "ทั้งหมด" ? 0 : 1}
+            onClear={() => setStatusFilter("ทั้งหมด")}
+            search={<ListSearchField onChange={setSearchQuery} placeholder={`ค้นหา${config.title}`} value={searchQuery} />}
+          >
+            <ListFilterSelect label="สถานะ" onChange={(value) => setStatusFilter(value as "ทั้งหมด" | VendorSettingStatus)} value={statusFilter}><option value="ทั้งหมด">แสดงทั้งหมด</option><option value={STATUS_ACTIVE}>ใช้งาน</option><option value={STATUS_INACTIVE}>ระงับ</option></ListFilterSelect>
+          </MobileListFilters>
+        </div>
+        <div className="hidden flex-col gap-md bg-surface-container-lowest p-lg md:flex md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-secondary">
               search

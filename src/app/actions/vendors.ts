@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { clearItemsServerCache } from "@/app/actions/items";
 import { createClient } from "@/utils/supabase/server";
 import { composeVendorAddressLine } from "@/lib/vendors/thai-address";
 
@@ -235,6 +236,7 @@ export async function createVendorAction(
     }
 
     revalidatePath(VENDORS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: vendor as VendorRecord };
   } catch (error) {
     console.error("Vendor create exception:", error);
@@ -280,6 +282,7 @@ export async function updateVendorAction(
     if (addressError) return { error: addressError.message };
 
     revalidatePath(VENDORS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: vendor as VendorRecord };
   } catch (error) {
     console.error("Vendor update exception:", error);
@@ -295,6 +298,7 @@ export async function deleteVendorAction(id: number): Promise<ActionResult<null>
     if (error) return { error: error.message };
 
     revalidatePath(VENDORS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: null };
   } catch (error) {
     console.error("Vendor delete exception:", error);
@@ -310,16 +314,15 @@ export async function toggleVendorStatusAction(
 
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("vendors")
-      .update({ status: nextStatus })
-      .eq("id", id)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc("set_vendor_status", {
+      p_status: nextStatus,
+      p_vendor_id: id,
+    });
 
     if (error) return { error: error.message };
 
     revalidatePath(VENDORS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: data as VendorRecord };
   } catch (error) {
     console.error("Vendor toggle exception:", error);

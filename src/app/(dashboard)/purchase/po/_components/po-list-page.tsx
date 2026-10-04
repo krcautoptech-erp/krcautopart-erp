@@ -2,7 +2,7 @@
 
 import {
   Ban,
-  CalendarDays,
+  Eye,
   Pencil,
   Plus,
   Printer,
@@ -10,8 +10,10 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Pagination } from "@/components/pagination";
+import { MobileDocumentList } from "@/components/mobile-document-list";
+import { MobileDocumentDetail } from "@/components/mobile-document-detail";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import {
   cancelPurchaseOrderAction,
@@ -35,12 +37,17 @@ import { PoCreateModal } from "./po-create-modal";
 import { PoPrintPreviewModal } from "./po-print-preview-modal";
 import { DocumentCancelModal } from "../../_components/document-cancel-modal";
 import { toast } from "@/components/toast";
+import { useHasPermission } from "@/components/permission-context";
+import { ListDateRangeFilter, ListFilterButton, ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
+import { RowActionMenu } from "@/components/row-action-menu";
 
 type PoListPageProps = {
   buyerName: string;
-  canDecide: boolean;
+  canApprove: boolean;
+  canReject: boolean;
   documentContext: CompanyDocumentContext;
   documentDate: string;
+  initialOpenOrderId: number | null;
   filters: {
     endDate: string;
     query: string;
@@ -56,22 +63,24 @@ type PoListPageProps = {
 };
 
 const HEADERS = [
-  ["ลำดับ", "4%"],
-  ["เลขที่ PO", "10%"],
-  ["วันที่", "7%"],
-  ["ผู้ขาย", "25%"],
-  ["อ้างอิง PR", "13%"],
-  ["วันที่ส่งมอบ", "10%"],
-  ["ยอดรวม", "10%"],
-  ["สถานะ", "9%"],
-  ["จัดการ", "12%"],
+  ["ลำดับ", "60px"],
+  ["เลขที่ PO", "130px"],
+  ["วันที่", "110px"],
+  ["ผู้ขาย", "260px"],
+  ["อ้างอิง PR", "160px"],
+  ["วันที่ส่งมอบ", "120px"],
+  ["ยอดรวม", "120px"],
+  ["สถานะ", "110px"],
+  ["จัดการ", "64px"],
 ] as const;
 
 export function PoListPage({
   buyerName,
-  canDecide,
+  canApprove,
+  canReject,
   documentContext,
   documentDate,
+  initialOpenOrderId,
   filters,
   page,
   pageSize,
@@ -80,8 +89,13 @@ export function PoListPage({
   vendors,
 }: PoListPageProps) {
   const router = useRouter();
+  const canCreate = useHasPermission("po.create");
+  const canEdit = useHasPermission("po.edit");
+  const canCancel = useHasPermission("po.cancel");
   const [isPending, startTransition] = useTransition();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createVersion, setCreateVersion] = useState(0);
+  const createNext = () => { setEditOrder(null); setCreateVersion(value => value + 1); setIsCreateOpen(true); };
   const [cancelOrder, setCancelOrder] =
     useState<PurchaseOrderSummary | null>(null);
   const [editOrder, setEditOrder] = useState<PurchaseOrderEditData | null>(
@@ -89,10 +103,27 @@ export function PoListPage({
   );
   const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
   const [loadingPrintId, setLoadingPrintId] = useState<number | null>(null);
+  const openedNotificationOrderRef = useRef<number | null>(null);
   const [printDetail, setPrintDetail] =
     useState<PurchaseOrderPrintDetail | null>(null);
+  const [mobileDetail, setMobileDetail] = useState<PurchaseOrderPrintDetail | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const mobileRows = rows.map((row) => ({
+    details: [
+      { label: "ผู้ขาย", value: row.vendor_name },
+      { label: "อ้างอิง PR", value: row.pr_references.join(", ") || "-" },
+      { label: "วันที่เอกสาร", value: formatDisplayDate(row.document_date) },
+      { label: "วันที่ส่งมอบ", value: formatDisplayDate(row.delivery_date) },
+      { label: "จำนวน", value: `${row.item_count} รายการ` },
+      { label: "มูลค่า", value: `${formatPurchaseOrderAmount(row.grand_total)} บาท` },
+    ],
+    id: row.id,
+    meta: `${formatDisplayDate(row.document_date)} · ${formatPurchaseOrderAmount(row.grand_total)} บาท`,
+    status: <StatusBadge tone={statusTone(row.status)}>{PURCHASE_ORDER_STATUS_META[row.status].label}</StatusBadge>,
+    subtitle: row.vendor_name,
+    title: row.po_number,
+  }));
   const defaultDeliveryAddress = [
     documentContext.branding.legalNameTh,
     documentContext.company.address,
@@ -165,6 +196,24 @@ export function PoListPage({
     setPrintDetail(result.detail);
   };
 
+  const openMobileDetail = async (purchaseOrderId: number) => {
+    if (loadingPrintId !== null) return;
+    setLoadingPrintId(purchaseOrderId);
+    const result = await getPurchaseOrderPrintDetailAction(purchaseOrderId);
+    setLoadingPrintId(null);
+    if (!result.success) { toast.error(result.error ?? "ไม่สามารถดึงรายละเอียดใบสั่งซื้อได้"); return; }
+    setMobileDetail(result.detail);
+  };
+
+  useEffect(() => {
+    if (!initialOpenOrderId || openedNotificationOrderRef.current === initialOpenOrderId) return;
+    openedNotificationOrderRef.current = initialOpenOrderId;
+    void getPurchaseOrderPrintDetailAction(initialOpenOrderId).then((result) => {
+      if (result.success) setPrintDetail(result.detail);
+      else toast.error(result.error ?? "ไม่สามารถเปิดรายละเอียดใบสั่งซื้อจากการแจ้งเตือนได้");
+    });
+  }, [initialOpenOrderId]);
+
   const openEditModal = async (purchaseOrderId: number) => {
     if (loadingEditId !== null) return;
 
@@ -219,101 +268,105 @@ export function PoListPage({
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
           <ExcelExportButton className="flex-1 sm:flex-none" onClick={exportExcel} />
-          <button
+          {canCreate ? <button
             className="inline-flex h-[38px] flex-1 items-center justify-center gap-2 rounded-[3px] border border-primary bg-primary px-4 text-[13px] font-bold text-white shadow-sm hover:bg-primary/95 sm:flex-none sm:px-5"
             onClick={() => setIsCreateOpen(true)}
             type="button"
           >
             <Plus size={17} strokeWidth={2} />
             สร้าง PO ใหม่
-          </button>
+          </button> : null}
         </div>
       </div>
 
+      <form className="md:hidden" id="po-mobile-filters" method="get">
+        <MobileListFilters activeCount={[filters.status, filters.vendorId].filter(Boolean).length} formId="po-mobile-filters" onClear={() => router.push("/purchase/po")} resultLabel={`แสดง ${total.toLocaleString("th-TH")} รายการ`} search={<ListSearchField defaultValue={filters.query} name="q" placeholder="ค้นหาเลขที่ PO, ผู้ขาย, เลขที่ PR..." />}>
+          <ListFilterSelect defaultValue={filters.status} label="สถานะ" name="status"><option value="">ทั้งหมด</option>{PURCHASE_ORDER_STATUSES.map((status) => <option key={status} value={status}>{PURCHASE_ORDER_STATUS_META[status].label}</option>)}</ListFilterSelect>
+          <ListFilterSelect defaultValue={filters.vendorId} label="ผู้ขาย" name="vendor"><option value="">ทั้งหมด</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendorName}</option>)}</ListFilterSelect>
+          <ListDateRangeFilter defaultEndValue={filters.endDate} defaultStartValue={filters.startDate} endName="end" minEnd={filters.startDate || undefined} startName="start" />
+        </MobileListFilters>
+      </form>
+
       <form
-        className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-[1.22fr_0.88fr_0.88fr_1.18fr_auto]"
+        className="hidden min-w-0 gap-2 md:grid md:grid-cols-2 xl:grid-cols-[1.22fr_0.88fr_0.88fr_1.18fr_auto]"
         method="get"
       >
-        <label className="relative">
-          <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary"
-            size={18}
-          />
-          <input
-            className="h-[38px] w-full rounded-[5px] border border-outline-variant bg-background px-11 text-[14px] font-medium text-on-surface outline-none focus:border-primary"
+        <ListSearchField
             defaultValue={filters.query}
             name="q"
             placeholder="ค้นหาเลขที่ PO, ผู้ขาย, เลขที่ PR..."
-          />
-        </label>
-        <select
-          className="h-[38px] rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface outline-none focus:border-primary cursor-pointer"
+        />
+        <ListFilterSelect
           defaultValue={filters.status}
+          label="สถานะ"
           name="status"
-          onChange={(e) => e.target.form?.submit()}
+          onNativeChange={(event) => event.target.form?.requestSubmit()}
         >
-          <option value="">สถานะ: ทั้งหมด</option>
+          <option value="">ทั้งหมด</option>
           {PURCHASE_ORDER_STATUSES.map((status) => (
             <option key={status} value={status}>
-              สถานะ: {PURCHASE_ORDER_STATUS_META[status].label}
+              {PURCHASE_ORDER_STATUS_META[status].label}
             </option>
           ))}
-        </select>
-        <select
-          className="h-[38px] rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface outline-none focus:border-primary cursor-pointer"
+        </ListFilterSelect>
+        <ListFilterSelect
           defaultValue={filters.vendorId}
+          label="ผู้ขาย"
           name="vendor"
-          onChange={(e) => e.target.form?.submit()}
+          onNativeChange={(event) => event.target.form?.requestSubmit()}
         >
-          <option value="">ผู้ขาย: ทั้งหมด</option>
+          <option value="">ทั้งหมด</option>
           {vendors.map((vendor) => (
             <option key={vendor.id} value={vendor.id}>
               {vendor.vendorName}
             </option>
           ))}
-        </select>
-        <div className="flex h-[38px] min-w-0 overflow-hidden items-center gap-2 rounded-[5px] border border-outline-variant bg-background px-3 sm:px-4">
-          <CalendarDays className="shrink-0 text-secondary" size={18} />
-          <input
-            aria-label="วันที่เริ่มต้น"
-            className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-on-surface outline-none"
-            defaultValue={filters.startDate}
-            name="start"
-            type="date"
-            onChange={(e) => e.target.form?.submit()}
-          />
-          <span className="shrink-0 text-secondary">-</span>
-          <input
-            aria-label="วันที่สิ้นสุด"
-            className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-on-surface outline-none"
-            defaultValue={filters.endDate}
-            name="end"
-            type="date"
-            onChange={(e) => e.target.form?.submit()}
-          />
-        </div>
+        </ListFilterSelect>
+        <ListDateRangeFilter
+          defaultEndValue={filters.endDate}
+          defaultStartValue={filters.startDate}
+          endName="end"
+          minEnd={filters.startDate || undefined}
+          onEndChange={(_, event) => event.target.form?.requestSubmit()}
+          onStartChange={(_, event) => event.target.form?.requestSubmit()}
+          startName="start"
+        />
         <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-1">
-          <button
-            className="inline-flex h-[38px] flex-1 items-center justify-center gap-2 rounded-[5px] bg-primary px-4 text-[14px] font-bold text-white shadow-sm hover:bg-primary/95 transition-colors cursor-pointer xl:flex-none"
+          <ListFilterButton
+            className="flex-1 xl:flex-none"
+            icon={<Search size={17} />}
             type="submit"
+            tone="primary"
           >
-            <Search size={17} />
             ค้นหา
-          </button>
-          <button
-            className="inline-flex h-[38px] flex-1 items-center justify-center gap-2 rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface transition-colors hover:bg-surface-container-low cursor-pointer xl:flex-none"
+          </ListFilterButton>
+          <ListFilterButton
+            className="flex-1 xl:flex-none"
+            icon={<SlidersHorizontal size={17} />}
             onClick={() => router.push("/purchase/po")}
-            type="button"
           >
-            <SlidersHorizontal size={17} />
             ล้างตัวกรอง
-          </button>
+          </ListFilterButton>
         </div>
       </form>
 
-      <div className="overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest shadow-sm">
+      {!mobileDetail ? <MobileDocumentList
+        actions={(mobileRow, close) => {
+          const row = rows.find((item) => item.id === mobileRow.id);
+          if (!row) return null;
+          return <>
+            <button className="mobile-sheet-primary" onClick={() => { close(); void openMobileDetail(row.id); }} type="button"><Eye size={18} />เปิดเอกสาร</button>
+            <button className="mobile-sheet-secondary" onClick={() => { close(); void openPrintPreview(row.id); }} type="button"><Printer size={18} />พิมพ์</button>
+            {canEdit && row.status === "draft" ? <button className="mobile-sheet-quiet" onClick={() => { close(); void openEditModal(row.id); }} type="button"><Pencil size={18} />แก้ไข</button> : null}
+          </>;
+        }}
+        emptyText="ยังไม่มีใบสั่งซื้อที่ตรงกับตัวกรอง"
+        rows={mobileRows}
+      /> : null}
+
+      <div className="erp-desktop-table overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest shadow-sm">
         <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain">
-          <table className="erp-data-table min-w-[1000px]">
+          <table className="erp-data-table min-w-[1220px]">
             <thead className="bg-gray-50 text-[11px] font-bold text-black dark:bg-white/5 dark:text-white">
               <tr className="h-[34px]">
                 {HEADERS.map(([label, width], index) => (
@@ -340,6 +393,7 @@ export function PoListPage({
                 rows.map((row, index) => (
                   <tr
                     className="h-[36px] bg-surface-container-lowest transition-colors hover:bg-surface-container-low/50"
+                    data-row-actions={`po-${row.id}`}
                     key={row.id}
                   >
                     <td className="px-[14px] align-middle whitespace-nowrap">
@@ -375,34 +429,14 @@ export function PoListPage({
                       </StatusBadge>
                     </td>
                     <td className="px-[14px] align-middle">
-                      <div className="flex items-center justify-start gap-[10px] pr-[6px]">
-                        <TableAction
-                          disabled={loadingEditId !== null}
-                          label={row.status === "draft" ? "แก้ไข" : "ดูรายละเอียด"}
-                          onClick={() => openEditModal(row.id)}
-                        >
-                          <Pencil size={17} strokeWidth={2.1} />
-                        </TableAction>
-                        <TableAction
-                          disabled={loadingPrintId !== null}
-                          label="พิมพ์ใบสั่งซื้อ"
-                          onClick={() => openPrintPreview(row.id)}
-                        >
-                          <Printer size={17} strokeWidth={2.1} />
-                        </TableAction>
-                        <TableAction
-                          disabled={
-                            !["pending_approval", "approved", "sent"].includes(
-                              row.status,
-                            )
-                          }
-                          label="ยกเลิกใบสั่งซื้อ"
-                          onClick={() => setCancelOrder(row)}
-                          tone="danger"
-                        >
-                          <Ban size={17} strokeWidth={2.1} />
-                        </TableAction>
-                      </div>
+                      <RowActionMenu
+                        actions={[
+                          { disabled: loadingPrintId !== null, icon: <Printer size={16} />, label: "ดูและพิมพ์เอกสาร", onSelect: () => void openPrintPreview(row.id) },
+                          ...(canEdit && row.status === "draft" ? [{ disabled: loadingEditId !== null, icon: <Pencil size={16} />, label: "แก้ไข", onSelect: () => void openEditModal(row.id) }] : []),
+                          ...(canCancel ? [{ danger: true, disabled: !["pending_approval", "approved", "sent"].includes(row.status), icon: <Ban size={16} />, label: "ยกเลิกเอกสาร", onSelect: () => setCancelOrder(row) }] : []),
+                        ]}
+                        contextId={`po-${row.id}`}
+                      />
                     </td>
                   </tr>
                 ))
@@ -414,14 +448,20 @@ export function PoListPage({
         <Pagination currentPage={page} disabled={isPending} onPageChange={goToPage} pageSize={pageSize} totalItems={total} totalPages={totalPages} />
       </div>
 
+      <div className="md:hidden">
+        <Pagination currentPage={page} disabled={isPending} onPageChange={goToPage} pageSize={pageSize} totalItems={total} totalPages={totalPages} />
+      </div>
+
       {isCreateOpen ? (
         <PoCreateModal
+          key={createVersion}
+          onPrint={openPrintPreview}
+          onNext={createNext}
           buyerName={buyerName}
           defaultDeliveryAddress={defaultDeliveryAddress}
           documentDate={documentDate}
           onClose={() => setIsCreateOpen(false)}
           onSaved={(message) => {
-            setIsCreateOpen(false);
             toast.success(message);
             startTransition(() => router.refresh());
           }}
@@ -431,13 +471,15 @@ export function PoListPage({
 
       {editOrder ? (
         <PoCreateModal
+          key={createVersion}
+          onPrint={openPrintPreview}
+          onNext={createNext}
           buyerName={buyerName}
           defaultDeliveryAddress={defaultDeliveryAddress}
           documentDate={editOrder.documentDate}
           initialData={editOrder}
           onClose={() => setEditOrder(null)}
           onSaved={(message) => {
-            setEditOrder(null);
             toast.success(message);
             startTransition(() => router.refresh());
           }}
@@ -446,12 +488,41 @@ export function PoListPage({
         />
       ) : null}
 
+      {mobileDetail ? <MobileDocumentDetail
+        actions={<>
+          {canEdit && mobileDetail.status === "draft" ? <button className="mobile-sheet-secondary flex-1" onClick={() => { const id = mobileDetail.id; setMobileDetail(null); void openEditModal(id); }} type="button"><Pencil size={18} />แก้ไข</button> : null}
+          <button className="mobile-sheet-primary flex-1" onClick={() => { setPrintDetail(mobileDetail); setMobileDetail(null); }} type="button"><Printer size={18} />พิมพ์</button>
+        </>}
+        fields={[
+          { label: "วันที่เอกสาร", value: formatDisplayDate(mobileDetail.documentDate) },
+          { label: "ผู้ขาย", value: mobileDetail.vendor.name },
+          { label: "อ้างอิง PR", value: mobileDetail.prReferences.join(", ") || "-" },
+          { label: "วันที่ส่งมอบ", value: formatDisplayDate(mobileDetail.deliveryDate) },
+          { label: "การชำระเงิน", value: mobileDetail.paymentMethodName },
+          { label: "ยอดรวม", value: `${formatPurchaseOrderAmount(mobileDetail.grandTotal)} บาท` },
+        ]}
+        items={mobileDetail.items.map((item) => ({
+          code: item.itemCode,
+          details: [
+            { label: "จำนวน", value: `${item.quantity.toLocaleString("th-TH")} ${item.unitName}` },
+            { label: "ราคา/หน่วย", value: `${formatPurchaseOrderAmount(item.unitPrice)} บาท` },
+          ],
+          id: item.lineNo,
+          name: item.itemDescription,
+          trailing: `${formatPurchaseOrderAmount(item.lineTotal)} บาท`,
+        }))}
+        onClose={() => setMobileDetail(null)}
+        status={<StatusBadge tone={statusTone(mobileDetail.status)}>{PURCHASE_ORDER_STATUS_META[mobileDetail.status].label}</StatusBadge>}
+        title={mobileDetail.poNumber}
+      /> : null}
+
       {printDetail ? (
         <PoPrintPreviewModal
           detail={printDetail}
           documentContext={documentContext}
           onClose={() => setPrintDetail(null)}
-          canDecide={canDecide}
+          canApprove={canApprove}
+          canReject={canReject}
           onDecision={handleDecision}
         />
       ) : null}
@@ -480,38 +551,5 @@ export function PoListPage({
         />
       ) : null}
     </section>
-  );
-}
-
-function TableAction({
-  children,
-  disabled = false,
-  label,
-  onClick,
-  tone = "default",
-}: {
-  children: React.ReactNode;
-  disabled?: boolean;
-  label: string;
-  onClick?: () => void;
-  tone?: "approve" | "danger" | "default";
-}) {
-  return (
-    <button
-      aria-label={label}
-      className={`grid h-[22px] w-[22px] place-items-center bg-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-        tone === "danger"
-          ? "text-primary hover:text-primary/80"
-          : tone === "approve"
-            ? "text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
-            : "text-on-surface hover:text-primary"
-      }`}
-      disabled={disabled}
-      onClick={onClick}
-      title={label}
-      type="button"
-    >
-      {children}
-    </button>
   );
 }

@@ -1,0 +1,123 @@
+.footer {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: auto;
+  padding-top: 1mm;
+  font-family: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif;
+  font-size: 6.8pt;
+  line-height: 1.2;
+  color: #000;
+  overflow: hidden;
+}
+
+.placementPage,
+.placementReport {
+  right: var(--document-page-padding-inline, 6mm);
+  bottom: var(--document-footer-bottom, 3mm);
+  left: var(--document-page-padding-inline, 6mm);
+  width: auto;
+  max-width: none;
+  margin-top: 0;
+}
+
+.placementPage {
+  position: absolute;
+}
+
+.placementReport {
+  position: fixed;
+}
+
+.variantStandard {
+  border-top: 0.5mm solid #d31220;
+}
+
+.variantAccent {
+  border-top: 0.5mm solid #d31220;
+}
+
+.variantReport {
+  border-top: 0.25mm solid #bbb;
+  color: #444;
+  font-size: 7.2pt;
+  padding-top: 1.5mm;
+  margin-top: 2mm;
+}
+
+.variantReport.placementReport {
+  margin-top: 0;
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3mm;
+  text-align: left;
+  min-width: 0;
+}
+
+.systemStamp {
+  font-weight: 700;
+  font-size: 6.8pt;
+  color: #000;
+  white-space: nowrap;
+}
+
+.printMeta {
+  color: #333;
+  font-size: 6.5pt;
+  white-space: nowrap;
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3mm;
+  text-align: center;
+  padding: 0 2mm;
+  font-weight: 500;
+  font-size: 6.8pt;
+  min-width: 0;
+}
+
+.center:empty {
+  display: none;
+}
+
+.right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3mm;
+  align-items: flex-end;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pageNumber {
+  font-weight: 600;
+  color: #000;
+  font-size: 6.8pt;
+  font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  .footer {
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  .variantStandard, .variantAccent {
+    border-top-color: #d31220 !important;
+  }
+  .variantReport {
+    border-top-color: #777 !important;
+  }
+  .systemStamp, .pageNumber {
+    color: #000 !important;
+  }
+}

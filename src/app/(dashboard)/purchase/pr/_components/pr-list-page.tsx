@@ -2,12 +2,11 @@
 
 import {
   Ban,
-  CalendarDays,
+  Eye,
   Filter,
   Pencil,
   Plus,
   Printer,
-  Search,
   Trash2,
 } from "lucide-react";
 import {
@@ -20,6 +19,8 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/data-table";
+import { MobileDocumentList } from "@/components/mobile-document-list";
+import { MobileDocumentDetail } from "@/components/mobile-document-detail";
 import { Pagination } from "@/components/pagination";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { StatusBadge, statusTone } from "@/components/status-badge";
@@ -42,7 +43,7 @@ import { exportPurchaseRequisitionsToExcel } from "./pr-export";
 import { PrPrintPreviewModal } from "./pr-print-preview-modal";
 import {
   cancelPurchaseRequisitionAction,
-  decidePurchaseRequisitionAction,
+  reviewPurchaseRequisitionAction,
   deletePurchaseRequisitionAction,
   getPurchaseRequisitionItemsAction,
   getPurchaseRequisitionPrintDetailAction,
@@ -50,9 +51,20 @@ import {
 import { DocumentCancelModal } from "../../_components/document-cancel-modal";
 import { toast } from "@/components/toast";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { useHasPermission } from "@/components/permission-context";
+import {
+  ListDateRangeFilter,
+  ListFilterButton,
+  ListFilterSelect,
+  ListFilterToolbar,
+  ListSearchField,
+  MobileListFilters,
+} from "@/components/list-filters";
+import { RowActionMenu } from "@/components/row-action-menu";
 
 type PrListPageProps = {
-  canDecide: boolean;
+  canReview: boolean;
+  canReturn: boolean;
   documentContext: CompanyDocumentContext;
   initialDepartments: string[];
   initialDocumentDate: string;
@@ -75,11 +87,12 @@ const TABLE_HEADERS = [
   { key: "needed", label: "วันที่ต้องการใช้", width: "w-[11%]" },
   { key: "items", label: "จำนวนรายการ", width: "w-[9%]" },
   { key: "status", label: "สถานะ", width: "w-[10%]" },
-  { key: "actions", label: "จัดการ", width: "w-[10%]" },
+  { key: "actions", label: "จัดการ", width: "w-[6%]" },
 ] as const;
 
 export function PrListPage({
-  canDecide,
+  canReview,
+  canReturn,
   documentContext,
   initialDepartments,
   initialDocumentDate,
@@ -91,12 +104,17 @@ export function PrListPage({
   initialStartDate,
 }: PrListPageProps) {
   const router = useRouter();
+  const canCreate = useHasPermission("pr.create");
+  const canEdit = useHasPermission("pr.edit");
+  const canDelete = useHasPermission("pr.delete");
+  const canCancel = useHasPermission("pr.cancel");
   const [isPending, startTransition] = useTransition();
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const openedNotificationPrRef = useRef<number | null>(null);
   const [printPreview, setPrintPreview] =
     useState<PurchaseRequisitionPrintDetail | null>(null);
+  const [mobileDetail, setMobileDetail] = useState<PurchaseRequisitionPrintDetail | null>(null);
   const [editPrData, setEditPrData] = useState<{
     id: number;
     items: PurchaseRequisitionEditableRow[];
@@ -124,7 +142,9 @@ export function PrListPage({
   const [endDate, setEndDate] = useState(initialEndDate);
   const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const handlePreviewClick = async (row: PurchaseRequisitionSummary) => {
+  const [createVersion, setCreateVersion] = useState(0);
+  const createNext = () => { setEditPrData(null); setCreateVersion(value => value + 1); setIsCreateModalOpen(true); };
+  const handlePreviewClick = async (row: { id: number }) => {
     setIsPreviewLoading(true);
     const result = await getPurchaseRequisitionPrintDetailAction(row.id);
     setIsPreviewLoading(false);
@@ -138,6 +158,14 @@ export function PrListPage({
       result.error || "ไม่สามารถเปิดตัวอย่างใบขอซื้อได้",
       "error",
     );
+  };
+
+  const handleMobileDetailClick = async (row: { id: number }) => {
+    setIsPreviewLoading(true);
+    const result = await getPurchaseRequisitionPrintDetailAction(row.id);
+    setIsPreviewLoading(false);
+    if (result.success && result.detail) { setMobileDetail(result.detail); return; }
+    showToast(result.error || "ไม่สามารถเปิดรายละเอียดใบขอซื้อได้", "error");
   };
 
   useEffect(() => {
@@ -165,14 +193,14 @@ export function PrListPage({
   }, [initialOpenRequisitionId]);
 
   const handleDecision = async (
-    decision: "approved" | "rejected",
+    decision: "ready_for_po" | "returned",
     note: string,
   ) => {
     if (!printPreview) {
       return { error: "ไม่พบใบขอซื้อที่ต้องการดำเนินการ", success: false };
     }
 
-    const result = await decidePurchaseRequisitionAction({
+    const result = await reviewPurchaseRequisitionAction({
       decision,
       note,
       requisitionId: printPreview.id,
@@ -184,9 +212,9 @@ export function PrListPage({
 
     setPrintPreview(null);
     showToast(
-      decision === "approved"
-        ? `อนุมัติใบขอซื้อ ${result.prNumber} เรียบร้อยแล้ว`
-        : `ปฏิเสธใบขอซื้อ ${result.prNumber} เรียบร้อยแล้ว`,
+      decision === "ready_for_po"
+        ? `ตรวจสอบใบขอซื้อ ${result.prNumber} พร้อมออก PO แล้ว`
+        : `ส่งใบขอซื้อ ${result.prNumber} กลับแก้ไขแล้ว`,
     );
     startTransition(() => router.refresh());
     return result;
@@ -212,7 +240,7 @@ export function PrListPage({
 
   const handleDelete = (row: PurchaseRequisitionSummary) => {
     if (row.status !== "draft") {
-      showToast("ลบได้เฉพาะใบขอซื้อสถานะร่าง กรุณาใช้การยกเลิกสำหรับเอกสารที่ส่งอนุมัติแล้ว", "error");
+      showToast("ลบได้เฉพาะใบขอซื้อสถานะร่าง กรุณาใช้การยกเลิกสำหรับเอกสารที่ส่งตรวจสอบแล้ว", "error");
       return;
     }
     setDeleteConfirmPr(row);
@@ -302,6 +330,21 @@ export function PrListPage({
     ? (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1
     : 0;
 
+  const mobileRows = currentPageRows.map((row) => ({
+    details: [
+      { label: "ผู้ขอซื้อ", value: row.requester_name },
+      { label: "แผนก", value: row.department_name },
+      { label: "วันที่เอกสาร", value: formatDisplayDate(row.document_date) },
+      { label: "วันที่ต้องการใช้", value: formatDisplayDate(row.needed_by_date) },
+      { label: "จำนวน", value: `${row.requested_item_count} รายการ` },
+    ],
+    id: row.id,
+    meta: `${formatDisplayDate(row.document_date)} · ${row.requested_item_count} รายการ`,
+    status: <StatusBadge tone={statusTone(row.status)}>{getPurchaseRequisitionStatusLabel(row.status, row.po_status)}</StatusBadge>,
+    subtitle: row.requester_name,
+    title: row.pr_number,
+  }));
+
   return (
     <section className="min-w-0 space-y-2">
       <div className="shrink-0 space-y-2">
@@ -317,103 +360,107 @@ export function PrListPage({
 
           <div className="flex flex-wrap items-center gap-2">
             <ExcelExportButton onClick={() => exportPurchaseRequisitionsToExcel(filteredRequisitions)} />
-            <ActionButton
-              icon={<Plus size={17} />}
-              label="เปิด PR ใหม่"
-              onClick={() => setIsCreateModalOpen(true)}
-              tone="primary"
-            />
+            {canCreate ? (
+              <ActionButton
+                icon={<Plus size={17} />}
+                label="เปิด PR ใหม่"
+                onClick={() => setIsCreateModalOpen(true)}
+                tone="primary"
+              />
+            ) : null}
           </div>
         </div>
 
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-[1.22fr_0.88fr_0.88fr_1.18fr_auto]">
-          <label className="relative">
-            <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary"
-              size={18}
-            />
-            <input
-              className="h-[38px] w-full rounded-[5px] border border-outline-variant bg-background px-11 text-[14px] font-medium text-on-surface outline-none focus:border-primary"
-              onChange={(event) => {
-                setQuery(event.target.value);
+        <MobileListFilters activeCount={[statusFilter !== "all", departmentFilter !== "all", startDate, endDate].filter(Boolean).length} onClear={resetFilters} resultLabel={`แสดง ${filteredRequisitions.length.toLocaleString("th-TH")} รายการ`} search={<ListSearchField onChange={(value) => { setQuery(value); setCurrentPage(1); }} placeholder="ค้นหาเลขที่ PR, ผู้ขอซื้อ..." value={query} />}>
+          <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value === "all" ? "all" : value as PurchaseRequisitionStatus); setCurrentPage(1); }} value={statusFilter}><option value="all">ทั้งหมด</option><option value="draft">ร่าง</option><option value="pending_approval">รอตรวจสอบ</option><option value="approved">พร้อมออก PO</option><option value="rejected">ส่งกลับแก้ไข</option><option value="cancelled">ยกเลิก</option></ListFilterSelect>
+          <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentFilter(value); setCurrentPage(1); }} value={departmentFilter}><option value="all">ทั้งหมด</option>{initialDepartments.map((department) => <option key={department} value={department}>{department}</option>)}</ListFilterSelect>
+          <ListDateRangeFilter
+            endValue={endDate}
+            minEnd={startDate || undefined}
+            onEndChange={(value) => { setEndDate(value); setCurrentPage(1); }}
+            onStartChange={(value) => { setStartDate(value); setCurrentPage(1); }}
+            startValue={startDate}
+          />
+        </MobileListFilters>
+
+        <ListFilterToolbar className="hidden min-w-0 md:grid md:grid-cols-2 xl:grid-cols-[1.22fr_0.88fr_0.88fr_1.18fr_auto]">
+          <ListSearchField
+              onChange={(value) => {
+                setQuery(value);
                 setCurrentPage(1);
               }}
               placeholder="ค้นหาเลขที่ PR, ผู้ขอซื้อ..."
               value={query}
-            />
-          </label>
+          />
 
-          <select
-            className="h-[38px] rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface outline-none focus:border-primary"
-            onChange={(event) => {
+          <ListFilterSelect
+            label="สถานะ"
+            onChange={(value) => {
               setStatusFilter(
-                event.target.value === "all"
+                value === "all"
                   ? "all"
-                  : (event.target.value as PurchaseRequisitionStatus),
+                  : (value as PurchaseRequisitionStatus),
               );
               setCurrentPage(1);
             }}
             value={statusFilter}
           >
-            <option value="all">สถานะ: ทั้งหมด</option>
-            <option value="draft">สถานะ: ร่าง</option>
-            <option value="pending_approval">สถานะ: รออนุมัติ</option>
-            <option value="approved">สถานะ: อนุมัติแล้ว</option>
-            <option value="rejected">สถานะ: ปฏิเสธ</option>
-            <option value="cancelled">สถานะ: ยกเลิก</option>
-          </select>
+            <option value="all">ทั้งหมด</option>
+            <option value="draft">ร่าง</option>
+            <option value="pending_approval">รอตรวจสอบ</option>
+            <option value="approved">พร้อมออก PO</option>
+            <option value="rejected">ส่งกลับแก้ไข</option>
+            <option value="cancelled">ยกเลิก</option>
+          </ListFilterSelect>
 
-          <select
-            className="h-[38px] rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface outline-none focus:border-primary"
-            onChange={(event) => {
-              setDepartmentFilter(event.target.value);
+          <ListFilterSelect
+            label="แผนก"
+            onChange={(value) => {
+              setDepartmentFilter(value);
               setCurrentPage(1);
             }}
             value={departmentFilter}
           >
-            <option value="all">แผนก: ทั้งหมด</option>
+            <option value="all">ทั้งหมด</option>
             {initialDepartments.map((department) => (
               <option key={department} value={department}>
-                แผนก: {department}
+                {department}
               </option>
             ))}
-          </select>
+          </ListFilterSelect>
 
-          <div className="flex h-[38px] items-center gap-3 rounded-[5px] border border-outline-variant bg-background px-4">
-            <CalendarDays className="shrink-0 text-secondary" size={18} />
-            <input
-              className="w-full bg-transparent text-[14px] font-medium text-on-surface outline-none"
-              onChange={(event) => {
-                setStartDate(event.target.value);
-                setCurrentPage(1);
-              }}
-              type="date"
-              value={startDate}
-            />
-            <span className="text-secondary">-</span>
-            <input
-              className="w-full bg-transparent text-[14px] font-medium text-on-surface outline-none"
-              onChange={(event) => {
-                setEndDate(event.target.value);
-                setCurrentPage(1);
-              }}
-              type="date"
-              value={endDate}
-            />
-          </div>
+          <ListDateRangeFilter
+            endValue={endDate}
+            minEnd={startDate || undefined}
+            onEndChange={(value) => { setEndDate(value); setCurrentPage(1); }}
+            onStartChange={(value) => { setStartDate(value); setCurrentPage(1); }}
+            startValue={startDate}
+          />
 
-          <button
-            className="inline-flex h-[38px] items-center justify-center gap-2 rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface transition-colors hover:bg-surface-container-low"
+          <ListFilterButton
+            icon={<Filter size={17} />}
             onClick={resetFilters}
-            type="button"
           >
-            <Filter size={17} />
             ล้างตัวกรอง
-          </button>
-        </div>
+          </ListFilterButton>
+        </ListFilterToolbar>
       </div>
 
-      <div className="overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest shadow-sm">
+      {!mobileDetail ? <MobileDocumentList
+        actions={(mobileRow, close) => {
+          const row = currentPageRows.find((item) => item.id === mobileRow.id);
+          if (!row) return null;
+          return <>
+            <button className="mobile-sheet-primary" onClick={() => { close(); void handleMobileDetailClick(row); }} type="button"><Eye size={18} />เปิดเอกสาร</button>
+            <button className="mobile-sheet-secondary" onClick={() => { close(); void handlePreviewClick(row); }} type="button"><Printer size={18} />พิมพ์</button>
+            {canEdit && ["draft", "rejected"].includes(row.status) ? <button className="mobile-sheet-quiet" onClick={() => { close(); void handleEditClick(row); }} type="button"><Pencil size={18} />แก้ไข</button> : null}
+          </>;
+        }}
+        emptyText="ไม่พบรายการใบขอซื้อที่ตรงกับตัวกรอง"
+        rows={mobileRows}
+      /> : null}
+
+      <div className="erp-desktop-table overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest shadow-sm">
         <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain">
           <DataTable className="min-w-[900px]">
             <thead className="bg-gray-50 text-[11px] font-bold text-black dark:bg-white/5 dark:text-white">
@@ -441,6 +488,7 @@ export function PrListPage({
                   <tr
                     key={row.id}
                     className="h-[36px] bg-surface-container-lowest transition-colors hover:bg-surface-container-low/50"
+                    data-row-actions={`pr-${row.id}`}
                   >
                     <td className="px-[14px] align-middle whitespace-nowrap">
                       {rowsStart + index}
@@ -468,47 +516,19 @@ export function PrListPage({
                     </td>
                     <td className="px-[14px] align-middle whitespace-nowrap">
                       <StatusBadge tone={statusTone(row.status)}>
-                        {getPurchaseRequisitionStatusLabel(row.status)}
+                        {getPurchaseRequisitionStatusLabel(row.status, row.po_status)}
                       </StatusBadge>
                     </td>
                     <td className="px-[14px] align-middle">
-                      <div className="flex items-center justify-start gap-[10px] pr-[6px]">
-                        <IconButton
-                          label="พิมพ์ใบขอซื้อ"
-                          tone="view"
-                          onClick={() => handlePreviewClick(row)}
-                          disabled={isPending || isPreviewLoading}
-                        >
-                          <Printer size={17} strokeWidth={2.1} />
-                        </IconButton>
-                        <IconButton
-                          label={row.status === "draft" ? "แก้ไข" : "ดูรายละเอียด"}
-                          tone={row.status === "draft" ? "edit" : "view"}
-                          onClick={() => handleEditClick(row)}
-                          disabled={isPending || isEditLoading}
-                        >
-                          <Pencil size={17} strokeWidth={2.1} />
-                        </IconButton>
-                        <IconButton
-                          label="ยกเลิกใบขอซื้อ"
-                          tone="delete"
-                          onClick={() => setCancelRequisition(row)}
-                          disabled={
-                            isPending ||
-                            !["pending_approval", "approved"].includes(row.status)
-                          }
-                        >
-                          <Ban size={17} strokeWidth={2.1} />
-                        </IconButton>
-                        <IconButton
-                          label="ลบ"
-                          tone="delete"
-                          onClick={() => handleDelete(row)}
-                          disabled={isPending || isEditLoading || row.status !== "draft"}
-                        >
-                          <Trash2 size={17} strokeWidth={2.1} />
-                        </IconButton>
-                      </div>
+                      <RowActionMenu
+                        actions={[
+                          { disabled: isPending || isPreviewLoading, icon: <Printer size={16} />, label: "ดูและพิมพ์เอกสาร", onSelect: () => void handlePreviewClick(row) },
+                          ...(canEdit && ["draft", "rejected"].includes(row.status) ? [{ disabled: isPending || isEditLoading, icon: <Pencil size={16} />, label: "แก้ไข", onSelect: () => void handleEditClick(row) }] : []),
+                          ...(canCancel ? [{ danger: true, disabled: isPending || !["pending_approval", "approved"].includes(row.status), icon: <Ban size={16} />, label: "ยกเลิกเอกสาร", onSelect: () => setCancelRequisition(row) }] : []),
+                          ...(canDelete ? [{ danger: true, disabled: isPending || isEditLoading || row.status !== "draft", icon: <Trash2 size={16} />, label: "ลบเอกสาร", onSelect: () => handleDelete(row) }] : []),
+                        ]}
+                        contextId={`pr-${row.id}`}
+                      />
                     </td>
                   </tr>
                 ))
@@ -520,8 +540,15 @@ export function PrListPage({
         <Pagination currentPage={safeCurrentPage} onPageChange={setCurrentPage} pageSize={ITEMS_PER_PAGE} totalItems={filteredRequisitions.length} totalPages={totalPages} />
       </div>
 
+      <div className="md:hidden">
+        <Pagination currentPage={safeCurrentPage} onPageChange={setCurrentPage} pageSize={ITEMS_PER_PAGE} totalItems={filteredRequisitions.length} totalPages={totalPages} />
+      </div>
+
       {isCreateModalOpen ? (
         <PrCreateModal
+          key={createVersion}
+          onPrint={id => handlePreviewClick({ id })}
+          onNext={createNext}
           documentDate={initialDocumentDate}
           materials={initialMaterials}
           onClose={() => setIsCreateModalOpen(false)}
@@ -531,6 +558,9 @@ export function PrListPage({
 
       {editPrData ? (
         <PrCreateModal
+          key={createVersion}
+          onPrint={id => handlePreviewClick({ id })}
+          onNext={createNext}
           documentDate={initialDocumentDate}
           materials={initialMaterials}
           onClose={() => setEditPrData(null)}
@@ -540,9 +570,36 @@ export function PrListPage({
         />
       ) : null}
 
+      {mobileDetail ? <MobileDocumentDetail
+        actions={<>
+          {canEdit && ["draft", "rejected"].includes(mobileDetail.status) ? <button className="mobile-sheet-secondary flex-1" onClick={() => { const row = initialRequisitions.find((item) => item.id === mobileDetail.id); setMobileDetail(null); if (row) void handleEditClick(row); }} type="button"><Pencil size={18} />แก้ไข</button> : null}
+          <button className="mobile-sheet-primary flex-1" onClick={() => { setPrintPreview(mobileDetail); setMobileDetail(null); }} type="button"><Printer size={18} />พิมพ์</button>
+        </>}
+        fields={[
+          { label: "วันที่เอกสาร", value: formatDisplayDate(mobileDetail.documentDate) },
+          { label: "ผู้ขอซื้อ", value: mobileDetail.requesterName },
+          { label: "แผนก", value: mobileDetail.departmentName },
+          { label: "วันที่ต้องการใช้", value: formatDisplayDate(mobileDetail.neededByDate) },
+          { label: "หมายเหตุ", value: mobileDetail.remarks || "-" },
+        ]}
+        items={mobileDetail.items.map((item) => ({
+          code: item.code,
+          details: [
+            { label: "จำนวน", value: `${item.quantity.toLocaleString("th-TH")} ${item.unitName}` },
+            { label: "วันที่ต้องการ", value: formatDisplayDate(item.neededByDate) },
+          ],
+          id: item.lineNo,
+          name: item.name || item.description,
+        }))}
+        onClose={() => setMobileDetail(null)}
+        status={<StatusBadge tone={statusTone(mobileDetail.status)}>{getPurchaseRequisitionStatusLabel(mobileDetail.status, initialRequisitions.find((row) => row.id === mobileDetail.id)?.po_status)}</StatusBadge>}
+        title={mobileDetail.prNumber}
+      /> : null}
+
       {printPreview ? (
         <PrPrintPreviewModal
-          canDecide={canDecide}
+          canReview={canReview}
+          canReturn={canReturn}
           detail={printPreview}
           documentContext={documentContext}
           onDecision={handleDecision}
@@ -618,38 +675,6 @@ function ActionButton({
     >
       {icon}
       {label}
-    </button>
-  );
-}
-
-function IconButton({
-  children,
-  label,
-  onClick,
-  tone,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  tone: "delete" | "edit" | "view";
-  disabled?: boolean;
-}) {
-  const className =
-    tone === "delete"
-      ? "text-primary hover:text-primary/80"
-      : "text-on-surface hover:text-primary";
-
-  return (
-    <button
-      aria-label={label}
-      className={`grid h-[22px] w-[22px] place-items-center bg-transparent transition-colors ${className} disabled:opacity-30 disabled:cursor-not-allowed`}
-      onClick={onClick}
-      title={label}
-      type="button"
-      disabled={disabled}
-    >
-      {children}
     </button>
   );
 }

@@ -9,7 +9,13 @@ export const metadata: Metadata = {
   title: "ตั้งค่าข้อมูลบริษัท | KRC ERP",
 };
 
-export default async function CompanySettingsPage() {
+export default async function CompanySettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const tab = (await searchParams).tab;
+  const initialTab = tab === "branches" || tab === "documents" ? tab : "company";
   const result = await getCompanySettingsAction();
 
   if (!("data" in result)) {
@@ -23,7 +29,8 @@ export default async function CompanySettingsPage() {
   return (
     <CompanySettingsForm
       initialData={result.data}
-      key={`${result.data.profile.id}:${result.data.profile.updatedAt}`}
+      initialTab={initialTab}
+      key={`${result.data.profile.id}:${result.data.profile.updatedAt}:${initialTab}`}
     />
   );
 }

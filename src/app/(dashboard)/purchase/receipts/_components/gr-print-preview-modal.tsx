@@ -1,10 +1,13 @@
 "use client";
 
-import { Printer, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
+import { CompanyDocumentFooter } from "@/components/company-document-footer";
+import { DocumentPreviewShell } from "@/components/document-preview-shell";
 import type { CompanyDocumentContext } from "@/lib/company-settings";
+import { exportElementPdf, printElement } from "@/lib/document-print";
 import { formatDisplayDate } from "@/lib/purchase-requisitions";
+import { supplierDocumentTypeLabel } from "@/lib/goods-receipts";
 
 type GrPrintItem = {
   id: number;
@@ -31,7 +34,9 @@ type GrPrintDetail = {
   vendor_code: string;
   vendor_name: string;
   vendor_address?: string;
-  delivery_note_no: string;
+  delivery_note_no: string | null;
+  supplier_document_type: string | null;
+  supplier_document_date: string | null;
   remarks: string;
   created_at: string;
   items: GrPrintItem[];
@@ -76,13 +81,8 @@ export function GrPrintPreviewModal({
   const itemsPerPage = pageSize === "A4" ? 20 : 10;
   const pages = paginateItems(detail.items, itemsPerPage);
 
-  const footerText =
-    [
-      documentContext.documentSettings.footerTextTh,
-      documentContext.documentSettings.footerTextEn,
-    ]
-      .filter(Boolean)
-      .join(" / ") || "เอกสารตรวจรับสินค้า KRC ERP";
+
+  const printRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -91,73 +91,57 @@ export function GrPrintPreviewModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.classList.remove("printing-goods-receipt");
-      document.getElementById("gr-active-print-page-size")?.remove();
     };
   }, [onClose]);
 
-  const handlePrint = () => {
-    const printPageStyle = document.createElement("style");
-    printPageStyle.id = "gr-active-print-page-size";
-    printPageStyle.textContent = `@page { size: ${
-      pageSize === "A4" ? "210mm 297mm" : "210mm 148mm"
-    }; margin: 0; }`;
+  const handlePrint = async () => {
+    if (printRootRef.current) {
+      await printElement(printRootRef.current, {
+        title: detail.gr_number || "goods-receipt",
+        paperSize: pageSize === "A4" ? "A4" : "A5",
+        orientation: pageSize === "A4" ? "portrait" : "landscape",
+        bodyClass: "printing-goods-receipt",
+      });
+      return;
+    }
+  };
 
-    document.getElementById(printPageStyle.id)?.remove();
-    document.head.appendChild(printPageStyle);
-
-    const clearPrintMode = () => {
-      document.body.classList.remove("printing-goods-receipt");
-      printPageStyle.remove();
-      window.removeEventListener("afterprint", clearPrintMode);
-    };
-
-    document.body.classList.add("printing-goods-receipt");
-    window.addEventListener("afterprint", clearPrintMode);
-    requestAnimationFrame(() => window.print());
+  const handleExportPdf = async () => {
+    if (printRootRef.current) {
+      await exportElementPdf(printRootRef.current, {
+        filename: detail.gr_number || "goods-receipt",
+        paperSize: pageSize === "A4" ? "A4" : "A5",
+        orientation: pageSize === "A4" ? "portrait" : "landscape",
+        bodyClass: "printing-goods-receipt",
+      });
+      return;
+    }
   };
 
   return (
-    <div
-      aria-label={`ตัวอย่างใบรับสินค้า ${detail.gr_number}`}
-      aria-modal="true"
-      className="gr-preview-overlay"
-      role="dialog"
-    >
-      {/* Toolbar */}
-      <div className="gr-preview-toolbar">
-        <div>
-          <strong>ตัวอย่างก่อนพิมพ์ใบรับสินค้า</strong>
-          <span>
-            {pageSize === "A4" ? "A4 แนวตั้ง" : "A5 แนวนอน"} · {detail.items.length} รายการ · {pages.length} หน้า
-          </span>
-        </div>
-        <div className="gr-preview-actions">
-          <div className="flex items-center gap-1.5 mr-3">
-            <span className="text-[11px] font-bold text-slate-500">โหมดกระดาษ:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(e.target.value as "A4" | "A5")}
-              className="h-[30px] rounded-[3px] border border-outline-variant bg-background px-2 text-[11px] font-bold text-on-surface outline-none cursor-pointer"
-            >
-              <option value="A4">A4 (แนวตั้ง)</option>
-              <option value="A5">A5 (แนวนอน)</option>
-            </select>
-          </div>
-          <button onClick={onClose} type="button" className="gr-btn-secondary">
-            <X size={17} />
-            ปิด
-          </button>
-          <button onClick={handlePrint} type="button" className="gr-btn-primary">
-            <Printer size={17} />
-            พิมพ์ใบ GR ({pageSize})
-          </button>
-        </div>
-      </div>
-
-      {/* A4/A5 Paper Container */}
-      <div className="gr-preview-scroll">
-        <div className="gr-print-root">
+    <>
+      <DocumentPreviewShell
+        ariaLabel={`ตัวอย่างใบรับสินค้า ${detail.gr_number}`}
+        documentNumber={detail.gr_number}
+        onClose={onClose}
+        onExportPdf={handleExportPdf}
+        onPaperChange={(value) => setPageSize(value as "A4" | "A5")}
+        onPrint={handlePrint}
+        paperHeightMm={pageSize === "A4" ? 297 : 148}
+        paperLabel={pageSize === "A4" ? "A4 (แนวตั้ง)" : "A5 (แนวนอน)"}
+        paperOptions={[
+          { label: "A4 (แนวตั้ง)", value: "A4" },
+          { label: "A5 (แนวนอน)", value: "A5" },
+        ]}
+        paperValue={pageSize}
+        paperWidthMm={210}
+        statusDate={formatDisplayDate(detail.document_date)}
+        statusDescription="เอกสารถูกบันทึกรับสินค้าเข้าคลังแล้ว"
+        statusLabel="บันทึกแล้ว"
+        title="ตัวอย่างก่อนพิมพ์ใบรับสินค้า"
+        totalPages={pages.length}
+      >
+        <div className="gr-print-root" ref={printRootRef}>
           {pages.map((pageItems, pageIndex) => {
             const isLastPage = pageIndex === pages.length - 1;
             const filledRows = Array.from(
@@ -202,8 +186,16 @@ export function GrPrintPreviewModal({
                           <td><strong>{detail.po_number}</strong></td>
                         </tr>
                         <tr>
-                          <td>เลขที่ใบส่งของคู่ค้า:</td>
+                          <td>เอกสารผู้ขาย:</td>
+                          <td><strong>{supplierDocumentTypeLabel(detail.supplier_document_type)}</strong></td>
+                        </tr>
+                        <tr>
+                          <td>เลขที่เอกสาร:</td>
                           <td><strong>{detail.delivery_note_no || "-"}</strong></td>
+                        </tr>
+                        <tr>
+                          <td>วันที่เอกสาร:</td>
+                          <td><strong>{detail.supplier_document_date ? formatDisplayDate(detail.supplier_document_date) : "-"}</strong></td>
                         </tr>
                       </tbody>
                     </table>
@@ -306,19 +298,20 @@ export function GrPrintPreviewModal({
                   )}
                 </section>
 
-                {/* Footer */}
-                <footer className="gr-document-footer">
-                  <span>{footerText}</span>
-                  <span>
-                    หน้า {pageIndex + 1} / {pages.length}
-                  </span>
-                  <span>พิมพ์เมื่อ {formatPrintedAt(printedAt)}</span>
-                </footer>
+                <CompanyDocumentFooter
+                  className="gr-document-footer"
+                  context={documentContext}
+                  currentPage={pageIndex + 1}
+                  printedAt={formatPrintedAt(printedAt)}
+                  placement="page"
+                  totalPages={pages.length}
+                  variant="standard"
+                />
               </article>
             );
           })}
         </div>
-      </div>
+      </DocumentPreviewShell>
 
       {/* Styled JSX Styles */}
       <style jsx global>{`
@@ -403,6 +396,25 @@ export function GrPrintPreviewModal({
           background: #900d14;
         }
 
+        .gr-btn-export {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          height: 36px;
+          border: 1px solid #af101a;
+          border-radius: 4px;
+          background: #ffffff;
+          color: #af101a;
+          padding: 0 16px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .gr-btn-export:hover {
+          background: #fdf2f2;
+        }
+
         .gr-preview-scroll {
           flex: 1;
           overflow-y: auto;
@@ -414,7 +426,6 @@ export function GrPrintPreviewModal({
           flex-direction: column;
           align-items: center;
           gap: 18px;
-          zoom: 0.73;
         }
 
         /* Screen Preview page layout - FLEXBOX based matching PO dimensions */
@@ -429,6 +440,8 @@ export function GrPrintPreviewModal({
         }
 
         .gr-print-page.gr-size-A4 {
+          --document-footer-bottom: 3mm;
+          --document-page-padding-inline: 6mm;
           width: 210mm;
           height: 297mm;
           box-shadow: 0 12px 40px rgba(0, 0, 0, 0.32);
@@ -436,6 +449,8 @@ export function GrPrintPreviewModal({
         }
 
         .gr-print-page.gr-size-A5 {
+          --document-footer-bottom: 1.5mm;
+          --document-page-padding-inline: 3mm;
           width: 210mm;
           height: 148mm;
           box-shadow: 0 12px 40px rgba(0, 0, 0, 0.32);
@@ -444,51 +459,52 @@ export function GrPrintPreviewModal({
 
         /* A5 landscape follows the compact 10-row goods-receipt blueprint. */
         .gr-size-A5 [class*="company-document-header_header__"] {
-          height: 18mm !important;
+          height: 15mm !important;
+          min-height: 15mm !important;
           column-gap: 2mm !important;
           border-bottom-width: 0.5mm !important;
-          padding-bottom: 1.5mm !important;
+          padding-bottom: 1mm !important;
           margin-bottom: 0 !important;
         }
         .gr-size-A5 [class*="company-document-header_logo__"] {
-          max-height: 15.5mm !important;
+          max-height: 13mm !important;
         }
         .gr-size-A5 [class*="company-document-header_identity__"] strong {
-          font-size: 9pt !important;
+          font-size: 8.5pt !important;
           line-height: 1.2 !important;
         }
         .gr-size-A5 [class*="company-document-header_identity__"] span {
-          font-size: 6.4pt !important;
+          font-size: 6.2pt !important;
           line-height: 1.15 !important;
         }
         .gr-size-A5 [class*="company-document-header_summary__"] {
-          padding-left: 3mm !important;
+          padding-left: 2.5mm !important;
         }
         .gr-size-A5 [class*="company-document-header_summary__"] [class*="company-document-header_title__"] b {
-          font-size: 8pt !important;
+          font-size: 7.5pt !important;
         }
         .gr-size-A5 [class*="company-document-header_summary__"] [class*="company-document-header_title__"] span {
-          font-size: 7.4pt !important;
+          font-size: 7pt !important;
         }
         .gr-size-A5 [class*="company-document-header_meta__"] dt,
         .gr-size-A5 [class*="company-document-header_meta__"] dd {
-          font-size: 6.8pt !important;
+          font-size: 6.4pt !important;
           line-height: 1.1 !important;
         }
 
         .gr-size-A5 .gr-parties {
           grid-template-columns: 1.15fr 1fr;
           gap: 2mm;
-          margin-top: 1.5mm;
+          margin-top: 1mm;
         }
         .gr-size-A5 .gr-party-box {
-          height: 19mm;
-          min-height: 19mm;
-          padding: 1.2mm 2mm;
+          height: 17mm;
+          min-height: 17mm;
+          padding: 1mm 2mm;
         }
         .gr-size-A5 .gr-party-box h2 {
-          margin-bottom: 1mm;
-          padding-bottom: 0.7mm;
+          margin-bottom: 0.7mm;
+          padding-bottom: 0.5mm;
           font-size: 7.2pt;
           letter-spacing: 0;
         }
@@ -522,14 +538,14 @@ export function GrPrintPreviewModal({
         }
         .gr-size-A5 .gr-table {
           table-layout: fixed;
-          font-size: 6.8pt;
+          font-size: 7.4pt;
         }
         .gr-size-A5 .gr-table th {
           height: 5mm;
           padding: 0.6mm 1mm;
           background: #fff;
           border-color: #777;
-          font-size: 6.8pt;
+          font-size: 7.3pt;
         }
         .gr-size-A5 .gr-bottom {
           margin-top: 1.5mm;
@@ -721,7 +737,7 @@ export function GrPrintPreviewModal({
           height: 6.1mm !important;
           padding: 0.5mm 1mm !important;
           border-color: #888;
-          font-size: 6.8pt !important;
+          font-size: 7.3pt !important;
         }
 
         .gr-size-A5 .gr-cell-normal-wrap {
@@ -733,7 +749,7 @@ export function GrPrintPreviewModal({
         .gr-size-A5 .gr-name-clamp {
           line-height: 1.05;
           max-height: 2.1em;
-          font-size: 6.6pt !important;
+          font-size: 7.1pt !important;
         }
 
         .gr-size-A5 .gr-line-meta {
@@ -828,10 +844,6 @@ export function GrPrintPreviewModal({
         }
 
         .gr-document-footer {
-          position: absolute;
-          bottom: 5mm;
-          left: 6mm;
-          right: 6mm;
           border-top: 0.75mm solid #af101a;
           padding-top: 2mm;
           display: flex;
@@ -842,9 +854,6 @@ export function GrPrintPreviewModal({
         }
 
         .gr-size-A5 .gr-document-footer {
-          position: static;
-          inset: auto;
-          flex: 0 0 4.5mm;
           align-items: flex-end;
           box-sizing: border-box;
           margin-top: auto;
@@ -967,11 +976,8 @@ export function GrPrintPreviewModal({
             padding: 10px;
           }
 
-          .gr-print-root {
-            zoom: 0.46;
-          }
         }
       `}</style>
-    </div>
+    </>
   );
 }

@@ -5,7 +5,7 @@ import { useState } from "react";
 
 type DocumentCancelModalProps = {
   documentNumber: string;
-  documentType: "ใบขอซื้อ" | "ใบสั่งซื้อ";
+  documentType: "ใบขอซื้อ" | "ใบสั่งซื้อ" | "ใบรับสินค้า";
   isPending: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;

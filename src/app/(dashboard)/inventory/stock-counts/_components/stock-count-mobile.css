@@ -1,0 +1,40 @@
+@media (max-width: 767px) {
+  .stock-count-entry-mobile { margin-bottom: 128px; }
+  .stock-count-sticky-actions .stock-count-danger { display: none; }
+  .stock-count-picker-table { max-height: none; overflow: visible; border: 0; }
+  .stock-count-picker-table table,
+  .stock-count-picker-table tbody,
+  .stock-count-picker-table tr { display: block; min-width: 0; width: 100%; }
+  .stock-count-picker-table thead { display: none; }
+  .stock-count-picker-table tr { position: relative; margin: 0 10px 8px; width: calc(100% - 20px); border: 1px solid var(--outline-variant); padding: 10px 38px 10px 12px; }
+  .stock-count-picker-table td { display: block; border: 0; padding: 1px 0; }
+  .stock-count-picker-table td:first-child { position: absolute; right: 10px; top: 12px; }
+  .stock-count-picker-table td:nth-child(4),
+  .stock-count-picker-table td:nth-child(5),
+  .stock-count-picker-table td:nth-child(6),
+  .stock-count-picker-table td:nth-child(7) { display: inline; margin-right: 10px; color: var(--text-secondary); font-size: 11px; }
+  .stock-count-selected-list tr { display: grid; grid-template-columns: 26px 62px minmax(0, 1fr) auto; gap: 2px 6px; padding: 8px 36px 8px 8px; }
+  .stock-count-selected-list td { display: block !important; margin: 0 !important; }
+  .stock-count-selected-list td:first-child { position: static; grid-row: 1 / 3; align-self: center; }
+  .stock-count-selected-list td:nth-child(2) { font-weight: 800; }
+  .stock-count-selected-list td:nth-child(3) { grid-column: 3 / 5; }
+  .stock-count-selected-list td:nth-child(4) { grid-column: 2; color: var(--text-secondary); font-size: 11px; }
+  .stock-count-selected-list td:nth-child(5) { display: none !important; }
+  .stock-count-selected-list td:nth-child(6)::before { content: "Lot "; }
+  .stock-count-selected-list td:last-child { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); }
+  .stock-count-review .stock-count-table-wrap { overflow: visible; border: 0; }
+  .stock-count-review table,
+  .stock-count-review tbody,
+  .stock-count-review tr { display: block; min-width: 0; width: 100%; }
+  .stock-count-review thead { display: none; }
+  .stock-count-review tr { margin-bottom: 8px; border: 1px solid var(--outline-variant); padding: 10px; }
+  .stock-count-review td { display: grid; grid-template-columns: 105px minmax(0, 1fr); border: 0; padding: 3px 0; text-align: left !important; }
+  .stock-count-review td:nth-child(1)::before { content: "สินค้า"; }
+  .stock-count-review td:nth-child(2)::before { content: "Lot"; }
+  .stock-count-review td:nth-child(3)::before { content: "ยอดระบบ"; }
+  .stock-count-review td:nth-child(4)::before { content: "ยอดนับจริง"; }
+  .stock-count-review td:nth-child(5)::before { content: "ผลต่าง"; }
+  .stock-count-review td:nth-child(6)::before { content: "หน่วย"; }
+  .stock-count-review td:nth-child(7)::before { content: "เหตุผล"; }
+  .stock-count-review td::before { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+}

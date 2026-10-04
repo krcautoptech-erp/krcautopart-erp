@@ -1,4 +1,15 @@
 -- Stock counts reuse adjustment transactions, Lot balances and FIFO cost layers.
+alter table public.app_permissions
+  drop constraint if exists app_permissions_action_code_check;
+
+alter table public.app_permissions
+  add constraint app_permissions_action_code_check
+  check (action_code in (
+    'view', 'create', 'edit', 'delete', 'deactivate',
+    'cancel', 'approve', 'reject', 'manage', 'export',
+    'count', 'review'
+  ));
+
 insert into public.app_permissions (
   permission_code, permission_name, module_code, module_name,
   action_code, module_sort_order, sort_order, status
@@ -158,8 +169,13 @@ begin
       from public.raw_material_warehouses warehouse where warehouse.status = 'active'), '[]'::jsonb),
     'assignees', coalesce((select jsonb_agg(jsonb_build_object('id', profile.user_id,
       'name', concat_ws(' ', profile.first_name, profile.last_name)) order by profile.first_name, profile.user_id)
-      from public.user_profiles profile where profile.status = 'active'
-        and (profile.user_id = v_user_id or public.is_current_user_owner())), '[]'::jsonb),
+      from public.user_profiles profile where profile.status = 'active' and exists (
+        select 1 from public.user_roles user_role
+        join public.app_roles role on role.id = user_role.role_id and role.status = 'active'
+        join public.role_permissions role_permission on role_permission.role_id = role.id
+        join public.app_permissions permission on permission.id = role_permission.permission_id and permission.status = 'active'
+        where user_role.user_id = profile.user_id and (role.is_owner or permission.permission_code = 'stock_count.count')
+      )), '[]'::jsonb),
     'items', coalesce((select jsonb_agg(jsonb_build_object(
       'id', master.id, 'code', master.item_code, 'name', master.item_name,
       'unitName', coalesce(nullif(unit.symbol, ''), unit.unit_name, 'หน่วย'),
@@ -211,8 +227,13 @@ begin
     where warehouse.id = p_warehouse_id and warehouse.status = 'active' for share;
   if not found then raise exception 'warehouse_not_found' using errcode = 'P0002'; end if;
   select concat_ws(' ', profile.first_name, profile.last_name) into v_assignee_name
-    from public.user_profiles profile where profile.user_id = p_assigned_to and profile.status = 'active'
-      and (profile.user_id = v_user_id or public.is_current_user_owner()) for share;
+    from public.user_profiles profile where profile.user_id = p_assigned_to and profile.status = 'active' and exists (
+      select 1 from public.user_roles user_role
+      join public.app_roles role on role.id = user_role.role_id and role.status = 'active'
+      left join public.role_permissions role_permission on role_permission.role_id = role.id
+      left join public.app_permissions permission on permission.id = role_permission.permission_id and permission.status = 'active'
+      where user_role.user_id = profile.user_id and (role.is_owner or permission.permission_code = 'stock_count.count')
+    ) for share;
   if not found then raise exception 'invalid_stock_count_assignee' using errcode = '22023'; end if;
   select concat_ws(' ', profile.first_name, profile.last_name) into v_actor_name
     from public.user_profiles profile where profile.user_id = v_user_id;

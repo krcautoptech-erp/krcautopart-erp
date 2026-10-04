@@ -6,7 +6,10 @@ export type PermissionMatrixAction =
   | "deactivate"
   | "cancel"
   | "approve"
-  | "reject";
+  | "reject"
+  | "export"
+  | "count"
+  | "review";
 
 export type PermissionMatrixPermission = {
   action: string;
@@ -28,6 +31,14 @@ export type PermissionMatrixGroup<
   >;
 };
 
+export const PERMISSION_MODULE_CATEGORIES: { label: string; modules: string[] }[] = [
+  { label: "ข้อมูลกลาง", modules: ["items", "assets", "partners"] },
+  { label: "จัดซื้อและคลังสินค้า", modules: ["pr", "po", "inventory", "inventory_issue", "inventory_adjustment", "inventory_cost", "stock_count"] },
+  { label: "ตั้งค่าระบบ", modules: ["company", "partner_settings", "material_settings", "item_types", "document_terms", "warehouses", "departments"] },
+  { label: "ผู้ใช้งานและความปลอดภัย", modules: ["users", "roles", "approval_signature", "approval_policy"] },
+  { label: "Legacy / เดิม", modules: ["mdm"] },
+];
+
 function normalizeAction(action: string): PermissionMatrixAction | null {
   if (action === "manage") return "edit";
   if (
@@ -38,7 +49,10 @@ function normalizeAction(action: string): PermissionMatrixAction | null {
     action === "deactivate" ||
     action === "cancel" ||
     action === "approve" ||
-    action === "reject"
+    action === "reject" ||
+    action === "export" ||
+    action === "count" ||
+    action === "review"
   ) {
     return action;
   }
@@ -94,6 +108,28 @@ export function togglePermissionIds(
   return next;
 }
 
+export function togglePermissionWithViewDependency(
+  selectedPermissionIds: Set<number>,
+  group: PermissionMatrixGroup,
+  permissionId: number,
+) {
+  const next = new Set(selectedPermissionIds);
+  const viewId = group.permissionsByAction.view?.id;
+
+  if (next.has(permissionId)) {
+    if (permissionId === viewId) {
+      group.permissions.forEach((permission) => next.delete(permission.id));
+    } else {
+      next.delete(permissionId);
+    }
+  } else {
+    next.add(permissionId);
+    if (viewId) next.add(viewId);
+  }
+
+  return next;
+}
+
 export function toggleActionPermissions(
   selectedPermissionIds: Set<number>,
   groups: PermissionMatrixGroup[],
@@ -108,8 +144,20 @@ export function toggleActionPermissions(
   );
 
   for (const permission of permissions) {
-    if (isFullySelected) next.delete(permission.id);
-    else next.add(permission.id);
+    if (isFullySelected) {
+      if (action === "view") {
+        groups
+          .find((group) => group.moduleCode === permission.moduleCode)
+          ?.permissions.forEach((item) => next.delete(item.id));
+      } else {
+        next.delete(permission.id);
+      }
+    } else {
+      next.add(permission.id);
+      const group = groups.find((item) => item.moduleCode === permission.moduleCode);
+      const viewId = group?.permissionsByAction.view?.id;
+      if (viewId) next.add(viewId);
+    }
   }
 
   return next;

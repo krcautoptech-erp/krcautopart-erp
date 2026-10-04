@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Download, Pencil, Plus, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { CompanyFormLogo } from "@/components/company-logo";
 import { useRouter } from "next/navigation";
 import {
   useMemo,
@@ -32,6 +33,8 @@ import { Pagination } from "@/components/pagination";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ItemCreateModal } from "@/app/(dashboard)/items/_components/item-create-modal";
 import { exportRawMaterialsToExcel, downloadRawMaterialTemplate } from "./raw-material-export";
+import { ListFilterButton, ListFilterSelect, ListFilterToolbar, ListSearchField, MobileListFilters } from "@/components/list-filters";
+import { readSpreadsheet } from "@/lib/spreadsheet-import";
 
 type RawMaterialManagementProps = {
   initialGrades: RawMaterialLookup[];
@@ -138,38 +141,6 @@ function parseNumber(value: string) {
   return isNaN(num) ? null : num;
 }
 
-function parseCsvLine(line: string) {
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const nextChar = line[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      values.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current.trim());
-  return values;
-}
-
 function mapImportRow(headers: string[], rowValues: string[]) {
   const mappedRow: RawMaterialImportInput = { ...EMPTY_IMPORT_ROW };
 
@@ -197,85 +168,9 @@ function mapImportRow(headers: string[], rowValues: string[]) {
   return mappedRow;
 }
 
-function parseSpreadsheetXml(content: string) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(content, "application/xml");
-  const parserError = xml.querySelector("parsererror");
-
-  if (parserError) {
-    throw new Error("ไฟล์ Excel ไม่ถูกต้อง หรือไม่ใช่ไฟล์จากรูปแบบที่ระบบรองรับ");
-  }
-
-  const rowNodes = Array.from(xml.getElementsByTagName("Row"));
-  if (rowNodes.length <= 1) {
-    return [];
-  }
-
-  const rows: string[][] = [];
-
-  for (const rowNode of rowNodes) {
-    const cells: string[] = [];
-    let currentIdx = 0;
-
-    const cellNodes = Array.from(rowNode.getElementsByTagName("Cell"));
-    for (const cellNode of cellNodes) {
-      const indexAttr = cellNode.getAttribute("ss:Index") || cellNode.getAttribute("Index");
-      if (indexAttr) {
-        currentIdx = parseInt(indexAttr, 10) - 1; // 1-based to 0-based
-      }
-
-      const dataNode = cellNode.getElementsByTagName("Data")[0];
-      const textVal = dataNode?.textContent?.trim() ?? "";
-
-      cells[currentIdx] = textVal;
-      currentIdx += 1;
-    }
-
-    // Fill missing indices with empty strings
-    const maxLen = cells.length;
-    const filledRow: string[] = [];
-    for (let i = 0; i < maxLen; i++) {
-      filledRow[i] = cells[i] ?? "";
-    }
-    rows.push(filledRow);
-  }
-
-  const [headerRow, ...dataRows] = rows;
-  return dataRows
-    .filter((row) => row.some((cell) => cell.trim() !== ""))
-    .map((row) => mapImportRow(headerRow, row));
-}
-
-function parseCsvContent(content: string) {
-  const lines = content
-    .replace(/^\uFEFF/, "")
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() !== "");
-
-  if (lines.length <= 1) {
-    return [];
-  }
-
-  const [headerLine, ...dataLines] = lines;
-  const headers = parseCsvLine(headerLine);
-
-  return dataLines.map((line) => mapImportRow(headers, parseCsvLine(line)));
-}
-
 async function parseImportFile(file: File) {
-  const content = await file.text();
-  const fileName = file.name.toLowerCase();
-
-  if (fileName.endsWith(".csv")) {
-    return parseCsvContent(content);
-  }
-
-  if (fileName.endsWith(".xls") || fileName.endsWith(".xml")) {
-    return parseSpreadsheetXml(content);
-  }
-
-  throw new Error("รองรับเฉพาะไฟล์ .xls จากระบบนี้, .xml หรือ .csv UTF-8");
+  const { headers, rows } = await readSpreadsheet(file);
+  return rows.map((row) => mapImportRow(headers, row));
 }
 
 function buildImportSummary(result: {
@@ -686,7 +581,7 @@ export function RawMaterialManagement({
                     type="button"
                   >
                     <Upload size={15} className="text-secondary" />
-                    <span>นำเข้าไฟล์วัตถุดิบ (.csv, .xls, .xlsx)</span>
+                    <span>นำเข้าไฟล์วัตถุดิบ (.xlsx, .csv)</span>
                   </button>
                   <button
                     onClick={() => {
@@ -732,59 +627,63 @@ export function RawMaterialManagement({
           </div>
         ) : null}
 
-        <div className="mt-5 flex flex-col gap-3 xl:flex-row xl:items-center">
-          <label className="relative block xl:w-[335px]">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary" size={18} />
-            <input
-              className="h-10 w-full rounded-[8px] border border-outline-variant bg-surface-container-lowest pl-12 pr-4 text-[15px] font-medium text-on-surface outline-none transition-colors placeholder:text-secondary focus:border-primary"
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
+        <MobileListFilters activeCount={[groupFilter !== "all", gradeFilter !== "all", statusFilter !== "all"].filter(Boolean).length} onClear={resetFilters} resultLabel={`แสดง ${filteredRawMaterials.length.toLocaleString("th-TH")} รายการ`} search={<ListSearchField onChange={(value) => { setSearchQuery(value); setCurrentPage(1); }} placeholder="ค้นหารหัสวัตถุดิบ / ชื่อวัตถุดิบ / เกรดวัสดุ" value={searchQuery} />}>
+          <ListFilterSelect label="กลุ่มวัตถุดิบ" onChange={(value) => { setGroupFilter(value); setCurrentPage(1); }} value={groupFilter}><option value="all">ทั้งหมด</option>{initialGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</ListFilterSelect>
+          <ListFilterSelect label="เกรดวัสดุ" onChange={(value) => { setGradeFilter(value); setCurrentPage(1); }} value={gradeFilter}><option value="all">ทั้งหมด</option>{initialGrades.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</ListFilterSelect>
+          <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }} value={statusFilter}><option value="all">ทั้งหมด</option><option value="active">ใช้งาน</option><option value="inactive">ระงับ</option></ListFilterSelect>
+        </MobileListFilters>
+
+        <ListFilterToolbar className="mt-5 hidden md:grid xl:grid-cols-[minmax(280px,1.6fr)_repeat(3,minmax(170px,1fr))_auto] xl:items-center">
+          <ListSearchField
+              onChange={(value) => {
+                setSearchQuery(value);
                 setCurrentPage(1);
               }}
               placeholder="ค้นหารหัสวัตถุดิบ / ชื่อวัตถุดิบ / เกรดวัสดุ"
-              type="text"
               value={searchQuery}
-            />
-          </label>
+          />
 
-          <FilterSelect
+          <ListFilterSelect
             label="กลุ่มวัตถุดิบ"
             onChange={(value) => {
               setGroupFilter(value);
               setCurrentPage(1);
             }}
-            options={initialGroups.map((item) => ({ label: item.name, value: String(item.id) }))}
             value={groupFilter}
-          />
-          <FilterSelect
+          >
+            <option value="all">ทั้งหมด</option>
+            {initialGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </ListFilterSelect>
+          <ListFilterSelect
             label="เกรดวัสดุ"
             onChange={(value) => {
               setGradeFilter(value);
               setCurrentPage(1);
             }}
-            options={initialGrades.map((item) => ({ label: item.name, value: String(item.id) }))}
             value={gradeFilter}
-          />
-          <FilterSelect
+          >
+            <option value="all">ทั้งหมด</option>
+            {initialGrades.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </ListFilterSelect>
+          <ListFilterSelect
             label="สถานะ"
             onChange={(value) => {
               setStatusFilter(value);
               setCurrentPage(1);
             }}
-            options={[
-              { label: "ใช้งาน", value: "active" },
-              { label: "ระงับ", value: "inactive" },
-            ]}
             value={statusFilter}
-          />
-          <button
-            className="inline-flex h-10 items-center justify-center rounded-[8px] border border-primary px-5 text-[14px] font-bold text-primary transition-colors hover:bg-primary/5 xl:ml-auto"
+          >
+            <option value="all">ทั้งหมด</option>
+            <option value="active">ใช้งาน</option>
+            <option value="inactive">ระงับ</option>
+          </ListFilterSelect>
+          <ListFilterButton
+            icon={<SlidersHorizontal size={17} />}
             onClick={resetFilters}
-            type="button"
           >
             ล้างตัวกรอง
-          </button>
-        </div>
+          </ListFilterButton>
+        </ListFilterToolbar>
 
         <div className="mt-5 relative rounded-[12px] border border-outline-variant bg-surface-container-lowest shadow-sm">
           <div className="overflow-x-auto rounded-t-[12px]">
@@ -1143,9 +1042,7 @@ function RawMaterialFormModal({
             <h2 className="text-[18px] font-bold leading-none tracking-[-0.02em] text-on-surface">
               {formMode === "edit" ? "แก้ไขวัตถุดิบ" : "เพิ่มวัตถุดิบ"}
             </h2>
-            <span className="rounded-[5px] bg-primary px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.12em] text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
           </div>
           <button className="text-secondary transition-colors hover:text-on-surface" onClick={onClose} type="button">
             <X size={18} />
@@ -1377,33 +1274,6 @@ function DimensionInput({
         มม.
       </span>
     </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  options: Array<{ label: string; value: string }>;
-  value: string;
-}) {
-  return (
-    <select
-      className="h-10 min-w-[220px] rounded-[8px] border border-outline-variant bg-surface-container-lowest px-4 text-[15px] font-bold text-on-surface outline-none transition-colors focus:border-primary"
-      onChange={(event) => onChange(event.target.value)}
-      value={value}
-    >
-      <option value="all">{label}: ทั้งหมด</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
   );
 }
 

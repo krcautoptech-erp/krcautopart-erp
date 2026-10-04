@@ -1,4 +1,4 @@
-import type { CatalogItem, ItemCatalogData, ItemTypeRecord } from "@/app/actions/items";
+import type { CatalogItem, ItemTypeRecord } from "@/app/actions/items";
 
 export type ColumnId =
   | "index"

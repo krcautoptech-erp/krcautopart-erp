@@ -194,7 +194,7 @@ export function ItemSideDrawer({
           </h2>
           <button
             aria-label="ปิดรายละเอียดสินค้า"
-            className="grid h-9 w-9 place-items-center justify-self-end rounded-full text-black hover:bg-[#fafafa]"
+            className="hidden h-9 w-9 place-items-center justify-self-end rounded-full text-black hover:bg-[#fafafa] sm:grid"
             onClick={onClose}
             type="button"
           >
@@ -206,7 +206,7 @@ export function ItemSideDrawer({
           <section className={hasImage ? "flex items-center gap-4" : "flex items-center"}>
             {hasImage ? (
               <div className="grid h-[92px] w-[122px] shrink-0 place-items-center overflow-hidden rounded-[4px] bg-white">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   alt={item.name}
                   className="max-h-full max-w-full object-contain"
@@ -271,7 +271,20 @@ export function ItemSideDrawer({
           </dl>
         </div>
 
-        <footer className="grid shrink-0 grid-cols-[auto_1fr_1fr] gap-2 border-t border-[#eeeeee] bg-white px-5 py-4 sm:px-7">
+        {onEdit ? (
+          <footer className="shrink-0 border-t border-[#eeeeee] bg-white px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:hidden">
+            <button
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-[4px] bg-[#c10b16] text-[16px] font-bold text-white"
+              onClick={() => { onClose(); onEdit(item); }}
+              type="button"
+            >
+              <Edit3 size={20} />
+              แก้ไขข้อมูล
+            </button>
+          </footer>
+        ) : null}
+
+        <footer className="hidden shrink-0 grid-cols-[auto_1fr_1fr] gap-2 border-t border-[#eeeeee] bg-white px-7 py-4 sm:grid">
           {onDelete ? (
             <button
               className="flex h-10 items-center justify-center gap-1.5 rounded-[4px] border border-rose-200 bg-rose-50 px-3 text-[13px] font-bold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-400"

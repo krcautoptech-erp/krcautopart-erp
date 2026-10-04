@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getRequiredPermission } from "@/lib/access-control";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -52,6 +53,19 @@ export async function updateSession(request: NextRequest) {
       url.pathname = "/login";
       url.searchParams.set("reason", "account_suspended");
       return NextResponse.redirect(url);
+    }
+
+    const requiredPermission = getRequiredPermission(url.pathname, url.search);
+    if (requiredPermission) {
+      const { data: isAuthorized, error: authorizationError } = await supabase.rpc("authorize", {
+        requested_permission: requiredPermission,
+      });
+      if (authorizationError || !isAuthorized) {
+        url.pathname = "/workspace";
+        url.search = "";
+        url.searchParams.set("reason", "forbidden");
+        return NextResponse.redirect(url);
+      }
     }
   }
 

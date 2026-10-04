@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   Package,
-  Plus,
   RotateCcw,
   Search,
   Tag,
-  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -20,6 +16,13 @@ import {
   postGoodsReceiptAction,
 } from "@/app/actions/inventory";
 import { reserveBusinessNumberAction } from "@/app/actions/number-series";
+import { focusKeyboardTarget, runEnterAction } from "@/components/keyboard-workflow";
+import { CompanyFormLogo } from "@/components/company-logo";
+import { ConfirmModal } from "@/components/confirm-modal";
+import {
+  SUPPLIER_DOCUMENT_TYPES,
+  type SupplierDocumentType,
+} from "@/lib/goods-receipts";
 
 type PendingPO = {
   id: number;
@@ -39,8 +42,10 @@ type ReceiptLine = {
   isStocked: boolean;
   itemCode: string;
   itemName: string;
+  quantityOrdered: number;
   quantityRemaining: number;
   quantity: string;
+  unitCost: number | null;
   trackingMethod: "none" | "lot" | "serial";
   unitName: string;
   warehouseId: number | "";
@@ -50,7 +55,11 @@ type ReceiptLine = {
   serialNumbers: string;
 };
 
+import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
+
 type Props = {
+  onPrint: (id: number) => Promise<void>;
+  onNext: () => void;
   pendingPOs: PendingPO[];
   warehouses: Warehouse[];
   onClose: () => void;
@@ -58,7 +67,7 @@ type Props = {
 };
 
 const fieldClass =
-  "h-9 w-full rounded-[2px] border border-outline-variant bg-white px-3 text-[12px] font-medium text-on-surface outline-none placeholder:text-secondary/70 focus:border-primary disabled:bg-white disabled:text-on-surface dark:bg-surface-container-lowest dark:disabled:bg-surface-container-lowest";
+  "h-9 w-full rounded-[2px] border border-neutral-300 bg-white px-3 text-[12px] font-medium text-on-surface outline-none placeholder:text-secondary/70 focus:border-primary disabled:bg-white disabled:text-on-surface dark:border-neutral-700 dark:bg-surface-container-lowest dark:disabled:bg-surface-container-lowest";
 
 function numberValue(value: string) {
   const parsed = Number(value);
@@ -68,6 +77,10 @@ function numberValue(value: string) {
 function formatDate(value: string) {
   const [year, month, day] = value.split("-");
   return year && month && day ? `${day}/${month}/${year}` : "-";
+}
+
+function formatMoney(value: number) {
+  return value.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function StepIndicator({ currentStep }: { currentStep: number }) {
@@ -137,15 +150,16 @@ function SerialEntryModal({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex w-full max-w-[500px] flex-col overflow-hidden rounded-[4px] border border-outline-variant bg-surface-container-lowest shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="serial-title" className="document-serial flex w-full max-w-[480px] max-h-[90dvh] flex-col overflow-auto rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl">
         <header className="flex h-12 items-center justify-between border-b border-outline-variant px-4 bg-surface-container-low">
           <div className="flex items-center gap-2">
             <Tag size={18} className="text-primary" />
-            <h3 className="text-[14px] font-bold text-on-surface">
+            <h3 id="serial-title" className="text-[18px] font-bold text-on-surface">
               ระบุ Serial Number
             </h3>
           </div>
           <button
+            aria-label="ปิดหน้าระบุ Serial"
             onClick={onClose}
             className="p-1 text-secondary hover:text-on-surface"
             type="button"
@@ -168,7 +182,7 @@ function SerialEntryModal({
 
           <div>
             <div className="flex items-center justify-between text-[11px] font-semibold mb-1">
-              <label>Serial Numbers (1 บรรทัดต่อ 1 หมายเลข)</label>
+              <label htmlFor="receipt-serials">Serial Number · 1 หมายเลขต่อบรรทัด</label>
               <span
                 className={
                   isCountValid
@@ -180,7 +194,8 @@ function SerialEntryModal({
               </span>
             </div>
             <textarea
-              className="h-36 w-full rounded-[2px] border border-outline-variant bg-white p-2.5 font-mono text-[12px] leading-5 outline-none focus:border-primary dark:bg-surface-container-lowest"
+              id="receipt-serials"
+              className="h-32 w-full rounded-[4px] border border-outline-variant bg-white p-3 font-mono text-[15px] leading-6 outline-none focus:border-primary dark:bg-surface-container-lowest"
               onChange={(e) => setText(e.target.value)}
               placeholder="สแกนหรือพิมพ์ Serial Number ทีละบรรทัด&#10;SN-2026-0001&#10;SN-2026-0002"
               value={text}
@@ -339,9 +354,14 @@ export function ReceiptCreateModal({
   warehouses,
   onClose,
   onSaved,
+  onPrint,
+  onNext,
 }: Props) {
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
+  const [saved, setSaved] = useState<SavedDocument | null>(null);
+  const saveLock = useRef(false);
+  const requestKey = useRef(crypto.randomUUID());
   const [selectedPoId, setSelectedPoId] = useState("");
   const [poId, setPoId] = useState("");
   const [po, setPo] = useState<{
@@ -360,9 +380,16 @@ export function ReceiptCreateModal({
     number: "",
   });
   const [deliveryNoteNo, setDeliveryNoteNo] = useState("");
+  const [supplierDocumentType, setSupplierDocumentType] =
+    useState<SupplierDocumentType>("delivery_note");
+  const [supplierDocumentDate, setSupplierDocumentDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [duplicateWarning, setDuplicateWarning] = useState("");
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [canViewCost, setCanViewCost] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("receivable");
   const [activeSerialLineId, setActiveSerialLineId] = useState<number | null>(
@@ -454,6 +481,7 @@ export function ReceiptCreateModal({
         return;
       }
       setPo(result.data.po);
+      setCanViewCost(result.data.canViewCost);
 
       // Auto-detect default warehouse
       const defaultWh =
@@ -472,8 +500,10 @@ export function ReceiptCreateModal({
           isStocked: item.is_stocked !== false,
           itemCode: item.item_code,
           itemName: item.item_name,
+          quantityOrdered: item.quantity_ordered,
           quantityRemaining: item.quantity_remaining,
           quantity: String(item.quantity_remaining),
+          unitCost: item.unit_cost,
           trackingMethod:
             item.tracking_method === "serial" || item.tracking_method === "lot"
               ? item.tracking_method
@@ -523,7 +553,8 @@ export function ReceiptCreateModal({
   const validate = () => {
     if (!poId) throw new Error("กรุณาเลือกใบสั่งซื้อ");
     if (!grNumber) throw new Error(numberError || "ไม่สามารถสร้างเลขที่ GR ได้");
-    if (!deliveryNoteNo.trim()) throw new Error("กรุณาระบุเลขที่ใบส่งของ");
+    if (!deliveryNoteNo.trim()) throw new Error("กรุณาระบุเลขที่เอกสารผู้ขาย");
+    if (!supplierDocumentDate) throw new Error("กรุณาระบุวันที่เอกสารผู้ขาย");
     if (lines.length === 0) throw new Error("ไม่มีรายการค้างรับในใบสั่งซื้อนี้");
     lines.forEach((line, lineIndex) => {
       const quantity = numberValue(line.quantity);
@@ -553,15 +584,21 @@ export function ReceiptCreateModal({
     });
   };
 
-  const submit = () => {
+  const submit = (allowDuplicateSupplierDocument = false) => {
+    if (saveLock.current || saved || isPending) return;
     try {
       validate();
       setError("");
-      setStep(3);
+      saveLock.current = true;
       startTransition(async () => {
+        try {
         const result = await postGoodsReceiptAction({
+          requestKey: requestKey.current,
           deliveryNoteNo,
           documentDate,
+          supplierDocumentType,
+          supplierDocumentDate,
+          allowDuplicateSupplierDocument,
           items: lines.map((line) => ({
             expiryDate: line.expiryDate,
             mfgDate: line.mfgDate,
@@ -583,9 +620,16 @@ export function ReceiptCreateModal({
         if (!result.success) {
           setStep(2);
           setError(result.error ?? "ไม่สามารถบันทึกใบรับสินค้าได้");
+          if ("duplicate" in result && result.duplicate) {
+            setDuplicateWarning(result.error);
+          }
           return;
         }
+        const receipt = Array.isArray(result.data) ? result.data[0] : result.data;
+        setSaved({ id: Number(receipt?.goods_receipt_id), number: String(receipt?.goods_receipt_number || grNumber) });
         onSaved("บันทึกใบรับสินค้าสำเร็จ");
+        } catch { setError("ไม่สามารถยืนยันผลการบันทึก กรุณาตรวจสอบรายการก่อนลองอีกครั้ง"); }
+        finally { saveLock.current = false; }
       });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "ข้อมูลไม่ถูกต้อง");
@@ -597,6 +641,10 @@ export function ReceiptCreateModal({
       itemsCount: lines.length,
       quantity: lines.reduce(
         (sum, line) => sum + numberValue(line.quantity),
+        0,
+      ),
+      inventoryValue: lines.reduce(
+        (sum, line) => sum + (line.isStocked && line.unitCost !== null ? numberValue(line.quantity) * line.unitCost : 0),
         0,
       ),
     }),
@@ -617,20 +665,16 @@ export function ReceiptCreateModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-0 backdrop-blur-[2px] sm:p-3">
-      <div className="flex h-[100dvh] w-full max-w-[1220px] flex-col overflow-hidden border border-primary/70 bg-surface-container-lowest shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:rounded-[3px]">
-        <header className="flex h-[70px] shrink-0 items-center justify-between border-b border-outline-variant px-6">
+      <div className="document-form flex h-[100dvh] w-full max-w-[1520px] flex-col overflow-hidden border border-neutral-300 bg-surface-container-lowest shadow-2xl dark:border-neutral-700 sm:h-auto sm:max-h-[92dvh] sm:rounded-[3px]">
+        <header className="document-form-header flex h-[70px] shrink-0 items-center justify-between border-b border-outline-variant px-6">
           <div className="flex items-center gap-4">
-            <span className="grid size-12 place-items-center rounded-[2px] bg-primary text-center text-[13px] font-black leading-[12px] text-white">
-              KRC
-              <br />
-              ERP
-            </span>
+            <CompanyFormLogo className="document-brand" />
             <div>
               <h2 className="text-[21px] font-bold leading-6 text-on-surface">
-                รับสินค้าใหม่
+                สร้างใบรับสินค้า (GR)
               </h2>
               <p className="mt-1 text-[11px] font-medium text-secondary">
-                รับสินค้าตามใบสั่งซื้อและบันทึกคลัง
+                เลือก PO › รับสินค้า
               </p>
             </div>
           </div>
@@ -638,13 +682,14 @@ export function ReceiptCreateModal({
             aria-label="ปิด"
             className="p-1 text-on-surface hover:text-primary"
             onClick={onClose}
+            disabled={isPending}
             type="button"
           >
             <X size={26} />
           </button>
         </header>
 
-        <StepIndicator currentStep={step} />
+        {step === 1 && <StepIndicator currentStep={step} />}
         {error && (
           <div className="mx-5 mt-2 border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 dark:bg-red-950/30">
             {error}
@@ -712,8 +757,8 @@ export function ReceiptCreateModal({
               </button>
             </div>
             <div className="grid min-h-0 flex-1 gap-3 px-5 pb-4 lg:grid-cols-[minmax(0,1fr)_270px]">
-              <div className="overflow-auto border border-outline-variant">
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-[12px]">
+              <div className="document-table-scroll border border-outline-variant">
+                <table className="document-entry-table document-gr-picker-table w-full table-fixed border-collapse">
                   <thead>
                     <tr className="h-10 border-b border-outline-variant bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
                       <th className="w-[7%]">เลือก</th>
@@ -818,91 +863,17 @@ export function ReceiptCreateModal({
           </>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto"><fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
               <section className="border-b border-outline-variant px-5 py-3">
-                <h3 className="mb-2 text-[13px] font-bold">
-                  <span className="mr-2 text-primary">01</span> ข้อมูลการรับสินค้า
-                </h3>
-                <div className="grid gap-3 lg:grid-cols-[0.8fr_0.8fr_1.45fr_0.9fr_0.9fr_1.15fr]">
-                  <label className="text-[10px] font-semibold">
-                    เลขที่ GR
-                    <input
-                      className={`${fieldClass} mt-1`}
-                      disabled
-                      value={
-                        grNumber ||
-                        (numberError
-                          ? "สร้างเลขไม่สำเร็จ"
-                          : "กำลังสร้างเลข...")
-                      }
-                    />
-                  </label>
-                  <label className="text-[10px] font-semibold">
-                    อ้างอิง PO
-                    <input
-                      className={`${fieldClass} mt-1`}
-                      disabled
-                      value={po?.po_number ?? ""}
-                    />
-                  </label>
-                  <label className="text-[10px] font-semibold">
-                    ผู้ขาย
-                    <input
-                      className={`${fieldClass} mt-1`}
-                      disabled
-                      value={po?.vendor_name ?? ""}
-                    />
-                  </label>
-                  <label className="text-[10px] font-semibold">
-                    เลขที่ใบส่งของ *
-                    <input
-                      className={`${fieldClass} mt-1`}
-                      onChange={(event) =>
-                        setDeliveryNoteNo(event.target.value)
-                      }
-                      placeholder="เช่น DN-2569-001"
-                      value={deliveryNoteNo}
-                    />
-                  </label>
-                  <label className="text-[10px] font-semibold">
-                    วันที่รับสินค้า *
-                    <input
-                      className={`${fieldClass} mt-1`}
-                      onChange={(event) =>
-                        setDocumentDate(event.target.value)
-                      }
-                      type="date"
-                      value={documentDate}
-                    />
-                  </label>
-                  <label className="text-[10px] font-semibold">
-                    {hasStockedItems
-                      ? "คลังรับเข้าหลัก (หยอดลงทุกรายการ) *"
-                      : "คลังรับเข้าหลัก (ไม่มีสินค้าคุมสต็อก)"}
-                    <select
-                      className={`${fieldClass} mt-1 ${!hasStockedItems ? "cursor-not-allowed opacity-60" : ""}`}
-                      disabled={!hasStockedItems}
-                      onChange={(event) =>
-                        handleMainWarehouseChange(
-                          event.target.value === ""
-                            ? ""
-                            : Number(event.target.value),
-                        )
-                      }
-                      value={hasStockedItems ? warehouseId : ""}
-                    >
-                      <option value="">
-                        {hasStockedItems
-                          ? "-- เลือกคลังรับเข้า --"
-                          : "-- ไม่จำเป็นต้องระบุคลัง --"}
-                      </option>
-                      {activeWarehouses.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="document-fields">
+                  <label className="document-field"><span>เลขที่ GR</span><input className={fieldClass} disabled value={saved?.number || grNumber || (numberError ? "ไม่สามารถสร้างเลขเอกสาร" : "กำลังสร้างเลขเอกสาร...")} /></label>
+                  <label className="document-field"><span>เลขที่ PO</span><input className={fieldClass} disabled value={po?.po_number ?? ""} /></label>
+                  <label className="document-field document-field-wide"><span>ผู้ขาย</span><input className={fieldClass} disabled value={po?.vendor_name ?? ""} /></label>
+                  <label className="document-field"><span>ประเภทเอกสารผู้ขาย <b className="text-primary">*</b></span><select className={fieldClass} onChange={event => setSupplierDocumentType(event.target.value as SupplierDocumentType)} value={supplierDocumentType}>{SUPPLIER_DOCUMENT_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+                  <label className="document-field"><span>เลขที่เอกสารผู้ขาย <b className="text-primary">*</b></span><input className={fieldClass} maxLength={100} onChange={event => setDeliveryNoteNo(event.target.value)} placeholder="เช่น DN-2569-001" value={deliveryNoteNo} /></label>
+                  <label className="document-field"><span>วันที่เอกสารผู้ขาย <b className="text-primary">*</b></span><input className={fieldClass} onChange={event => setSupplierDocumentDate(event.target.value)} type="date" value={supplierDocumentDate} /></label>
+                  <label className="document-field"><span>วันที่รับสินค้า <b className="text-primary">*</b></span><input className={fieldClass} onChange={event => setDocumentDate(event.target.value)} type="date" value={documentDate} /></label>
+                  <label className="document-field document-field-wide"><span>คลังรับเข้า {hasStockedItems && <b className="text-primary">*</b>}</span><select className={fieldClass} disabled={!hasStockedItems} onChange={event => handleMainWarehouseChange(event.target.value === "" ? "" : Number(event.target.value))} value={hasStockedItems ? warehouseId : ""}><option value="">{hasStockedItems ? "-- เลือกคลังรับเข้า --" : "-- ไม่จำเป็นต้องระบุคลัง --"}</option>{activeWarehouses.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                 </div>
               </section>
 
@@ -921,20 +892,22 @@ export function ReceiptCreateModal({
                     <Loader2 className="animate-spin text-primary" />
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-[2px] border border-outline-variant">
-                    <table className="w-full table-fixed border-collapse text-[11.5px]">
+                  <div className="document-table-scroll rounded-[2px] border border-neutral-300 dark:border-neutral-700">
+                    <table className={`document-entry-table document-gr-table w-full table-fixed border-collapse ${canViewCost ? "with-cost" : ""}`}>
                       <thead className="bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
                         <tr className="h-[32px] border-b border-outline-variant">
                           <th className="w-[4%] px-1 text-center">ลำดับ</th>
-                          <th className="w-[12%] px-2 text-left">รหัส</th>
-                          <th className="w-[26%] px-2 text-left">สินค้า / รายการ</th>
-                          <th className="w-[16%] px-2 text-left">คลังรับเข้า</th>
-                          <th className="w-[7%] px-1 text-center">สั่งซื้อ</th>
-                          <th className="w-[7%] px-1 text-center">ค้างรับ</th>
-                          <th className="w-[10%] px-1 text-center">จำนวนรับ</th>
-                          <th className="w-[6%] px-1 text-center">หน่วย</th>
+                          <th className="w-[9%] px-2 text-left">รหัส</th>
+                          <th className="w-[19%] px-2 text-left">สินค้า / รายการ</th>
+                          <th className="w-[13%] px-2 text-left">คลังรับเข้า</th>
+                          <th className="w-[6%] px-1 text-center">สั่งซื้อ</th>
+                          <th className="w-[6%] px-1 text-center">ค้างรับ</th>
+                          <th className="w-[7%] px-1 text-center">จำนวนรับ</th>
+                          <th className="w-[5%] px-1 text-center">หน่วย</th>
+                          {canViewCost && <th className="w-[9%] px-1 text-right">ราคา/หน่วยสุทธิ</th>}
+                          {canViewCost && <th className="w-[10%] px-1 text-right">มูลค่ารับเข้า</th>}
                           <th className="w-[12%] px-2 text-center">
-                            การจัดการ Lot / Serial
+                            Lot / Serial
                           </th>
                         </tr>
                       </thead>
@@ -963,20 +936,19 @@ export function ReceiptCreateModal({
                               <td className="px-1 text-center font-medium">
                                 {lineIndex + 1}
                               </td>
-                              <td className="truncate px-2 font-bold text-primary">
+                              <td className="break-all px-2 font-bold leading-4 text-primary">
                                 {line.itemCode}
                               </td>
                               <td
-                                className="truncate px-2 font-medium"
-                                title={line.itemName}
+                                className="whitespace-normal break-words px-2 py-2 font-medium leading-4"
                               >
-                                {line.itemName}
+                                <DocumentProductName name={line.itemName} />
                               </td>
                               <td className="px-2">
                                 {line.isStocked ? (
                                   <select
                                     aria-label={`คลังรับเข้าสำหรับ ${line.itemCode}`}
-                                    className="h-7 w-full rounded-[2px] border border-outline-variant bg-white px-1.5 text-[11px] font-medium outline-none focus:border-primary dark:bg-surface-container-lowest"
+                                    className="h-7 w-full rounded-[2px] border border-neutral-300 bg-white px-1.5 text-[11px] font-medium outline-none focus:border-primary dark:border-neutral-700 dark:bg-surface-container-lowest"
                                     onChange={(event) =>
                                       updateLine(line.purchaseOrderItemId, {
                                         warehouseId:
@@ -1003,7 +975,7 @@ export function ReceiptCreateModal({
                                 )}
                               </td>
                               <td className="px-1 text-center font-medium">
-                                {line.quantityRemaining.toLocaleString("th-TH")}
+                                {line.quantityOrdered.toLocaleString("th-TH")}
                               </td>
                               <td className="px-1 text-center font-semibold text-secondary">
                                 {line.quantityRemaining.toLocaleString("th-TH")}
@@ -1011,7 +983,8 @@ export function ReceiptCreateModal({
                               <td className="px-1 text-center">
                                 <input
                                   aria-label={`จำนวนรับ ${line.itemCode}`}
-                                  className="mx-auto h-7 w-20 rounded-[2px] border border-outline-variant px-2 text-right text-[12px] font-semibold outline-none focus:border-primary dark:bg-surface-container-lowest"
+                                  className="mx-auto h-7 w-20 rounded-[2px] border border-neutral-300 px-2 text-right text-[12px] font-semibold outline-none focus:border-primary dark:border-neutral-700 dark:bg-surface-container-lowest"
+                                  data-keyboard-target={`receipt-quantity-${line.purchaseOrderItemId}`}
                                   max={line.quantityRemaining}
                                   min="0"
                                   onChange={(event) =>
@@ -1020,6 +993,14 @@ export function ReceiptCreateModal({
                                       event.target.value,
                                     )
                                   }
+                                  onKeyDown={(event) => runEnterAction(event, () => {
+                                    if (line.trackingMethod === "lot") setActiveLotLineId(line.purchaseOrderItemId);
+                                    else if (line.trackingMethod === "serial") setActiveSerialLineId(line.purchaseOrderItemId);
+                                    else {
+                                      const next = lines[lineIndex + 1];
+                                      if (next) focusKeyboardTarget(`receipt-quantity-${next.purchaseOrderItemId}`);
+                                    }
+                                  })}
                                   step="any"
                                   type="number"
                                   value={line.quantity}
@@ -1028,6 +1009,8 @@ export function ReceiptCreateModal({
                               <td className="px-1 text-center font-medium">
                                 {line.unitName}
                               </td>
+                              {canViewCost && <td className="px-2 text-right font-medium tabular-nums">{line.unitCost === null ? "-" : formatMoney(line.unitCost)}</td>}
+                              {canViewCost && <td className="px-2 text-right font-semibold tabular-nums">{line.unitCost === null || !line.isStocked ? "-" : formatMoney(quantity * line.unitCost)}</td>}
                               <td className="px-2 text-center">
                                 {line.trackingMethod === "serial" ? (
                                   <button
@@ -1089,8 +1072,8 @@ export function ReceiptCreateModal({
                   </div>
                 )}
 
-                <label className="mt-2 block text-[10px] font-semibold">
-                  หมายเหตุ
+                <label className="document-field mt-4">
+                  <span>หมายเหตุ</span>
                   <input
                     className={`${fieldClass} mt-1`}
                     onChange={(event) => setRemarks(event.target.value)}
@@ -1099,39 +1082,12 @@ export function ReceiptCreateModal({
                   />
                 </label>
               </section>
-            </div>
+            </fieldset></div>
 
-            <footer className="flex min-h-[66px] shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline-variant px-5 py-2">
-              <div className="text-[12px] font-semibold">
-                รวม <b className="text-primary">{totals.itemsCount}</b> รายการ
-                &nbsp; • &nbsp;รับทั้งหมด{" "}
-                <b className="text-primary">
-                  {totals.quantity.toLocaleString("th-TH")}
-                </b>{" "}
-                หน่วย
-              </div>
-              <div className="flex gap-3">
-                <button
-                  className="h-10 min-w-24 border border-outline-variant px-4 font-semibold hover:bg-surface-container-high"
-                  onClick={() => {
-                    setStep(1);
-                    setError("");
-                  }}
-                  type="button"
-                >
-                  ย้อนกลับ
-                </button>
-                <button
-                  className="inline-flex h-10 min-w-40 items-center justify-center gap-2 bg-primary px-5 font-bold text-white disabled:opacity-50"
-                  disabled={isPending || loading}
-                  onClick={submit}
-                  type="button"
-                >
-                  {isPending && <Loader2 className="animate-spin" size={16} />}
-                  บันทึกการรับสินค้า
-                </button>
-              </div>
-            </footer>
+            <DocumentFormFooter saved={saved} pending={isPending || loading} summary={<>{totals.itemsCount} รายการ{canViewCost && <> · {formatMoney(totals.inventoryValue)} บาท</>}</>} onClose={onClose} onPrint={onPrint} onNext={onNext}>
+              <button type="button" disabled={isPending} onClick={() => { setStep(1); setError(""); }}>ย้อนกลับ</button>
+              <button className="primary" type="button" disabled={isPending || loading} onClick={() => submit()}>{isPending ? "กำลังบันทึก..." : "บันทึกการรับสินค้า"}</button>
+            </DocumentFormFooter>
           </>
         )}
 
@@ -1162,6 +1118,19 @@ export function ReceiptCreateModal({
             }}
           />
         )}
+        <ConfirmModal
+          open={Boolean(duplicateWarning)}
+          title="พบเลขที่เอกสารผู้ขายซ้ำ"
+          description={`${duplicateWarning} กรุณาตรวจสอบก่อนยืนยันรับสินค้าซ้ำ`}
+          confirmText="ยืนยันรับสินค้าซ้ำ"
+          tone="warning"
+          isPending={isPending}
+          onClose={() => setDuplicateWarning("")}
+          onConfirm={() => {
+            setDuplicateWarning("");
+            submit(true);
+          }}
+        />
       </div>
     </div>
   );

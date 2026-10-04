@@ -3,20 +3,11 @@
 import React, { useEffect } from "react";
 import {
   X,
-  Tag,
   Building,
-  User,
-  MapPin,
-  Calendar,
   FileText,
   Receipt,
-  FileCheck,
-  Store,
-  Warehouse,
   QrCode,
   ArrowRightLeft,
-  DollarSign,
-  Clock,
 } from "lucide-react";
 import type { AssetRecord } from "@/lib/assets";
 import { StatusBadge, statusTone } from "@/components/status-badge";
@@ -25,7 +16,7 @@ interface AssetSideDrawerProps {
   asset: AssetRecord | null;
   onClose: () => void;
   onOpenQr: (asset: AssetRecord) => void;
-  onOpenTransfer: (asset: AssetRecord) => void;
+  onOpenTransfer?: (asset: AssetRecord) => void;
 }
 
 export function AssetSideDrawer({
@@ -124,13 +115,13 @@ export function AssetSideDrawer({
               <QrCode size={13} className="text-primary" />
               พิมพ์สติกเกอร์ / QR
             </button>
-            <button
-              onClick={() => onOpenTransfer(asset)}
+            {onOpenTransfer ? <button
+              onClick={() => onOpenTransfer?.(asset)}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xs border border-outline-variant bg-surface-container-lowest px-3 font-semibold text-on-surface hover:bg-surface-container-high transition-colors text-[11px]"
             >
               <ArrowRightLeft size={13} className="text-primary" />
               โอนย้าย / เปลี่ยนผู้ถือ
-            </button>
+            </button> : null}
           </div>
 
           {/* Custodian & Location */}

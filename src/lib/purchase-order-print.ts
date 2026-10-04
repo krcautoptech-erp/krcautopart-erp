@@ -3,6 +3,7 @@ import type { PurchaseOrderStatus } from "./purchase-orders";
 export const PURCHASE_ORDER_PRINT_ROWS_PER_PAGE = 15;
 
 export type PurchaseOrderPrintItem = {
+  deliveryDate: string;
   discountAmount: number;
   itemCode: string;
   itemDescription: string;
@@ -17,6 +18,7 @@ export type PurchaseOrderPrintItem = {
 export type PurchaseOrderPrintDetail = {
   approvedAt: string;
   approverName: string;
+  approverSignatureUrl: string | null;
   buyerName: string;
   creditTermName: string;
   deliveryAddress: string;
@@ -47,17 +49,40 @@ export type PurchaseOrderPrintDetail = {
   };
 };
 
+function getItemSlotWeight<T>(item: T): number {
+  if (!item || typeof item !== "object") return 1;
+  const desc = (item as { itemDescription?: string }).itemDescription;
+  if (!desc) return 1;
+  if (desc.includes("\n") || desc.length > 45) return 2;
+  return 1;
+}
+
 export function paginatePurchaseOrderItems<T>(items: readonly T[]): T[][] {
   if (items.length === 0) return [[]];
 
   const pages: T[][] = [];
-  for (
-    let index = 0;
-    index < items.length;
-    index += PURCHASE_ORDER_PRINT_ROWS_PER_PAGE
-  ) {
-    pages.push(items.slice(index, index + PURCHASE_ORDER_PRINT_ROWS_PER_PAGE));
+  let currentPage: T[] = [];
+  let currentWeight = 0;
+
+  for (const item of items) {
+    const weight = getItemSlotWeight(item);
+    if (
+      currentPage.length > 0 &&
+      currentWeight + weight > PURCHASE_ORDER_PRINT_ROWS_PER_PAGE
+    ) {
+      pages.push(currentPage);
+      currentPage = [item];
+      currentWeight = weight;
+    } else {
+      currentPage.push(item);
+      currentWeight += weight;
+    }
   }
+
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
+  }
+
   return pages;
 }
 

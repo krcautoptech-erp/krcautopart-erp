@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import type { DepartmentManagerCandidate } from "@/app/actions/departments";
 import type { DepartmentInput } from "@/lib/departments";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 export type DepartmentFormMode = "create" | "edit";
 
@@ -37,9 +38,7 @@ export function DepartmentModal({
       >
         <header className="flex h-14 items-center justify-between border-b border-outline-variant px-5">
           <div className="flex items-center gap-3">
-            <span className="rounded-[3px] bg-primary px-2.5 py-1 text-[12px] font-black tracking-wider text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
             <h2 className="text-[20px] font-bold text-on-surface">
               {mode === "create" ? "เพิ่มแผนก" : "แก้ไขแผนก"}
             </h2>

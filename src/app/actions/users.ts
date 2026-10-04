@@ -135,6 +135,19 @@ async function requireOwner(): Promise<
   return { supabase, userId: user.id };
 }
 
+async function requirePermission(permission: string): Promise<
+  | { error: string }
+  | { supabase: AuthenticatedClient; userId: string }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "กรุณาเข้าสู่ระบบใหม่" };
+
+  const { data, error } = await supabase.rpc("authorize", { requested_permission: permission });
+  if (error || !data) return { error: "คุณไม่มีสิทธิ์เข้าถึงข้อมูลผู้ใช้งาน" };
+  return { supabase, userId: user.id };
+}
+
 function normalizeFilters(filters: UserListFilters) {
   const page =
     Number.isSafeInteger(filters.page) && Number(filters.page) > 0
@@ -269,7 +282,7 @@ export async function getUserManagementPageAction(
   filters: UserListFilters = {},
 ) {
   try {
-    const auth = await requireOwner();
+    const auth = await requirePermission("users.view");
     if ("error" in auth) return auth;
 
     return await fetchUserManagementPage(auth.supabase, filters);

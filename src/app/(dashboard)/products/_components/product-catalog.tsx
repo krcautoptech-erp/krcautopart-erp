@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -25,6 +26,8 @@ import { ProductDetailModal } from "./product-detail-modal";
 import { ProductEditModal } from "./product-edit-modal";
 import { ProductTable } from "./product-table";
 import { ItemCreateModal } from "@/app/(dashboard)/items/_components/item-create-modal";
+import { readSpreadsheet } from "@/lib/spreadsheet-import";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 export type ProductRecord = {
   id: string;
@@ -244,38 +247,6 @@ function buildImportTemplateWorksheet() {
 </Workbook>`;
 }
 
-function parseCsvLine(line: string) {
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const nextChar = line[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      values.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  values.push(current.trim());
-  return values;
-}
-
 function mapImportRow(headers: string[], rowValues: string[]) {
   const mappedRow: ProductImportInput = { ...EMPTY_IMPORT_ROW };
 
@@ -303,63 +274,9 @@ function mapImportRow(headers: string[], rowValues: string[]) {
   return mappedRow;
 }
 
-function parseSpreadsheetXml(content: string) {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(content, "application/xml");
-  const parserError = xml.querySelector("parsererror");
-
-  if (parserError) {
-    throw new Error("ไฟล์ Excel ไม่ถูกต้อง หรือไม่ใช่ไฟล์จากรูปแบบที่ระบบรองรับ");
-  }
-
-  const rowNodes = Array.from(xml.getElementsByTagName("Row"));
-  if (rowNodes.length <= 1) {
-    return [];
-  }
-
-  const rows = rowNodes.map((row) =>
-    Array.from(row.getElementsByTagName("Cell")).map((cell) => {
-      const dataNode = cell.getElementsByTagName("Data")[0];
-      return dataNode?.textContent?.trim() ?? "";
-    }),
-  );
-
-  const [headerRow, ...dataRows] = rows;
-  return dataRows
-    .filter((row) => row.some((cell) => cell.trim() !== ""))
-    .map((row) => mapImportRow(headerRow, row));
-}
-
-function parseCsvContent(content: string) {
-  const lines = content
-    .replace(/^\uFEFF/, "")
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() !== "");
-
-  if (lines.length <= 1) {
-    return [];
-  }
-
-  const [headerLine, ...dataLines] = lines;
-  const headers = parseCsvLine(headerLine);
-
-  return dataLines.map((line) => mapImportRow(headers, parseCsvLine(line)));
-}
-
 async function parseImportFile(file: File) {
-  const content = await file.text();
-  const fileName = file.name.toLowerCase();
-
-  if (fileName.endsWith(".csv")) {
-    return parseCsvContent(content);
-  }
-
-  if (fileName.endsWith(".xls") || fileName.endsWith(".xml")) {
-    return parseSpreadsheetXml(content);
-  }
-
-  throw new Error("รองรับเฉพาะไฟล์ .xls จากระบบนี้, .xml หรือ .csv UTF-8");
+  const { headers, rows } = await readSpreadsheet(file);
+  return rows.map((row) => mapImportRow(headers, row));
 }
 
 function buildImportSummary(result: {
@@ -401,7 +318,7 @@ export function ProductCatalog({
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const importDropdownRef = useRef<HTMLDivElement>(null);
-  const { searchQuery, isAddModalOpen, setIsAddModalOpen } = useApp();
+  const { searchQuery, setSearchQuery, isAddModalOpen, setIsAddModalOpen } = useApp();
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [selectedMaterial, setSelectedMaterial] = useState("ทั้งหมด");
   const [currentPage, setCurrentPage] = useState(1);
@@ -410,6 +327,7 @@ export function ProductCatalog({
   const [editProduct, setEditProduct] = useState<ProductRecord | null>(null);
   const [centralEditingItem, setCentralEditingItem] = useState<CatalogItem | null>(null);
   const [deleteConfirmProduct, setDeleteConfirmProduct] = useState<ProductRecord | null>(null);
+  const [pendingImportRows, setPendingImportRows] = useState<ProductImportInput[] | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -494,16 +412,19 @@ export function ProductCatalog({
   const nextDisabled =
     currentDetailIdx === -1 || currentDetailIdx >= filteredProducts.length - 1;
 
-  const navigateDetail = (direction: "prev" | "next") => {
-    if (direction === "prev" && !prevDisabled) {
-      setDetailProduct(filteredProducts[currentDetailIdx - 1]);
-      return;
-    }
+  const navigateDetail = useCallback(
+    (direction: "prev" | "next") => {
+      if (direction === "prev" && !prevDisabled) {
+        setDetailProduct(filteredProducts[currentDetailIdx - 1]);
+        return;
+      }
 
-    if (direction === "next" && !nextDisabled) {
-      setDetailProduct(filteredProducts[currentDetailIdx + 1]);
-    }
-  };
+      if (direction === "next" && !nextDisabled) {
+        setDetailProduct(filteredProducts[currentDetailIdx + 1]);
+      }
+    },
+    [currentDetailIdx, filteredProducts, nextDisabled, prevDisabled],
+  );
 
   useEffect(() => {
     if (!detailProduct) {
@@ -522,7 +443,7 @@ export function ProductCatalog({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [detailProduct, currentDetailIdx, nextDisabled, prevDisabled]);
+  }, [detailProduct, navigateDetail]);
 
   const handleExportExcel = () => {
     if (filteredProducts.length === 0) {
@@ -578,23 +499,29 @@ export function ProductCatalog({
     startImportTransition(async () => {
       try {
         const rows = await parseImportFile(file);
-        const result = await bulkImportProductsAction(rows);
-
-        if (!("success" in result)) {
-          setErrorMessage(result.error);
-          setShowErrorModal(true);
-          return;
-        }
-
-        setSuccessMessage(buildImportSummary(result));
-        setShowSuccessModal(true);
-        router.refresh();
+        setPendingImportRows(rows);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "เกิดข้อผิดพลาดในการอ่านไฟล์นำเข้า";
         setErrorMessage(message);
         setShowErrorModal(true);
       }
+    });
+  };
+
+  const handleConfirmImport = () => {
+    if (!pendingImportRows) return;
+    startImportTransition(async () => {
+      const result = await bulkImportProductsAction(pendingImportRows);
+      setPendingImportRows(null);
+      if (!("success" in result)) {
+        setErrorMessage(result.error);
+        setShowErrorModal(true);
+        return;
+      }
+      setSuccessMessage(buildImportSummary(result));
+      setShowSuccessModal(true);
+      router.refresh();
     });
   };
 
@@ -677,7 +604,7 @@ export function ProductCatalog({
                     type="button"
                   >
                     <Upload className="h-4 w-4 text-secondary" />
-                    <span>นำเข้าไฟล์สินค้า (.xls, .csv, .xml)</span>
+                    <span>นำเข้าไฟล์สินค้า (.xlsx, .csv)</span>
                   </button>
                   <button
                     onClick={() => {
@@ -708,13 +635,20 @@ export function ProductCatalog({
             ref={fileInputRef}
             className="hidden"
             type="file"
-            accept=".xls,.xml,.csv"
+            accept=".xlsx,.csv,.xls,.xml"
             onChange={handleImportFile}
           />
         </div>
       </header>
 
-      <div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
+      <MobileListFilters
+        activeCount={selectedMaterial === "ทั้งหมด" ? 0 : 1}
+        onClear={() => setSelectedMaterial("ทั้งหมด")}
+        search={<ListSearchField onChange={setSearchQuery} placeholder="ค้นหารหัสสินค้า ชื่อสินค้า หรือรายละเอียด..." value={searchQuery} />}
+      >
+        <ListFilterSelect label="เกรดวัสดุ" onChange={setSelectedMaterial} value={selectedMaterial}><option value="ทั้งหมด">ทั้งหมด ({items.length})</option>{materialGradeFilters.map((material) => <option key={material} value={material}>{material} ({items.filter((product) => (product.material || "").trim().toUpperCase() === material).length})</option>)}</ListFilterSelect>
+      </MobileListFilters>
+      <div className="hidden flex-col gap-sm md:flex md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-sm">
           <span className="text-[14px] font-semibold text-secondary">
             เกรดวัสดุ:
@@ -832,6 +766,18 @@ export function ProductCatalog({
           }}
         />
       ) : null}
+
+      <ConfirmModal
+        open={Boolean(pendingImportRows)}
+        title="ยืนยันนำเข้าข้อมูลสินค้า"
+        message={`ตรวจสอบไฟล์แล้ว ${pendingImportRows?.length ?? 0} รายการ รหัสที่มีอยู่จะถูกอัปเดต และรหัสใหม่จะถูกเพิ่ม`}
+        confirmText="ยืนยันนำเข้า"
+        cancelText="ยกเลิก"
+        variant="primary"
+        loading={isImporting}
+        onConfirm={handleConfirmImport}
+        onClose={() => setPendingImportRows(null)}
+      />
 
       <ConfirmModal
         open={Boolean(deleteConfirmProduct)}

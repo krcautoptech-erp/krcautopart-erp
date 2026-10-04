@@ -13,6 +13,7 @@ import { Pagination } from "@/components/pagination";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { useRouter } from "next/navigation";
 import {
+  Fragment,
   useEffect,
   useEffectEvent,
   useState,
@@ -30,6 +31,9 @@ import {
   type UserRecord,
 } from "@/app/actions/users";
 import { ActiveStatusBadge } from "@/components/status-badge";
+import { MobileEntityList } from "@/components/mobile-entity-list";
+import { useHasPermission } from "@/components/permission-context";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 import {
   validateCreateUserInput,
   validateUserProfileInput,
@@ -54,6 +58,9 @@ export function UserManagement({
   tabs?: ReactNode;
 }) {
   const router = useRouter();
+  const canCreate = useHasPermission("users.create");
+  const canEdit = useHasPermission("users.edit");
+  const canChangeStatus = useHasPermission("users.delete");
   const [search, setSearch] = useState(initialFilters.search ?? "");
   const [departmentId, setDepartmentId] = useState(
     initialFilters.departmentId?.toString() ?? "",
@@ -236,30 +243,30 @@ export function UserManagement({
   );
 
   return (
-    <div className="space-y-3">
-      <header className="flex items-end justify-between border-b border-outline-variant pb-3">
-        <div>
-          <h1 className="text-[25px] font-bold tracking-[-0.025em] text-on-surface">
+    <div className="space-y-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 sm:flex sm:items-baseline sm:gap-3">
+          <h1 className="shrink-0 text-[20px] font-bold tracking-[-0.025em] text-on-surface">
             ผู้ใช้งานและสิทธิ์
           </h1>
-          <p className="mt-0.5 text-[13px] font-medium text-secondary">
+          <p className="mt-0.5 truncate text-[12px] font-medium text-secondary sm:mt-0">
             จัดการบัญชีผู้ใช้งาน Role และขอบเขตการเข้าถึงระบบ
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ExcelExportButton onClick={() => exportUsersToExcel(initialData.users)} />
-          <button
+          {canCreate ? <button
             className="inline-flex h-9 items-center gap-2 rounded-[4px] bg-primary px-4 text-[13px] font-bold text-white hover:bg-primary/95"
             onClick={() => openModal("create")}
             type="button"
           >
             <Plus size={17} />
             เพิ่มผู้ใช้งาน
-          </button>
+          </button> : null}
         </div>
       </header>
 
-      {tabs}
+      {tabs ? <Fragment key="access-tabs">{tabs}</Fragment> : null}
 
       {feedback ? (
         <div
@@ -274,7 +281,16 @@ export function UserManagement({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-[minmax(260px,1.3fr)_minmax(160px,.75fr)_minmax(160px,.75fr)_minmax(160px,.75fr)_auto] gap-2">
+      <MobileListFilters
+        activeCount={[departmentId, roleId, status].filter(Boolean).length}
+        onClear={() => { setSearch(""); setDepartmentId(""); setRoleId(""); setStatus(""); startTransition(() => router.replace("/settings/users")); }}
+        search={<ListSearchField onChange={setSearch} placeholder="ค้นหารหัสพนักงาน / ชื่อผู้ใช้งาน" value={search} />}
+      >
+        <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentId(value); navigateWithFilters({ departmentId: value, page: 1 }); }} value={departmentId}><option value="">ทั้งหมด</option>{initialData.options.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</ListFilterSelect>
+        <ListFilterSelect label="Role" onChange={(value) => { setRoleId(value); navigateWithFilters({ page: 1, roleId: value }); }} value={roleId}><option value="">ทั้งหมด</option>{initialData.options.roles.map((role) => <option key={role.id} value={role.id}>{role.code}</option>)}</ListFilterSelect>
+        <ListFilterSelect label="สถานะ" onChange={(value) => { setStatus(value); navigateWithFilters({ page: 1, status: value }); }} value={status}><option value="">ทั้งหมด</option><option value="active">ใช้งาน</option><option value="inactive">ระงับ</option></ListFilterSelect>
+      </MobileListFilters>
+      <div className="hidden min-w-0 grid-cols-1 gap-2 md:grid md:grid-cols-2 lg:grid-cols-[minmax(220px,1.3fr)_repeat(3,minmax(120px,.75fr))_auto]">
         <label className="relative">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
@@ -348,7 +364,21 @@ export function UserManagement({
       </div>
 
       <section className="overflow-hidden rounded-[4px] border border-outline-variant bg-surface-container-lowest">
-        <div className="overflow-x-auto">
+        <div className="sm:hidden">
+          <MobileEntityList
+            actionLabel={(user) => `${canEdit ? "แก้ไข" : "ดูรายละเอียด"} ${user.firstName}`}
+            emptyText="ไม่พบข้อมูลผู้ใช้งาน"
+            getKey={(user) => user.userId}
+            items={initialData.users}
+            meta={(user) => <>{user.departmentName} · {user.roleCode} · {user.username}</>}
+            onAction={(user) => openModal(canEdit ? "edit" : "view", user)}
+            onOpen={(user) => openModal("view", user)}
+            primary={(user) => user.employeeCode}
+            secondary={(user) => <>{user.firstName} {user.lastName}</>}
+            status={(user) => <ActiveStatusBadge active={user.status === "active"} />}
+          />
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="erp-data-table min-w-[1180px]">
             <thead className="bg-surface-container-low">
               <tr className="h-8 border-b border-outline-variant">
@@ -397,13 +427,13 @@ export function UserManagement({
                       >
                         <Eye size={15} />
                       </ActionIcon>
-                      <ActionIcon
+                      {canEdit ? <ActionIcon
                         label={`แก้ไข ${user.firstName}`}
                         onClick={() => openModal("edit", user)}
                       >
                         <Pencil size={15} />
-                      </ActionIcon>
-                      <ActionIcon
+                      </ActionIcon> : null}
+                      {canEdit ? <ActionIcon
                         label={`ตั้งรหัสผ่านใหม่ให้ ${user.firstName}`}
                         onClick={() => {
                           setFormError(null);
@@ -411,8 +441,8 @@ export function UserManagement({
                         }}
                       >
                         <KeyRound size={15} />
-                      </ActionIcon>
-                      <ActionIcon
+                      </ActionIcon> : null}
+                      {canChangeStatus ? <ActionIcon
                         label={
                           user.status === "active"
                             ? `ระงับ ${user.firstName}`
@@ -425,7 +455,7 @@ export function UserManagement({
                         ) : (
                           <CirclePlay size={15} />
                         )}
-                      </ActionIcon>
+                      </ActionIcon> : null}
                     </div>
                   </TableCell>
                 </tr>

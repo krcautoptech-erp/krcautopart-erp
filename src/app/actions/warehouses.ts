@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { clearItemsServerCache } from "@/app/actions/items";
 import {
   normalizeWarehouseInput,
   normalizeWarehouseTypeInput,
@@ -159,6 +160,7 @@ export async function saveWarehouseAction(id: number | null, input: WarehouseInp
     : await auth.supabase.from("raw_material_warehouses").insert(payload).select("id").single();
   if (result.error) return { error: friendlyError(result.error.message) };
   revalidatePath(SETTINGS_PATH);
+  await clearItemsServerCache();
   const settings = await fetchSettings(auth.supabase);
   if ("error" in settings) return settings;
   return { data: settings.data, success: true as const };
@@ -171,6 +173,7 @@ export async function setWarehouseStatusAction(id: number, status: WarehouseStat
   const { error } = await auth.supabase.from("raw_material_warehouses").update({ status }).eq("id", id);
   if (error) return { error: friendlyError(error.message) };
   revalidatePath(SETTINGS_PATH);
+  await clearItemsServerCache();
   return { success: true as const };
 }
 
@@ -180,6 +183,7 @@ export async function deleteWarehouseAction(id: number) {
   const { error } = await auth.supabase.from("raw_material_warehouses").delete().eq("id", id);
   if (error) return { error: friendlyError(error.message) };
   revalidatePath(SETTINGS_PATH);
+  await clearItemsServerCache();
   return { success: true as const };
 }
 

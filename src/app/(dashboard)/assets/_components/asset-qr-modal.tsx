@@ -3,6 +3,7 @@
 import React, { useRef } from "react";
 import { Printer, X, Tag, QrCode } from "lucide-react";
 import type { AssetRecord } from "@/lib/assets";
+import { printAssetTag } from "@/lib/asset-print";
 
 interface AssetQrModalProps {
   asset: AssetRecord | null;
@@ -15,7 +16,7 @@ export function AssetQrModal({ asset, onClose }: AssetQrModalProps) {
   if (!asset) return null;
 
   const handlePrint = () => {
-    window.print();
+    void printAssetTag(asset, qrUrl);
   };
 
   // Build a clean asset QR content payload

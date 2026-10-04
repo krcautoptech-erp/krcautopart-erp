@@ -21,7 +21,6 @@ import { sendPurchaseRequisitionPush } from "@/lib/web-push.server";
 import { createClient } from "@/utils/supabase/server";
 
 type CatalogRow = { source: "raw_material" | "item_master"; source_id: number; item_code: string; item_name: string; item_description: string; type_code: string; type_name: string; unit_id: number; unit_name: string; unit_symbol: string; allows_decimal: boolean; is_stocked?: boolean; tracking_method?: string; form_template?: string; default_warehouse_id?: number | null };
-type LegacyRawMaterialRow = { id: number; material_code: string; material_name: string; unit: { id: number; unit_name: string; symbol: string; allows_decimal: boolean; status: string } | { id: number; unit_name: string; symbol: string; allows_decimal: boolean; status: string }[] | null };
 type FallbackCatalogRow = {
   attributes: { warehouseId?: number | string | null } | null;
   description: string | null;
@@ -70,10 +69,6 @@ type PurchaseRequisitionPrintItemRow = {
   unit_name: string;
 };
 
-function firstRelation<T>(relation: T | T[] | null) {
-  return Array.isArray(relation) ? relation[0] : relation;
-}
-
 function normalizeCatalogItem(row: CatalogRow): PurchaseRequisitionMaterial {
   return {
     allowsDecimal: Boolean(row.allows_decimal),
@@ -103,24 +98,24 @@ function getDecisionError(message: string) {
     message.includes("owner_approval_required") ||
     message.includes("permission_denied")
   ) {
-    return "เฉพาะ OWNER ที่ได้รับสิทธิ์เท่านั้นจึงจะอนุมัติหรือปฏิเสธ PR ได้";
+    return "คุณไม่มีสิทธิ์ตรวจสอบหรือส่งกลับใบขอซื้อ";
   }
   if (message.includes("purchase_requisition_not_found")) {
     return "ไม่พบใบขอซื้อที่ต้องการดำเนินการ";
   }
   if (message.includes("purchase_requisition_already_decided")) {
-    return "ใบขอซื้อนี้ได้รับการตัดสินใจแล้ว กรุณาโหลดข้อมูลล่าสุด";
+    return "ใบขอซื้อนี้ผ่านการตรวจสอบแล้ว กรุณาโหลดข้อมูลล่าสุด";
   }
   if (message.includes("rejection_note_required")) {
-    return "กรุณาระบุเหตุผลที่ปฏิเสธใบขอซื้อ";
+    return "กรุณาระบุเหตุผลที่ส่งใบขอซื้อกลับแก้ไข";
   }
   if (message.includes("decision_note_too_long")) {
     return "หมายเหตุต้องไม่เกิน 500 ตัวอักษร";
   }
-  return "ไม่สามารถบันทึกผลการอนุมัติใบขอซื้อได้";
+  return "ไม่สามารถบันทึกผลการตรวจสอบใบขอซื้อได้";
 }
 
-export async function decidePurchaseRequisitionAction(input: {
+export async function reviewPurchaseRequisitionAction(input: {
   decision: PurchaseRequisitionDecision;
   note: string;
   requisitionId: number;
@@ -145,16 +140,16 @@ export async function decidePurchaseRequisitionAction(input: {
     }
 
     const { data, error } = await supabase.rpc(
-      "decide_purchase_requisition",
+      "review_purchase_requisition",
       {
-        p_decision: input.decision,
+        p_outcome: input.decision,
         p_note: input.note.trim() || null,
         p_requisition_id: input.requisitionId,
       },
     );
 
     if (error) {
-      console.error("Unable to decide purchase requisition:", {
+      console.error("Unable to review purchase requisition:", {
         code: error.code,
         message: error.message,
       });
@@ -167,7 +162,7 @@ export async function decidePurchaseRequisitionAction(input: {
     const result = Array.isArray(data) ? data[0] : data;
     await sendPurchaseRequisitionPush(supabase, {
       entityId: input.requisitionId,
-      eventKey: input.decision,
+      eventKey: input.decision === "ready_for_po" ? "approved" : "rejected",
     });
     revalidatePath("/purchase/pr");
 
@@ -177,9 +172,9 @@ export async function decidePurchaseRequisitionAction(input: {
       success: true as const,
     };
   } catch (error) {
-    console.error("decidePurchaseRequisitionAction error:", error);
+    console.error("reviewPurchaseRequisitionAction error:", error);
     return {
-      error: "เกิดข้อผิดพลาดระหว่างบันทึกผลการอนุมัติ",
+      error: "เกิดข้อผิดพลาดระหว่างบันทึกผลการตรวจสอบ",
       success: false as const,
     };
   }
@@ -197,7 +192,7 @@ function getSaveError(message: string, status: "draft" | "pending_approval") {
     return "ไม่พบใบขอซื้อที่ต้องการแก้ไข";
   }
   if (message.includes("purchase_requisition_not_draft")) {
-    return "แก้ไขหรือส่งอนุมัติได้เฉพาะใบขอซื้อสถานะร่าง";
+    return "แก้ไขหรือส่งตรวจสอบได้เฉพาะใบขอซื้อสถานะร่าง";
   }
   if (message.includes("duplicate_raw_materials") || message.includes("duplicate_items")) {
     return "มีสินค้า/บริการซ้ำในใบขอซื้อ กรุณารวมเป็นรายการเดียว";
@@ -210,7 +205,7 @@ function getSaveError(message: string, status: "draft" | "pending_approval") {
   }
   return status === "draft"
     ? "ไม่สามารถบันทึกร่างใบขอซื้อได้"
-    : "ไม่สามารถส่งใบขอซื้อเพื่ออนุมัติได้";
+    : "ไม่สามารถส่งใบขอซื้อให้ฝ่ายจัดซื้อตรวจสอบได้";
 }
 
 async function savePurchaseRequisition(
@@ -290,7 +285,7 @@ async function savePurchaseRequisition(
       user.app_metadata.department_name ?? "ไม่ระบุแผนก",
     ).trim();
 
-    const { data, error } = await supabase.rpc("save_purchase_requisition", {
+    const { data, error } = await supabase.rpc("save_purchase_requisition_operational", {
       p_department_name: departmentName,
       p_document_date:
         input.documentDate || new Date().toISOString().slice(0, 10),

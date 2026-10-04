@@ -14,8 +14,11 @@ import type {
   RawMaterialSettingKind,
 } from "@/lib/raw-material-settings";
 import { ActiveStatusBadge } from "@/components/status-badge";
+import { MobileEntityList } from "@/components/mobile-entity-list";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { Pagination } from "@/components/pagination";
+import { CompanyFormLogo } from "@/components/company-logo";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 type RawMaterialSettingsData = {
   grades: RawMaterialSettingRecord[];
@@ -272,7 +275,14 @@ export function RawMaterialSettings({ initialData }: { initialData: RawMaterialS
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <MobileListFilters
+          activeCount={statusFilter === "all" ? 0 : 1}
+          onClear={() => { setStatusFilter("all"); setCurrentPage(1); }}
+          search={<ListSearchField onChange={(value) => { setSearchQuery(value); setCurrentPage(1); }} placeholder={`ค้นหารหัสหรือชื่อ${activeConfig.label}`} value={searchQuery} />}
+        >
+          <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }} value={statusFilter}><option value="all">ทั้งหมด</option><option value="active">ใช้งาน</option><option value="inactive">ระงับ</option></ListFilterSelect>
+        </MobileListFilters>
+        <div className="hidden flex-col gap-3 md:flex md:flex-row md:items-center md:justify-between">
           <label className="relative block w-full sm:max-w-[380px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary" size={17} />
             <input
@@ -305,7 +315,22 @@ export function RawMaterialSettings({ initialData }: { initialData: RawMaterialS
         </div>
 
         <div className="overflow-hidden border border-outline-variant bg-surface-container-lowest">
-          <div className="overflow-x-auto">
+          <div className="sm:hidden">
+            <MobileEntityList
+              actionLabel={(item) => `แก้ไข ${item.name}`}
+              disabled={isSaving}
+              emptyText={activeConfig.emptyText}
+              getKey={(item) => item.id}
+              items={paginatedItems}
+              meta={(item) => <>{activeTab === "unit" ? `สัญลักษณ์ ${item.symbol || "-"} · ` : ""}ลำดับแสดง ${item.sort_order}</>}
+              onAction={(item) => openEditModal(item)}
+              onOpen={openEditModal}
+              primary={(item) => item.code}
+              secondary={(item) => item.name}
+              status={(item) => <ActiveStatusBadge active={item.status === "active"} />}
+            />
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="erp-data-table min-w-[760px]">
               <thead className="bg-surface-container-low">
                 <tr className="border-b border-outline-variant">
@@ -442,9 +467,7 @@ function SettingModal({
       >
         <header className="flex h-14 items-center justify-between border-b border-outline-variant px-5">
           <div className="flex items-center gap-3">
-            <span className="rounded-[4px] bg-primary px-2.5 py-1 text-[12px] font-black tracking-wider text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
             <h2 className="text-[20px] font-bold text-on-surface">
               {mode === "create" ? "เพิ่ม" : "แก้ไข"}{title}
             </h2>

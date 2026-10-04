@@ -7,6 +7,7 @@ import type {
   UserRecord,
 } from "@/app/actions/users";
 import type { UserFormInput } from "@/lib/user-management";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 export type UserModalMode = "create" | "edit" | "view";
 
@@ -58,14 +59,12 @@ export function UserModal({
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
       <form
-        className="w-full max-w-[920px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-[920px] overflow-y-auto rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
         onSubmit={onSubmit}
       >
         <header className="flex h-[58px] items-center justify-between border-b border-outline-variant px-5">
           <div className="flex items-center gap-3">
-            <span className="rounded-[4px] bg-primary px-3 py-1.5 text-[13px] font-extrabold tracking-[0.08em] text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
             <div>
               <h2 className="text-[20px] font-bold leading-tight text-on-surface">
                 {mode === "create"
@@ -93,7 +92,7 @@ export function UserModal({
         <div className="grid md:grid-cols-2">
           <section className="space-y-3 border-b border-outline-variant p-5 md:border-b-0 md:border-r">
             <SectionTitle number="01" title="ข้อมูลพนักงาน" />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="รหัสพนักงาน">
                 <input
                   className={inputClass}
@@ -140,7 +139,7 @@ export function UserModal({
                   value={draft.lastName}
                 />
               </Field>
-              <Field className="col-span-2" label="ตำแหน่ง">
+              <Field className="sm:col-span-2" label="ตำแหน่ง">
                 <input
                   className={inputClass}
                   disabled={isReadOnly}
@@ -157,7 +156,7 @@ export function UserModal({
 
           <section className="space-y-3 p-5">
             <SectionTitle number="02" title="สิทธิ์และสายงาน" />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="แผนก" required>
                 <select
                   className={inputClass}
@@ -195,7 +194,7 @@ export function UserModal({
                   ))}
                 </select>
               </Field>
-              <Field className="col-span-2" label="ผู้อนุมัติประจำ">
+              <Field className="sm:col-span-2" label="ผู้อนุมัติประจำ">
                 <select
                   className={inputClass}
                   disabled={isReadOnly}
@@ -265,7 +264,7 @@ export function UserModal({
                       value={draft.passwordConfirmation}
                     />
                   </Field>
-                  <p className="col-span-2 text-[11px] font-medium leading-5 text-secondary">
+                  <p className="sm:col-span-2 text-[11px] font-medium leading-5 text-secondary">
                     รหัสผ่านต้องมี 8-72 ตัว และมีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก
                     และตัวเลข ผู้ใช้งานไม่สามารถเปลี่ยนเองได้
                   </p>

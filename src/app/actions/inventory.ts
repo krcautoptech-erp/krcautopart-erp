@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { resolveInventoryActorName, type CentralStockRow, type StockStateCode } from "@/lib/central-stock";
+import type { SupplierDocumentType } from "@/lib/goods-receipts";
 
 type DbRow = Record<string, unknown>;
 type MaybeArray<T> = T | T[] | null | undefined;
@@ -25,6 +26,8 @@ export type GoodsReceiptSummary = {
   vendor_code: string;
   vendor_name: string;
   delivery_note_no: string | null;
+  supplier_document_type: SupplierDocumentType | null;
+  supplier_document_date: string | null;
   status: "draft" | "posted" | "cancelled";
   remarks: string | null;
   created_at: string;
@@ -56,9 +59,13 @@ export type GoodsReceiptLineItem = {
 };
 
 export type GoodsReceiptSubmission = {
+  requestKey: string;
   purchaseOrderId: number;
   documentDate: string;
   deliveryNoteNo: string;
+  supplierDocumentType: SupplierDocumentType;
+  supplierDocumentDate: string;
+  allowDuplicateSupplierDocument?: boolean;
   remarks: string;
   items: Array<{
     purchaseOrderItemId: number;
@@ -105,6 +112,12 @@ function getErrorMessage(message: string) {
   if (message.includes("inventory_serials_item_serial_unique")) {
     return "พบ Serial Number ซ้ำในระบบ";
   }
+  if (message.includes("request_key_conflict")) {
+    return "คำขอบันทึกนี้ถูกใช้กับเอกสารอื่นแล้ว กรุณาเปิดรายการใหม่";
+  }
+  if (message.includes("invalid_supplier_document")) {
+    return "กรุณาระบุประเภท เลขที่ และวันที่เอกสารผู้ขายให้ครบถ้วน";
+  }
   return "เกิดข้อผิดพลาดในการบันทึกใบรับสินค้า";
 }
 
@@ -129,6 +142,8 @@ export async function getGoodsReceiptsAction(options?: {
         document_date,
         purchase_order_id,
         delivery_note_no,
+        supplier_document_type,
+        supplier_document_date,
         status,
         remarks,
         created_at,
@@ -169,6 +184,8 @@ export async function getGoodsReceiptsAction(options?: {
       vendor_code: String(row.vendor_code),
       vendor_name: String(row.vendor_name),
       delivery_note_no: row.delivery_note_no === null ? null : String(row.delivery_note_no),
+      supplier_document_type: row.supplier_document_type as SupplierDocumentType | null,
+      supplier_document_date: row.supplier_document_date === null ? null : String(row.supplier_document_date),
       status: row.status as GoodsReceiptSummary["status"],
       remarks: row.remarks === null ? null : String(row.remarks),
       created_at: String(row.created_at),
@@ -198,6 +215,8 @@ export async function getGoodsReceiptDetailAction(grId: number) {
           document_date,
           purchase_order_id,
           delivery_note_no,
+          supplier_document_type,
+          supplier_document_date,
           status,
           remarks,
           created_at,
@@ -271,6 +290,8 @@ export async function getGoodsReceiptDetailAction(grId: number) {
       vendor_name: String(headerRes.data.vendor_name),
       vendor_address: vendorAddress,
       delivery_note_no: headerRes.data.delivery_note_no,
+      supplier_document_type: headerRes.data.supplier_document_type as SupplierDocumentType | null,
+      supplier_document_date: headerRes.data.supplier_document_date,
       status: headerRes.data.status as GoodsReceiptSummary["status"],
       remarks: headerRes.data.remarks,
       created_at: String(headerRes.data.created_at),
@@ -323,6 +344,10 @@ export async function postGoodsReceiptAction(input: GoodsReceiptSubmission) {
       p_document_date: input.documentDate,
       p_delivery_note_no: input.deliveryNoteNo.trim() || null,
       p_remarks: input.remarks.trim() || null,
+      p_request_key: input.requestKey,
+      p_supplier_document_type: input.supplierDocumentType,
+      p_supplier_document_date: input.supplierDocumentDate,
+      p_allow_duplicate: input.allowDuplicateSupplierDocument ?? false,
       p_items: input.items.map((item, idx) => ({
         line_no: idx + 1,
         purchase_order_item_id: item.purchaseOrderItemId,
@@ -337,6 +362,14 @@ export async function postGoodsReceiptAction(input: GoodsReceiptSubmission) {
     });
 
     if (error) {
+      const duplicate = error.message.match(/duplicate_supplier_document:([^\s]+)/);
+      if (duplicate) {
+        return {
+          duplicate: true as const,
+          error: `เลขที่เอกสารผู้ขายนี้ถูกใช้กับ ${duplicate[1]} แล้ว`,
+          success: false as const,
+        };
+      }
       console.error("postGoodsReceiptAction database error:", error);
       return { error: getErrorMessage(error.message), success: false as const };
     }
@@ -350,6 +383,34 @@ export async function postGoodsReceiptAction(input: GoodsReceiptSubmission) {
   } catch (error) {
     console.error("postGoodsReceiptAction error:", error);
     return { error: "เกิดข้อผิดพลาดระหว่างบันทึกรับสินค้า", success: false as const };
+  }
+}
+
+export async function cancelGoodsReceiptAction(receiptId: number, reason: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง" };
+
+    const { error } = await supabase.rpc("cancel_goods_receipt", {
+      p_goods_receipt_id: receiptId,
+      p_reason: reason.trim().replace(/\s+/g, " "),
+    });
+    if (error) {
+      if (error.message.includes("permission_denied")) return { error: "คุณไม่มีสิทธิ์ยกเลิกใบรับสินค้า" };
+      if (error.message.includes("invalid_cancellation_reason")) return { error: "กรุณาระบุเหตุผล 10–500 ตัวอักษร" };
+      if (error.message.includes("goods_receipt_stock_already_consumed")) return { error: "ยกเลิกไม่ได้ เนื่องจากสินค้าจากใบรับนี้ถูกนำไปใช้แล้ว" };
+      console.error("cancelGoodsReceiptAction database error:", error);
+      return { error: "ไม่สามารถยกเลิกใบรับสินค้าได้" };
+    }
+
+    revalidatePath("/purchase/receipts");
+    revalidatePath("/purchase/po");
+    revalidatePath("/inventory/stock");
+    return { success: true as const };
+  } catch (error) {
+    console.error("cancelGoodsReceiptAction error:", error);
+    return { error: "เกิดข้อผิดพลาดระหว่างยกเลิกใบรับสินค้า" };
   }
 }
 
@@ -425,7 +486,7 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง" };
 
-    const [poRes, itemsRes] = await Promise.all([
+    const [poRes, itemsRes, costPermissionRes] = await Promise.all([
       supabase
         .from("purchase_orders")
         .select("id, po_number, vendor_id, vendor_code, vendor_name, delivery_address")
@@ -442,6 +503,8 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
           item_description,
           quantity,
           received_qty,
+          unit_price,
+          discount_amount,
           unit_name,
           is_stocked,
           tracking_method,
@@ -458,7 +521,10 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
           )
         `)
         .eq("purchase_order_id", poId)
-        .order("line_no", { ascending: true })
+        .order("line_no", { ascending: true }),
+      supabase.rpc("authorize", {
+        requested_permission: "inventory_cost.view",
+      }),
     ]);
 
     if (poRes.error) {
@@ -468,6 +534,11 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
       return { error: "ไม่พบใบสั่งซื้อ" };
     }
 
+    if (itemsRes.error) {
+      return { error: "ไม่สามารถโหลดรายการใบสั่งซื้อได้" };
+    }
+
+    const canViewCost = Boolean(costPermissionRes.data);
     const items = ((itemsRes.data ?? []) as DbRow[]).map((row) => {
       const master = firstRelation(row.item_master as MaybeArray<DbRow>);
       const attrs = objectValue(master?.attributes);
@@ -481,6 +552,10 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
       ].filter(Boolean).join(" ");
       const defaultWarehouseId = attrs.warehouseId != null ? Number(attrs.warehouseId) : null;
       const type = firstRelation(master?.item_types as MaybeArray<DbRow>);
+      const orderedQty = Number(row.quantity);
+      const unitCost = orderedQty > 0
+        ? Math.max((orderedQty * Number(row.unit_price) - Number(row.discount_amount ?? 0)) / orderedQty, 0)
+        : 0;
       const isStocked = type?.is_stocked != null ? Boolean(type.is_stocked) : (row.is_stocked ?? true);
       let trackingMethod: "none" | "lot" | "serial" = "none";
       if (row.tracking_method === "serial" || master?.tracking_method === "serial" || type?.serial_controlled) {
@@ -501,6 +576,7 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
         quantity_ordered: Number(row.quantity),
         quantity_received: Number(row.received_qty),
         quantity_remaining: Number(row.quantity) - Number(row.received_qty),
+        unit_cost: canViewCost ? unitCost : null,
         unit_name: String(row.unit_name),
         is_stocked: Boolean(isStocked),
         tracking_method: trackingMethod,
@@ -521,6 +597,7 @@ export async function getPurchaseOrderItemsForReceiptAction(poId: number) {
           vendor_name: String(poRes.data.vendor_name),
           delivery_address: poRes.data.delivery_address,
         },
+        canViewCost,
         items,
       }
     };
@@ -676,6 +753,7 @@ export type CentralInventoryFilters = {
   search?: string;
   itemTypeId?: number | null;
   warehouseId?: number | null;
+  trackingMethod?: CentralStockRow["trackingMethod"] | null;
   state?: StockStateCode | null;
   page?: number;
   pageSize?: number;
@@ -687,6 +765,10 @@ export type CentralInventorySummary = {
   reserved: number;
   lowStock: number;
   stale: number;
+  inventoryValue: number | null;
+  rawMaterialValue: number | null;
+  canViewCost: boolean;
+  canExportCost: boolean;
 };
 
 export type CentralInventoryOption = { id: number; code: string; name: string };
@@ -705,11 +787,14 @@ export type CentralInventoryLot = {
   id: number;
   lotNumber: string;
   vendorLotNumber: string;
+  grNumber: string;
   receivedAt: string;
   expiryDate: string;
   onHandQty: number;
   reservedQty: number;
   availableQty: number;
+  unitCost: number | null;
+  inventoryValue: number | null;
 };
 
 export type CentralInventorySerial = {
@@ -741,6 +826,7 @@ type CentralStockRpcRow = {
   attributes: Record<string, unknown>;
   form_field_config: CentralStockRow["formFieldConfig"];
   updated_at: string;
+  inventory_value: number | null;
 };
 
 function mapCentralStockRow(row: CentralStockRpcRow, totalCount: number): CentralStockRow {
@@ -767,6 +853,7 @@ function mapCentralStockRow(row: CentralStockRpcRow, totalCount: number): Centra
     formFieldConfig: objectValue(row.form_field_config) as CentralStockRow["formFieldConfig"],
     updatedAt: String(row.updated_at),
     totalCount,
+    inventoryValue: row.inventory_value == null ? null : Number(row.inventory_value),
   };
 }
 
@@ -777,14 +864,29 @@ export async function getCentralInventoryStockAction(filters: CentralInventoryFi
 
   const pageSize = Math.min(Math.max(Math.trunc(filters.pageSize ?? 25), 10), 100);
   const page = Math.max(Math.trunc(filters.page ?? 1), 1);
-  const { data, error } = await supabase.rpc("get_central_inventory_stock", {
+  let { data, error } = await supabase.rpc("get_central_inventory_stock", {
     p_search: filters.search?.trim() || null,
     p_item_type_id: filters.itemTypeId || null,
     p_warehouse_id: filters.warehouseId || null,
+    p_tracking_method: filters.trackingMethod || null,
     p_state: filters.state || null,
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
   });
+
+  // Keep the stock page usable while the new cost migration is waiting to be applied.
+  if (error?.code === "PGRST202" || error?.code === "PGRST203") {
+    const fallback = await supabase.rpc("get_central_inventory_stock", {
+      p_search: filters.search?.trim() || null,
+      p_item_type_id: filters.itemTypeId || null,
+      p_warehouse_id: filters.warehouseId || null,
+      p_state: filters.state || null,
+      p_limit: pageSize,
+      p_offset: (page - 1) * pageSize,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     console.error("getCentralInventoryStockAction error:", error);
@@ -800,6 +902,10 @@ export async function getCentralInventoryStockAction(filters: CentralInventoryFi
     reserved: Number(summaryRow.reserved ?? 0),
     lowStock: Number(summaryRow.lowStock ?? 0),
     stale: Number(summaryRow.stale ?? 0),
+    inventoryValue: summaryRow.inventoryValue === null || summaryRow.inventoryValue === undefined ? null : Number(summaryRow.inventoryValue),
+    rawMaterialValue: summaryRow.rawMaterialValue === null || summaryRow.rawMaterialValue === undefined ? null : Number(summaryRow.rawMaterialValue),
+    canViewCost: Boolean(payload.canViewCost),
+    canExportCost: Boolean(payload.canExportCost),
   };
   const rows = Array.isArray(payload.rows) ? payload.rows as CentralStockRpcRow[] : [];
   return { success: true as const, data: rows.map((row) => mapCentralStockRow(row, total)), total, summary };
@@ -833,11 +939,11 @@ export async function getCentralInventoryDetailsAction(itemId: number, warehouse
     return { error: "ข้อมูลรายการสต็อกไม่ถูกต้อง" };
   }
 
-  const [lotsResult, serialsResult, movementsResult, productMovementsResult] = await Promise.all([
+  const [lotsResult, serialsResult, movementsResult, productMovementsResult, costsResult] = await Promise.all([
     supabase.from("inventory_lots")
-      .select("id,lot_number,vendor_lot_no,received_at,expiry_date,on_hand_qty,reserved_qty,available_qty")
+      .select("id,lot_number,vendor_lot_no,received_at,expiry_date,on_hand_qty,reserved_qty,available_qty,goods_receipts(gr_number)")
       .eq("item_master_id", itemId).eq("warehouse_id", warehouseId)
-      .order("received_at", { ascending: false }).limit(100),
+      .order("received_at", { ascending: true }).order("id", { ascending: true }).limit(100),
     supabase.from("inventory_serials")
       .select("id,serial_number,status,created_at")
       .eq("item_master_id", itemId).eq("warehouse_id", warehouseId)
@@ -850,8 +956,12 @@ export async function getCentralInventoryDetailsAction(itemId: number, warehouse
       .select("id,transaction_type,reference_doc_type,reference_doc_number,quantity_change,created_by,created_at")
       .eq("item_master_id", itemId).eq("warehouse_id", warehouseId)
       .order("created_at", { ascending: false }).limit(100),
+    supabase.from("inventory_receipt_costs")
+      .select("inventory_lot_id,remaining_qty,unit_cost")
+      .eq("item_master_id", itemId).eq("warehouse_id", warehouseId),
   ]);
-  const firstError = lotsResult.error ?? serialsResult.error ?? movementsResult.error ?? productMovementsResult.error;
+  const costsError = costsResult.error && !["PGRST205", "42P01"].includes(costsResult.error.code) ? costsResult.error : null;
+  const firstError = lotsResult.error ?? serialsResult.error ?? movementsResult.error ?? productMovementsResult.error ?? costsError;
   if (firstError) {
     console.error("getCentralInventoryDetailsAction error:", firstError);
     return { error: "ไม่สามารถโหลดรายละเอียดและ Stock Card ได้" };
@@ -876,14 +986,30 @@ export async function getCentralInventoryDetailsAction(itemId: number, warehouse
     ...((movementsResult.data ?? []) as DbRow[]).map((row) => mapMovement(row, "inventory")),
     ...((productMovementsResult.data ?? []) as DbRow[]).map((row) => mapMovement(row, "product")),
   ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 100);
+  const costsByLot = new Map<number, { unitCost: number; inventoryValue: number }>();
+  for (const cost of (costsResult.data ?? []) as DbRow[]) {
+    if (cost.inventory_lot_id !== null) {
+      const unitCost = Number(cost.unit_cost);
+      costsByLot.set(Number(cost.inventory_lot_id), {
+        unitCost,
+        inventoryValue: Number(cost.remaining_qty) * unitCost,
+      });
+    }
+  }
 
   return {
     success: true as const,
-    lots: ((lotsResult.data ?? []) as DbRow[]).map((row): CentralInventoryLot => ({
-      id: Number(row.id), lotNumber: String(row.lot_number), vendorLotNumber: String(row.vendor_lot_no ?? "-"),
-      receivedAt: String(row.received_at), expiryDate: String(row.expiry_date ?? ""), onHandQty: Number(row.on_hand_qty),
-      reservedQty: Number(row.reserved_qty), availableQty: Number(row.available_qty),
-    })),
+    lots: ((lotsResult.data ?? []) as DbRow[]).map((row): CentralInventoryLot => {
+      const receipt = Array.isArray(row.goods_receipts) ? row.goods_receipts[0] : row.goods_receipts;
+      return {
+        id: Number(row.id), lotNumber: String(row.lot_number), vendorLotNumber: String(row.vendor_lot_no ?? "-"),
+        grNumber: String((receipt as DbRow | null)?.gr_number ?? "-"),
+        receivedAt: String(row.received_at), expiryDate: String(row.expiry_date ?? ""), onHandQty: Number(row.on_hand_qty),
+        reservedQty: Number(row.reserved_qty), availableQty: Number(row.available_qty),
+        unitCost: costsByLot.get(Number(row.id))?.unitCost ?? null,
+        inventoryValue: costsByLot.get(Number(row.id))?.inventoryValue ?? null,
+      };
+    }),
     serials: ((serialsResult.data ?? []) as DbRow[]).map((row): CentralInventorySerial => ({
       id: Number(row.id), serialNumber: String(row.serial_number), status: String(row.status), createdAt: String(row.created_at),
     })),

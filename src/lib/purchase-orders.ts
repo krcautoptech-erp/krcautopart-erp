@@ -50,6 +50,7 @@ export type PurchaseOrderEditData = {
   id: number;
   lines: Array<
     PurchaseOrderSourceItem & {
+      deliveryDate: string;
       discountAmount: string;
       quantity: string;
       remarks: string;
@@ -73,6 +74,29 @@ export type PurchaseOrderVendor = {
   vendorCode: string;
   vendorName: string;
 };
+
+export type PurchasePriceReference = {
+  documentDate: string;
+  poNumber: string;
+  requisitionItemId: number;
+  unitPrice: number;
+};
+
+export function applyLatestPurchasePrices<
+  T extends { requisitionItemId: number; unitPrice: string },
+>(lines: T[], references: PurchasePriceReference[]) {
+  const byRequisitionItem = new Map(
+    references.map((reference) => [reference.requisitionItemId, reference]),
+  );
+  return lines.map((line) => {
+    const priceReference = byRequisitionItem.get(line.requisitionItemId) ?? null;
+    return {
+      ...line,
+      priceReference,
+      unitPrice: priceReference ? String(priceReference.unitPrice) : "",
+    };
+  });
+}
 
 export type PurchaseOrderLineSubmission = {
   deliveryDate: string;
@@ -235,11 +259,20 @@ export function validatePurchaseOrderSubmission(
       return { error: "พบรายการ PR ซ้ำหรือไม่ถูกต้อง", success: false };
     }
     ids.add(item.requisitionItemId);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(item.deliveryDate) ||
+      item.deliveryDate < input.documentDate
+    ) {
+      return {
+        error: "วันที่ส่งมอบของแต่ละรายการต้องไม่อยู่ก่อนวันที่เอกสาร",
+        success: false,
+      };
+    }
     if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       return { error: "จำนวนสั่งซื้อต้องมากกว่า 0", success: false };
     }
-    if (!Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
-      return { error: "ราคาต่อหน่วยต้องไม่ติดลบ", success: false };
+    if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+      return { error: "กรุณาระบุราคาต่อหน่วยให้มากกว่า 0", success: false };
     }
     if (!Number.isFinite(item.discountAmount) || item.discountAmount < 0) {
       return { error: "ส่วนลดต้องไม่ติดลบ", success: false };

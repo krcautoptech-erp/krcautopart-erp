@@ -34,6 +34,7 @@ export async function markNotificationReadAction(notificationId: number) {
   }
 
   revalidatePath("/", "layout");
+  revalidatePath("/notifications");
   return { success: true as const };
 }
 
@@ -63,5 +64,6 @@ export async function markAllNotificationsReadAction() {
   }
 
   revalidatePath("/", "layout");
+  revalidatePath("/notifications");
   return { success: true as const };
 }

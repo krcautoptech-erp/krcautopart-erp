@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
 import {
   createCompanyBranding,
   DEFAULT_COMPANY_BRANDING,
@@ -9,6 +11,8 @@ import {
   type CompanyDocumentContext,
 } from "@/lib/company-settings";
 import { createClient } from "@/utils/supabase/server";
+
+export const COMPANY_BRANDING_CACHE_TAG = "company-branding";
 
 type PublicBrandingRow = {
   company_id: string;
@@ -97,17 +101,18 @@ function formatDocumentAddress(row: CompanyDocumentRow) {
     .join(" ");
 }
 
-export async function getPublicCompanyBranding(): Promise<CompanyBranding> {
-  try {
-    const supabase = await createClient();
+const loadPublicCompanyBranding = unstable_cache(
+  async (): Promise<CompanyBranding> => {
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
     const { data, error } = await supabase.rpc(
       "get_public_company_branding",
     );
 
-    if (error) {
-      console.error("Unable to load company branding:", error.message);
-      return DEFAULT_COMPANY_BRANDING;
-    }
+    if (error) throw error;
 
     const row = (data?.[0] ?? null) as PublicBrandingRow | null;
     return createCompanyBranding(
@@ -123,19 +128,27 @@ export async function getPublicCompanyBranding(): Promise<CompanyBranding> {
           }
         : null,
     );
+  },
+  [COMPANY_BRANDING_CACHE_TAG],
+  { revalidate: 300, tags: [COMPANY_BRANDING_CACHE_TAG] },
+);
+
+export async function getPublicCompanyBranding(): Promise<CompanyBranding> {
+  try {
+    return await loadPublicCompanyBranding();
   } catch (error) {
     console.error("Unable to load company branding:", error);
     return DEFAULT_COMPANY_BRANDING;
   }
 }
 
-export async function getCompanyDocumentContext(): Promise<CompanyDocumentContext> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("company_profiles")
-      .select(
-        `
+async function loadCompanyDocumentContext(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<CompanyDocumentContext> {
+  const { data, error } = await supabase
+    .from("company_profiles")
+    .select(
+      `
           id,
           legal_name_th,
           legal_name_en,
@@ -166,60 +179,68 @@ export async function getCompanyDocumentContext(): Promise<CompanyDocumentContex
             show_email,
             show_website
           )
-        `,
-      )
-      .eq("is_default", true)
-      .eq("status", "active")
-      .maybeSingle();
+      `,
+    )
+    .eq("is_default", true)
+    .eq("status", "active")
+    .maybeSingle();
 
-    if (error || !data) {
-      if (error) {
-        console.error("Unable to load company document settings:", error.message);
-      }
-      return DEFAULT_COMPANY_DOCUMENT_CONTEXT;
-    }
+  if (error) throw error;
+  if (!data) return DEFAULT_COMPANY_DOCUMENT_CONTEXT;
 
-    const row = data as unknown as CompanyDocumentRow;
-    const settings = firstRelation(row.company_document_settings);
-    const branding = createCompanyBranding({
-      companyId: row.id,
-      darkLogoMode: row.dark_logo_mode,
-      legalNameEn: row.legal_name_en,
-      legalNameTh: row.legal_name_th,
-      logoDarkPath: row.logo_dark_path,
-      logoLightPath: row.logo_light_path,
-      updatedAt: row.updated_at,
+  const row = data as unknown as CompanyDocumentRow;
+  const settings = firstRelation(row.company_document_settings);
+  const branding = createCompanyBranding({
+    companyId: row.id,
+    darkLogoMode: row.dark_logo_mode,
+    legalNameEn: row.legal_name_en,
+    legalNameTh: row.legal_name_th,
+    logoDarkPath: row.logo_dark_path,
+    logoLightPath: row.logo_light_path,
+    updatedAt: row.updated_at,
+  });
+
+  return {
+    branding,
+    company: {
+      address: formatDocumentAddress(row),
+      branchCode: row.branch_code ?? "00000",
+      branchType: row.branch_type === "branch" ? "branch" : "head_office",
+      email: row.email ?? "",
+      phone: row.phone ?? "",
+      taxId: row.tax_id ?? "",
+      website: row.website ?? "",
+    },
+    documentSettings: settings
+      ? {
+          footerTextEn: settings.footer_text_en ?? "",
+          footerTextTh: settings.footer_text_th ?? "",
+          headerFieldOrder: normalizeCompanyHeaderFieldOrder(
+            settings.header_field_order,
+          ),
+          headerStyle:
+            settings.header_style === "standard" ? "standard" : "compact",
+          logoWidthMm: Number(settings.logo_width_mm ?? 34),
+          showAddress: settings.show_address !== false,
+          showEmail: settings.show_email !== false,
+          showPhone: settings.show_phone !== false,
+          showTaxId: settings.show_tax_id !== false,
+          showWebsite: settings.show_website === true,
+        }
+      : DEFAULT_DOCUMENT_SETTINGS,
+  };
+}
+
+export async function getCompanyDocumentContext(): Promise<CompanyDocumentContext> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return DEFAULT_COMPANY_DOCUMENT_CONTEXT;
+    const permission = await supabase.rpc("authorize", {
+      requested_permission: "company.view",
     });
-
-    return {
-      branding,
-      company: {
-        address: formatDocumentAddress(row),
-        branchCode: row.branch_code ?? "00000",
-        branchType: row.branch_type === "branch" ? "branch" : "head_office",
-        email: row.email ?? "",
-        phone: row.phone ?? "",
-        taxId: row.tax_id ?? "",
-        website: row.website ?? "",
-      },
-      documentSettings: settings
-        ? {
-            footerTextEn: settings.footer_text_en ?? "",
-            footerTextTh: settings.footer_text_th ?? "",
-            headerFieldOrder: normalizeCompanyHeaderFieldOrder(
-              settings.header_field_order,
-            ),
-            headerStyle:
-              settings.header_style === "standard" ? "standard" : "compact",
-            logoWidthMm: Number(settings.logo_width_mm ?? 34),
-            showAddress: settings.show_address !== false,
-            showEmail: settings.show_email !== false,
-            showPhone: settings.show_phone !== false,
-            showTaxId: settings.show_tax_id !== false,
-            showWebsite: settings.show_website === true,
-          }
-        : DEFAULT_DOCUMENT_SETTINGS,
-    };
+    if (permission.error || !permission.data) return DEFAULT_COMPANY_DOCUMENT_CONTEXT;
+    return await loadCompanyDocumentContext(supabase);
   } catch (error) {
     console.error("Unable to load company document settings:", error);
     return DEFAULT_COMPANY_DOCUMENT_CONTEXT;

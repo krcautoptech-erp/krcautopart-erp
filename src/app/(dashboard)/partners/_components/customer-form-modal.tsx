@@ -3,6 +3,7 @@
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { CompanyFormLogo } from "@/components/company-logo";
 import type {
   CustomerAddressInput,
   CustomerInput,
@@ -272,9 +273,7 @@ export function CustomerFormModal({
       >
         <div className="flex items-center justify-between border-b border-red-200 px-6 py-4 dark:border-red-500/25">
           <div className="flex items-center gap-3">
-            <span className="rounded-[4px] bg-primary px-3 py-1 text-[12px] font-bold tracking-[0.12em] text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
             <div>
               <h2 className="text-[22px] font-bold text-on-surface">
                 {mode === "create" ? "เพิ่มลูกหนี้ / ลูกค้า" : "แก้ไขลูกหนี้ / ลูกค้า"}

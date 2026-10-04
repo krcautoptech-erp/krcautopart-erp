@@ -48,6 +48,7 @@ export function LoginForm() {
           </span>
           <input
             name="userId"
+            autoComplete="username"
             required
             minLength={8}
             disabled={isPending}
@@ -71,6 +72,7 @@ export function LoginForm() {
           </span>
           <input
             name="password"
+            autoComplete="current-password"
             required
             minLength={8}
             disabled={isPending}

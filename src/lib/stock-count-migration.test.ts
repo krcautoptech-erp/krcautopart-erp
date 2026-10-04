@@ -3,11 +3,24 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const sql = readFileSync(new URL("../../supabase/migrations/20261001133120_create_stock_counts.sql", import.meta.url), "utf8");
+const repairSql = readFileSync(new URL("../../supabase/migrations/20261002145218_repair_stock_count_scope_and_audit.sql", import.meta.url), "utf8");
 const body = (name: string) => {
   const match = sql.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\$\\$;`, "i"));
   assert.ok(match, `missing ${name}`);
   return match[0];
 };
+
+test("permission catalog accepts stock count workflow actions", () => {
+  assert.match(sql, /app_permissions_action_code_check[\s\S]*'count'[\s\S]*'review'/i);
+});
+
+test("repair stores selection scope and makes count numbers searchable in audit", () => {
+  assert.match(repairSql, /add column selection_scope text not null default 'all'/i);
+  assert.match(repairSql, /p_selection_scope text/i);
+  assert.match(repairSql, /v_after ->> 'count_number', v_before ->> 'count_number'/i);
+  assert.match(repairSql, /update public\.system_audit_logs audit[\s\S]*count\.count_number/i);
+  assert.match(repairSql, /revoke all on function public\.create_stock_count\(date, bigint, uuid, text, jsonb\)[\s\S]*authenticated/i);
+});
 
 test("count tables use permission-scoped reads, RPC-only writes and audit triggers", () => {
   for (const table of ["stock_counts", "stock_count_lines", "stock_count_lots"]) {
@@ -44,8 +57,8 @@ test("snapshots include every existing Lot and a single null-Lot entry for untra
   assert.match(create, /tracking_method = 'none'/);
   assert.match(create, /insert into public\.stock_count_lots[\s\S]*lot\.on_hand_qty/);
   assert.match(create, /invalid_stock_count_assignee/);
-  assert.match(body("get_stock_count_form_options"), /profile\.user_id = v_user_id or public\.is_current_user_owner\(\)/);
-  assert.match(create, /profile\.user_id = v_user_id or public\.is_current_user_owner\(\)/);
+  assert.match(body("get_stock_count_form_options"), /permission\.permission_code = 'stock_count\.count'/);
+  assert.match(create, /permission\.permission_code = 'stock_count\.count'/);
 });
 
 test("count updates check ownership, scale, duplicate IDs and round membership before writing", () => {

@@ -5,7 +5,11 @@ export type AppNotification = {
   message: string;
   readAt: string | null;
   title: string;
-  type: "purchase_order" | "purchase_requisition";
+  type:
+    | "purchase_order"
+    | "purchase_requisition"
+    | "goods_receipt"
+    | "stock_count";
 };
 
 type NotificationRelation = {
@@ -31,7 +35,7 @@ export function normalizeNotification(
 
   if (
     !notification ||
-    !["purchase_order", "purchase_requisition"].includes(
+    !["purchase_order", "purchase_requisition", "goods_receipt", "stock_count"].includes(
       notification.notification_type,
     )
   ) {

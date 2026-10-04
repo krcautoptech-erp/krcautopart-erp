@@ -4,10 +4,10 @@ import {
   validatePurchaseRequisitionDecision,
 } from "./purchase-requisition-approval.ts";
 
-test("accepts an approval without a note", () => {
+test("accepts a ready-for-PO review without a note", () => {
   assert.deepEqual(
     validatePurchaseRequisitionDecision({
-      decision: "approved",
+      decision: "ready_for_po",
       note: "",
       requisitionId: 10,
     }),
@@ -15,15 +15,15 @@ test("accepts an approval without a note", () => {
   );
 });
 
-test("requires a rejection reason", () => {
+test("requires a return reason", () => {
   assert.deepEqual(
     validatePurchaseRequisitionDecision({
-      decision: "rejected",
+      decision: "returned",
       note: "   ",
       requisitionId: 10,
     }),
     {
-      error: "กรุณาระบุเหตุผลที่ปฏิเสธใบขอซื้อ",
+      error: "กรุณาระบุเหตุผลที่ส่งใบขอซื้อกลับแก้ไข",
       success: false,
     },
   );
@@ -32,7 +32,7 @@ test("requires a rejection reason", () => {
 test("rejects invalid requisition identifiers", () => {
   assert.deepEqual(
     validatePurchaseRequisitionDecision({
-      decision: "approved",
+      decision: "ready_for_po",
       note: "",
       requisitionId: Number.NaN,
     }),
@@ -46,7 +46,7 @@ test("rejects invalid requisition identifiers", () => {
 test("limits decision notes to 500 characters", () => {
   assert.deepEqual(
     validatePurchaseRequisitionDecision({
-      decision: "approved",
+      decision: "ready_for_po",
       note: "x".repeat(501),
       requisitionId: 10,
     }),

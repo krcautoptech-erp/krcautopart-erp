@@ -2,14 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Search,
   RefreshCw,
   QrCode,
   ArrowRightLeft,
   Eye,
-  CheckCircle2,
   Archive,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
   getAssetCatalogAction,
@@ -28,6 +25,8 @@ import { AssetQrModal } from "./asset-qr-modal";
 import { AssetTransferModal } from "./asset-transfer-modal";
 import { AssetMobileLedger } from "./asset-mobile-ledger";
 import { toast } from "@/components/toast";
+import { useHasPermission } from "@/components/permission-context";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 interface AssetCatalogProps {
   initialItems: AssetRecord[];
@@ -47,6 +46,7 @@ export function AssetCatalog({
   initialSummary,
   lookups,
 }: AssetCatalogProps) {
+  const canManage = useHasPermission("assets.manage");
   const [items, setItems] = useState<AssetRecord[]>(initialItems);
   const [summary, setSummary] = useState<AssetSummary>(initialSummary);
   const [page, setPage] = useState(initialPagination.currentPage);
@@ -60,7 +60,6 @@ export function AssetCatalog({
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [isFetching, setIsFetching] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   // Modals & Drawer State
   const [drawerAsset, setDrawerAsset] = useState<AssetRecord | null>(null);
@@ -301,60 +300,10 @@ export function AssetCatalog({
       </div>
 
       {/* 2. Search & Filters Bar */}
-      <div className="mt-4 hidden flex-col gap-3 border border-outline-variant bg-surface-container-lowest p-3 sm:flex sm:flex-row sm:items-center">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search Input */}
-          <div className="relative min-w-[280px] flex-1">
-            <Search
-              size={14}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary"
-            />
-            <input
-              type="text"
-              className="h-10 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest pl-9 pr-3 text-[13px] font-medium text-on-surface outline-none focus:border-primary placeholder:text-on-surface-variant/60"
-              placeholder="ค้นหา Serial Number, รหัสสินค้า, ชื่ออุปกรณ์, หรือผู้ถือครอง..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          {/* Department Filter */}
-          <div className="flex items-center gap-1.5">
-            <select
-              aria-label="กรองตามแผนก"
-              className="h-10 min-w-[180px] rounded-[3px] border border-outline-variant bg-surface-container-lowest px-3 text-[13px] font-semibold text-on-surface outline-none focus:border-primary"
-              value={departmentFilter}
-              onChange={(e) => {
-                setDepartmentFilter(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">-- แผนกทั้งหมด --</option>
-              {lookups.departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter Dropdown */}
-          <select
-            aria-label="กรองตามสถานะ"
-            className="h-10 min-w-[180px] rounded-[3px] border border-outline-variant bg-surface-container-lowest px-3 text-[13px] font-semibold text-on-surface outline-none focus:border-primary"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="ALL">สถานะทั้งหมด</option>
-            <option value="in_use">ใช้งานอยู่</option>
-            <option value="in_stock">พร้อมใช้งาน (ในคลัง)</option>
-            <option value="under_repair">ส่งซ่อม/เคลม</option>
-            <option value="disposed">ตัดจำหน่าย</option>
-          </select>
-        </div>
+      <div className="mt-4 hidden gap-3 border border-outline-variant bg-surface-container-lowest p-3 sm:grid sm:grid-cols-[minmax(280px,1fr)_180px_180px_auto] sm:items-center">
+        <ListSearchField onChange={setSearch} placeholder="ค้นหา Serial Number, รหัสสินค้า, ชื่ออุปกรณ์, หรือผู้ถือครอง..." value={search} />
+        <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentFilter(value); setPage(1); }} value={departmentFilter}><option value="">ทั้งหมด</option>{lookups.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</ListFilterSelect>
+        <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setPage(1); }} value={statusFilter}><option value="ALL">ทั้งหมด</option><option value="in_use">ใช้งานอยู่</option><option value="in_stock">พร้อมใช้งาน (ในคลัง)</option><option value="under_repair">ส่งซ่อม/เคลม</option><option value="disposed">ตัดจำหน่าย</option></ListFilterSelect>
 
         {/* Page Size */}
         <div className="flex items-center gap-2 text-[13px] text-on-surface-variant">
@@ -375,73 +324,10 @@ export function AssetCatalog({
         </div>
       </div>
 
-      {/* Mobile toolbar mirrors the compact ledger mockup. */}
-      <div className="sm:hidden">
-        <h1 className="text-[18px] font-bold leading-tight">ทะเบียนสินทรัพย์ถาวร</h1>
-        <div className="mt-3 flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
-              size={15}
-            />
-            <input
-              className="h-10 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest pl-9 pr-3 text-[13px] font-medium outline-none placeholder:text-on-surface-variant/60 focus:border-primary"
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="ค้นหา..."
-              type="search"
-              value={search}
-            />
-          </div>
-          <button
-            aria-expanded={isMobileFilterOpen}
-            aria-label="เปิดตัวกรอง"
-            className={`grid size-10 shrink-0 place-items-center rounded-[3px] border bg-surface-container-lowest ${
-              isMobileFilterOpen || statusFilter !== "ALL" || departmentFilter
-                ? "border-primary text-primary"
-                : "border-outline-variant text-on-surface"
-            }`}
-            onClick={() => setIsMobileFilterOpen((open) => !open)}
-            type="button"
-          >
-            <SlidersHorizontal size={17} />
-          </button>
-        </div>
-        {isMobileFilterOpen ? (
-          <div className="mt-2 grid grid-cols-2 gap-2 border border-outline-variant p-2">
-            <select
-              aria-label="กรองตามแผนก"
-              className="h-9 min-w-0 rounded-[3px] border border-outline-variant bg-surface-container-lowest px-2 text-[12px] font-semibold outline-none focus:border-primary"
-              onChange={(event) => {
-                setDepartmentFilter(event.target.value);
-                setPage(1);
-              }}
-              value={departmentFilter}
-            >
-              <option value="">แผนกทั้งหมด</option>
-              {lookups.departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="กรองตามสถานะ"
-              className="h-9 min-w-0 rounded-[3px] border border-outline-variant bg-surface-container-lowest px-2 text-[12px] font-semibold outline-none focus:border-primary"
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                setPage(1);
-              }}
-              value={statusFilter}
-            >
-              <option value="ALL">สถานะทั้งหมด</option>
-              <option value="in_use">ใช้งานอยู่</option>
-              <option value="in_stock">พร้อมใช้งาน</option>
-              <option value="under_repair">ส่งซ่อม</option>
-              <option value="disposed">ตัดจำหน่าย</option>
-            </select>
-          </div>
-        ) : null}
-      </div>
+      <MobileListFilters activeCount={[statusFilter !== "ALL", departmentFilter].filter(Boolean).length} onClear={() => { setStatusFilter("ALL"); setDepartmentFilter(""); setPage(1); }} resultLabel={`แสดง ${totalCount.toLocaleString("th-TH")} รายการ`} search={<ListSearchField onChange={setSearch} placeholder="ค้นหา..." value={search} />}>
+        <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentFilter(value); setPage(1); }} value={departmentFilter}><option value="">ทั้งหมด</option>{lookups.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</ListFilterSelect>
+        <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setPage(1); }} value={statusFilter}><option value="ALL">ทั้งหมด</option><option value="in_use">ใช้งานอยู่</option><option value="in_stock">พร้อมใช้งาน</option><option value="under_repair">ส่งซ่อม</option><option value="disposed">ตัดจำหน่าย</option></ListFilterSelect>
+      </MobileListFilters>
 
       {/* 3. Main Data Table */}
       <div className="mt-4 hidden overflow-x-auto border border-outline-variant sm:block">
@@ -548,7 +434,7 @@ export function AssetCatalog({
                       >
                         <QrCode size={18} />
                       </button>
-                      <button
+                      {canManage ? <button
                         aria-label={`โอนย้าย ${item.itemCode}`}
                         title="โอนย้าย / ส่งมอบ"
                         onClick={() => setTransferAsset(item)}
@@ -556,7 +442,7 @@ export function AssetCatalog({
                         type="button"
                       >
                         <ArrowRightLeft size={18} />
-                      </button>
+                      </button> : null}
                     </div>
                   </td>
                 </tr>
@@ -570,10 +456,8 @@ export function AssetCatalog({
         <AssetMobileLedger
           disabled={isFetching}
           items={items}
-          lookups={lookups}
+          onOpenDetails={setDrawerAsset}
           onPageChange={handlePageChange}
-          onOpenTransfer={setTransferAsset}
-          onSaved={handleSaved}
           page={page}
           pageSize={pageSize}
           totalCount={totalCount}
@@ -601,22 +485,22 @@ export function AssetCatalog({
           setDrawerAsset(null);
           setQrAsset(a);
         }}
-        onOpenTransfer={(a) => {
+        onOpenTransfer={canManage ? (a) => {
           setDrawerAsset(null);
           setTransferAsset(a);
-        }}
+        } : undefined}
       />
 
       {/* Asset QR Sticker Modal */}
       <AssetQrModal asset={qrAsset} onClose={() => setQrAsset(null)} />
 
       {/* Asset Transfer Modal */}
-      <AssetTransferModal
+      {canManage ? <AssetTransferModal
         asset={transferAsset}
         departments={lookups.departments}
         onClose={() => setTransferAsset(null)}
         onSaved={handleSaved}
-      />
+      /> : null}
     </section>
   );
 }

@@ -6,6 +6,7 @@ import {
   normalizePurchaseOrderItemType,
   type PurchaseOrderDecision,
   type PurchaseOrderEditData,
+  type PurchasePriceReference,
   type PurchaseOrderSourceItem,
   type PurchaseOrderSubmission,
   validatePurchaseOrderDecision,
@@ -14,6 +15,7 @@ import {
 import type { PurchaseOrderPrintDetail } from "@/lib/purchase-order-print";
 import { validateCancellationReason } from "@/lib/purchase-document-cancellation";
 import { sendPurchaseOrderPush } from "@/lib/web-push.server";
+import { SIGNATURE_BUCKET } from "@/lib/approval-signatures";
 import { createClient } from "@/utils/supabase/server";
 
 type SourceItemRow = {
@@ -31,6 +33,13 @@ type SourceItemRow = {
   requisition_item_id: number;
   unit_name: string;
   warehouse_id?: number | null;
+};
+
+type LatestPurchasePriceRow = {
+  document_date: string;
+  po_number: string;
+  requisition_item_id: number;
+  unit_price: number;
 };
 
 type PurchaseOrderPrintRow = {
@@ -58,6 +67,7 @@ type PurchaseOrderPrintRow = {
 };
 
 type PurchaseOrderPrintItemRow = {
+  delivery_date: string | null;
   discount_amount: number;
   item_code: string | null;
   item_description: string | null;
@@ -83,6 +93,7 @@ type PurchaseOrderVendorAddressRow = {
 };
 
 type PurchaseOrderApprovalRow = {
+  approval_signature_id: string | null;
   actor_name: string | null;
   created_at: string;
 };
@@ -227,6 +238,49 @@ export async function searchPurchaseOrderSourceItemsAction(search = "") {
   }
 }
 
+export async function getLatestPurchasePricesAction(
+  vendorId: number,
+  requisitionItemIds: number[],
+) {
+  const ids = [...new Set(requisitionItemIds)].filter(
+    (id) => Number.isSafeInteger(id) && id > 0,
+  );
+  if (!Number.isSafeInteger(vendorId) || vendorId <= 0 || ids.length === 0) {
+    return { prices: [] as PurchasePriceReference[], success: true as const };
+  }
+  if (ids.length > 200) {
+    return { error: "เลือกรายการได้ไม่เกิน 200 รายการ", success: false as const };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง", success: false as const };
+  }
+
+  const { data, error } = await supabase.rpc("get_latest_purchase_prices", {
+    p_requisition_item_ids: ids,
+    p_vendor_id: vendorId,
+  });
+  if (error) {
+    console.error("Unable to load latest purchase prices:", {
+      code: error.code,
+      message: error.message,
+    });
+    return { error: "ไม่สามารถโหลดราคาซื้อล่าสุดได้", success: false as const };
+  }
+
+  const prices = ((data ?? []) as LatestPurchasePriceRow[]).map((row) => ({
+    documentDate: String(row.document_date),
+    poNumber: String(row.po_number),
+    requisitionItemId: Number(row.requisition_item_id),
+    unitPrice: Number(row.unit_price),
+  }));
+  return { prices, success: true as const };
+}
+
 export async function createPurchaseOrderAction(
   input: PurchaseOrderSubmission,
 ) {
@@ -336,7 +390,7 @@ function getPurchaseOrderDecisionError(message: string) {
     message.includes("owner_approval_required") ||
     message.includes("permission_denied")
   ) {
-    return "เฉพาะ OWNER ที่มีสิทธิ์เท่านั้นจึงจะอนุมัติใบสั่งซื้อได้";
+    return "คุณไม่มีสิทธิ์อนุมัติหรือปฏิเสธใบสั่งซื้อ";
   }
   if (message.includes("purchase_order_not_found")) {
     return "ไม่พบใบสั่งซื้อที่ต้องการอนุมัติ";
@@ -349,6 +403,12 @@ function getPurchaseOrderDecisionError(message: string) {
   }
   if (message.includes("decision_note_too_long")) {
     return "หมายเหตุต้องไม่เกิน 500 ตัวอักษร";
+  }
+  if (message.includes("approval_mfa_required")) {
+    return "กรุณากรอกรหัส Authenticator 6 หลักเพื่ออนุมัติเอกสาร";
+  }
+  if (message.includes("approval_signature_required")) {
+    return "กรุณาตั้งค่าลายเซ็นของคุณก่อนอนุมัติใบสั่งซื้อ";
   }
   return "ไม่สามารถบันทึกผลการอนุมัติใบสั่งซื้อได้";
 }
@@ -388,6 +448,7 @@ export async function decidePurchaseOrderAction(input: {
       });
       return {
         error: getPurchaseOrderDecisionError(error.message),
+        requiresMfa: error.message.includes("approval_mfa_required"),
         success: false as const,
       };
     }
@@ -544,6 +605,7 @@ export async function getPurchaseOrderEditDataAction(
       id: Number(order.id),
       lines: ((itemsResult.data ?? []) as PurchaseOrderEditItemRow[]).map(
         (item) => ({
+          deliveryDate: String(item.delivery_date ?? order.delivery_date),
           availableQuantity:
             capacityByItemId.get(Number(item.requisition_item_id)) ??
             Number(item.quantity),
@@ -698,7 +760,7 @@ export async function getPurchaseOrderPrintDetailAction(purchaseOrderId: number)
         supabase
           .from("purchase_order_items")
           .select(
-            "line_no, item_code, item_name, item_description, quantity, unit_name, unit_price, discount_amount, tax_rate, line_total",
+            "line_no, item_code, item_name, item_description, quantity, unit_name, unit_price, discount_amount, tax_rate, line_total, delivery_date",
           )
           .eq("purchase_order_id", purchaseOrderId)
           .order("line_no", { ascending: true }),
@@ -715,7 +777,7 @@ export async function getPurchaseOrderPrintDetailAction(purchaseOrderId: number)
           .maybeSingle(),
         supabase
           .from("purchase_order_status_logs")
-          .select("actor_name, created_at")
+          .select("actor_name, created_at, approval_signature_id")
           .eq("purchase_order_id", purchaseOrderId)
           .eq("to_status", "approved")
           .order("created_at", { ascending: false })
@@ -740,9 +802,24 @@ export async function getPurchaseOrderPrintDetailAction(purchaseOrderId: number)
       null) as PurchaseOrderVendorAddressRow | null;
     const approval = (approvalResult.data ??
       null) as PurchaseOrderApprovalRow | null;
+    let approverSignatureUrl: string | null = null;
+    if (approval?.approval_signature_id) {
+      const signatureResult = await supabase
+        .from("user_approval_signatures")
+        .select("storage_path")
+        .eq("id", approval.approval_signature_id)
+        .maybeSingle();
+      if (signatureResult.data?.storage_path) {
+        const signedUrl = await supabase.storage
+          .from(SIGNATURE_BUCKET)
+          .createSignedUrl(signatureResult.data.storage_path, 300);
+        approverSignatureUrl = signedUrl.data?.signedUrl ?? null;
+      }
+    }
     const detail: PurchaseOrderPrintDetail = {
       approvedAt: String(order.approved_at ?? approval?.created_at ?? ""),
       approverName: String(approval?.actor_name ?? ""),
+      approverSignatureUrl,
       buyerName: String(order.buyer_name),
       creditTermName: String(order.credit_term_name ?? "-"),
       deliveryAddress: String(order.delivery_address ?? ""),
@@ -753,6 +830,7 @@ export async function getPurchaseOrderPrintDetailAction(purchaseOrderId: number)
       id: Number(order.id),
       items: ((itemsResult.data ?? []) as PurchaseOrderPrintItemRow[]).map(
         (item) => ({
+          deliveryDate: String(item.delivery_date ?? order.delivery_date),
           discountAmount: Number(item.discount_amount),
           itemCode: String(item.item_code ?? ""),
           itemDescription: String(item.item_name),

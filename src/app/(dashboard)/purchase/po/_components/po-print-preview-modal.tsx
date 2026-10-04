@@ -1,9 +1,13 @@
 "use client";
 
-import { Printer, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { X } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
+import { CompanyDocumentFooter } from "@/components/company-document-footer";
+import { DocumentPreviewShell } from "@/components/document-preview-shell";
 import type { CompanyDocumentContext } from "@/lib/company-settings";
+import { exportElementPdf, printElement } from "@/lib/document-print";
 import {
   formatThaiBahtText,
   paginatePurchaseOrderItems,
@@ -16,16 +20,19 @@ import {
   PURCHASE_ORDER_STATUS_META,
 } from "@/lib/purchase-orders";
 import { formatDisplayDate } from "@/lib/purchase-requisitions";
+import { getMfaErrorMessage, isTotpCodeComplete, normalizeTotpCode } from "@/lib/mfa";
+import { createClient } from "@/utils/supabase/client";
 
 type PoPrintPreviewModalProps = {
   detail: PurchaseOrderPrintDetail;
   documentContext: CompanyDocumentContext;
   onClose: () => void;
-  canDecide?: boolean;
+  canApprove?: boolean;
+  canReject?: boolean;
   onDecision?: (
     decision: "approved" | "rejected",
     note: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; requiresMfa?: boolean }>;
 };
 
 function formatQuantity(value: number) {
@@ -71,6 +78,9 @@ function PrintRow({ item }: { item?: PurchaseOrderPrintItem }) {
         {item ? formatQuantity(item.quantity) : ""}
       </td>
       <td className="po-cell po-cell-center">{item?.unitName ?? ""}</td>
+      <td className="po-cell po-cell-center">
+        {item ? formatDisplayDate(item.deliveryDate) : ""}
+      </td>
       <td className="po-cell po-cell-number">
         {item ? formatPurchaseOrderAmount(item.unitPrice) : ""}
       </td>
@@ -88,7 +98,8 @@ export function PoPrintPreviewModal({
   detail,
   documentContext,
   onClose,
-  canDecide = false,
+  canApprove = false,
+  canReject = false,
   onDecision,
 }: PoPrintPreviewModalProps) {
   const [printedAt] = useState(() => new Date());
@@ -96,11 +107,15 @@ export function PoPrintPreviewModal({
   const [decisionNote, setDecisionNote] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [isDeciding, setIsDeciding] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   const openDecision = (nextDecision: "approved" | "rejected") => {
     setDecision(nextDecision);
     setDecisionError(null);
     setDecisionNote("");
+    setMfaRequired(false);
+    setTotpCode("");
   };
 
   const closeDecision = () => {
@@ -108,6 +123,8 @@ export function PoPrintPreviewModal({
     setDecision(null);
     setDecisionError(null);
     setDecisionNote("");
+    setMfaRequired(false);
+    setTotpCode("");
   };
 
   const handleDecision = async () => {
@@ -120,21 +137,43 @@ export function PoPrintPreviewModal({
 
     setDecisionError(null);
     setIsDeciding(true);
+
+    if (mfaRequired) {
+      if (!isTotpCodeComplete(totpCode)) {
+        setDecisionError("กรุณากรอกรหัส Authenticator 6 หลัก");
+        setIsDeciding(false);
+        return;
+      }
+      const supabase = createClient();
+      const factors = await supabase.auth.mfa.listFactors();
+      const factor = factors.data?.totp.find((item) => item.status === "verified");
+      if (factors.error || !factor) {
+        setDecisionError("ยังไม่ได้เชื่อมต่อ Authenticator กรุณาตั้งค่าในหน้าลายเซ็นและการอนุมัติ");
+        setIsDeciding(false);
+        return;
+      }
+      const verified = await supabase.auth.mfa.challengeAndVerify({
+        factorId: factor.id,
+        code: totpCode,
+      });
+      if (verified.error) {
+        setDecisionError(getMfaErrorMessage(verified.error));
+        setIsDeciding(false);
+        return;
+      }
+    }
+
     const result = await onDecision(decision, decisionNote);
     setIsDeciding(false);
 
     if (!result.success) {
       setDecisionError(result.error ?? "ไม่สามารถบันทึกผลการอนุมัติได้");
+      if (result.requiresMfa) setMfaRequired(true);
     }
   };
   const pages = paginatePurchaseOrderItems(detail.items);
-  const footerText =
-    [
-      documentContext.documentSettings.footerTextTh,
-      documentContext.documentSettings.footerTextEn,
-    ]
-      .filter(Boolean)
-      .join(" / ") || "เอกสารจากระบบ KRC ERP";
+
+  const printRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -144,82 +183,64 @@ export function PoPrintPreviewModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.classList.remove("printing-purchase-order");
     };
   }, [onClose]);
 
-  const handlePrint = () => {
-    const clearPrintMode = () => {
-      document.body.classList.remove("printing-purchase-order");
-      window.removeEventListener("afterprint", clearPrintMode);
-    };
-
-    document.body.classList.add("printing-purchase-order");
-    window.addEventListener("afterprint", clearPrintMode);
-    window.print();
+  const handlePrint = async () => {
+    if (printRootRef.current) {
+      await printElement(printRootRef.current, {
+        title: detail.poNumber || "purchase-order",
+        paperSize: "A4",
+        orientation: "portrait",
+        bodyClass: "printing-purchase-order",
+      });
+      return;
+    }
   };
 
-  return (
-    <div
-      aria-label={`ตัวอย่างใบสั่งซื้อ ${detail.poNumber}`}
-      aria-modal="true"
-      className="po-preview-overlay"
-      role="dialog"
-    >
-      <div className="po-preview-toolbar">
-        <div>
-          <strong>ตัวอย่างก่อนพิมพ์ใบสั่งซื้อ</strong>
-          <span>
-            A4 แนวตั้ง · {detail.items.length} รายการ · {pages.length} หน้า
-          </span>
-        </div>
-        <div className="po-preview-actions">
-          <button onClick={onClose} type="button">
-            <X aria-hidden="true" size={17} />
-            ปิด
-          </button>
-          <button
-            className="po-preview-print-button"
-            onClick={handlePrint}
-            type="button"
-          >
-            <Printer aria-hidden="true" size={17} />
-            พิมพ์ใบ PO
-          </button>
-          {canDecide && onDecision && detail.status === "pending_approval" ? (
-            <>
-              <span aria-hidden="true" className="po-preview-action-divider" />
-              <button
-                className="po-preview-reject-button"
-                onClick={() => openDecision("rejected")}
-                type="button"
-              >
-                ปฏิเสธ
-              </button>
-              <button
-                className="po-preview-approve-button"
-                onClick={() => openDecision("approved")}
-                type="button"
-              >
-                อนุมัติ
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
+  const handleExportPdf = async () => {
+    if (printRootRef.current) {
+      await exportElementPdf(printRootRef.current, {
+        filename: detail.poNumber || "purchase-order",
+        paperSize: "A4",
+        orientation: "portrait",
+        bodyClass: "printing-purchase-order",
+      });
+      return;
+    }
+  };
 
-      <div className="po-preview-scroll">
-        <div className="po-approval-context">
-          <span className={`po-approval-status po-approval-status-${detail.status}`}>
-            {PURCHASE_ORDER_STATUS_META[detail.status]?.label ?? detail.status}
-          </span>
-          <span>
-            {detail.status === "pending_approval"
-              ? "รอผู้มีสิทธิ์อนุมัติพิจารณาเอกสาร"
-              : "เอกสารผ่านขั้นตอนการพิจารณาแล้ว"}
-          </span>
-        </div>
-        <div className="po-print-root">
+  const statusLabel = PURCHASE_ORDER_STATUS_META[detail.status]?.label ?? detail.status;
+  const statusDescription = detail.status === "pending_approval"
+    ? "รอผู้มีสิทธิ์อนุมัติพิจารณาเอกสาร"
+    : "เอกสารผ่านขั้นตอนการพิจารณาแล้ว";
+
+  return (
+    <>
+    <DocumentPreviewShell
+      ariaLabel={`ตัวอย่างใบสั่งซื้อ ${detail.poNumber}`}
+      documentNumber={detail.poNumber}
+      extraActions={(canApprove || canReject) && onDecision && detail.status === "pending_approval" ? (
+        <>
+          <span className="text-[12px] font-semibold text-secondary">{statusDescription}</span>
+          {canReject ? <button className="h-8 border border-primary px-4 text-[12px] font-bold text-primary" onClick={() => openDecision("rejected")} type="button">ปฏิเสธ</button> : null}
+          {canApprove ? <button className="h-8 bg-emerald-700 px-4 text-[12px] font-bold text-white" onClick={() => openDecision("approved")} type="button">อนุมัติ</button> : null}
+        </>
+      ) : undefined}
+      isBusy={isDeciding}
+      onClose={onClose}
+      onExportPdf={handleExportPdf}
+      onPrint={handlePrint}
+      paperHeightMm={297}
+      paperLabel="A4 (แนวตั้ง)"
+      paperWidthMm={210}
+      statusDate={formatDisplayDate(detail.approvedAt ?? detail.documentDate)}
+      statusDescription={statusDescription}
+      statusLabel={statusLabel}
+      title="ตัวอย่างก่อนพิมพ์ใบสั่งซื้อ"
+      totalPages={pages.length}
+    >
+        <div className="po-print-root" ref={printRootRef}>
           {pages.map((items, pageIndex) => {
             const isLastPage = pageIndex === pages.length - 1;
             const rows = Array.from(
@@ -308,6 +329,7 @@ export function PoPrintPreviewModal({
                       <col className="po-col-description" />
                       <col className="po-col-quantity" />
                       <col className="po-col-unit" />
+                      <col className="po-col-delivery" />
                       <col className="po-col-price" />
                       <col className="po-col-discount" />
                       <col className="po-col-total" />
@@ -319,6 +341,7 @@ export function PoPrintPreviewModal({
                         <th>รายการสินค้า / รายละเอียด</th>
                         <th>จำนวน</th>
                         <th>หน่วย</th>
+                        <th>กำหนดส่ง</th>
                         <th>ราคาต่อหน่วย</th>
                         <th>ส่วนลด</th>
                         <th>จำนวนเงิน</th>
@@ -392,7 +415,17 @@ export function PoPrintPreviewModal({
                   {isLastPage ? (
                     <>
                       <h2>ผู้มีอำนาจอนุมัติ</h2>
-                      <div aria-hidden="true" className="po-signature-space" />
+                      <div className="po-signature-space">
+                        {detail.approverSignatureUrl ? (
+                          <Image
+                            alt="ลายเซ็นผู้อนุมัติ"
+                            height={80}
+                            src={detail.approverSignatureUrl}
+                            unoptimized
+                            width={240}
+                          />
+                        ) : null}
+                      </div>
                       <div aria-hidden="true" className="po-signature-line" />
                       <strong>
                         {detail.approverName
@@ -409,18 +442,20 @@ export function PoPrintPreviewModal({
                   ) : null}
                 </section>
 
-                <footer className="po-document-footer">
-                  <span>{footerText}</span>
-                  <span>
-                    หน้า {pageIndex + 1} / {pages.length}
-                  </span>
-                  <span>พิมพ์เมื่อ {formatPrintedAt(printedAt)}</span>
-                </footer>
+                <CompanyDocumentFooter
+                  context={documentContext}
+                  currentPage={pageIndex + 1}
+                  printedAt={formatPrintedAt(printedAt)}
+                  printedBy={detail.buyerName}
+                  placement="page"
+                  totalPages={pages.length}
+                  variant="standard"
+                />
               </article>
             );
           })}
         </div>
-      </div>
+    </DocumentPreviewShell>
 
       {decision ? (
         <div
@@ -487,6 +522,22 @@ export function PoPrintPreviewModal({
                   {decisionNote.length} / 500
                 </span>
               </label>
+              {decision === "approved" && mfaRequired ? (
+                <label className="block border-l-4 border-primary bg-surface-container-low px-3 py-3">
+                  <span className="block text-[13px] font-bold">ยืนยันด้วย Authenticator</span>
+                  <span className="mt-0.5 block text-[11px] text-secondary">กรอกรหัสล่าสุด 6 หลักเพื่อยืนยันตัวตนก่อนลงลายเซ็นอนุมัติ</span>
+                  <input
+                    autoComplete="one-time-code"
+                    className="mt-2 h-11 w-full border border-outline-variant bg-surface-container-lowest px-3 text-center font-mono text-[20px] font-bold tracking-[0.35em] outline-none focus:border-primary"
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(event) => { setTotpCode(normalizeTotpCode(event.target.value)); setDecisionError(null); }}
+                    pattern="[0-9]*"
+                    placeholder="000000"
+                    value={totpCode}
+                  />
+                </label>
+              ) : null}
               {decisionError ? (
                 <p
                   className="border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-bold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
@@ -594,6 +645,16 @@ export function PoPrintPreviewModal({
           color: #fff;
         }
 
+        .po-preview-actions .po-preview-export-button {
+          border-color: #bd0d1a;
+          background: #ffffff;
+          color: #bd0d1a;
+        }
+
+        .po-preview-actions .po-preview-export-button:hover {
+          background: #fdf2f2;
+        }
+
         .po-preview-actions .po-preview-reject-button {
           border-color: #bd0d1a;
           color: #bd0d1a;
@@ -656,12 +717,14 @@ export function PoPrintPreviewModal({
           flex-direction: column;
           align-items: center;
           gap: 18px;
-          zoom: 0.73;
         }
 
         .po-print-page {
           box-sizing: border-box;
+          position: relative;
           display: grid;
+          --document-footer-bottom: 3mm;
+          --document-page-padding-inline: 6mm;
           width: 210mm;
           height: 297mm;
           grid-template-rows: 30mm 40mm 128mm 46mm 7mm 30mm 6mm;
@@ -815,6 +878,7 @@ export function PoPrintPreviewModal({
         .po-cell-number {
           padding-right: 1.2mm;
           text-align: right;
+          font-variant-numeric: tabular-nums;
         }
 
         .po-col-index {
@@ -822,11 +886,11 @@ export function PoPrintPreviewModal({
         }
 
         .po-col-code {
-          width: 10%;
+          width: 9%;
         }
 
         .po-col-description {
-          width: 37%;
+          width: 27%;
         }
 
         .po-col-quantity {
@@ -837,8 +901,12 @@ export function PoPrintPreviewModal({
           width: 7%;
         }
 
+        .po-col-delivery {
+          width: 12%;
+        }
+
         .po-col-price {
-          width: 11%;
+          width: 10%;
         }
 
         .po-col-discount {
@@ -919,6 +987,7 @@ export function PoPrintPreviewModal({
 
         .po-summary dd {
           text-align: right;
+          font-variant-numeric: tabular-nums;
         }
 
         .po-summary .po-grand-total {
@@ -972,6 +1041,16 @@ export function PoPrintPreviewModal({
 
         .po-signature-space {
           min-height: 11mm;
+          display: grid;
+          place-items: end center;
+        }
+
+        .po-signature-space img {
+          width: auto;
+          height: auto;
+          max-width: 42mm;
+          max-height: 11mm;
+          object-fit: contain;
         }
 
         .po-signature-line {
@@ -1088,7 +1167,7 @@ export function PoPrintPreviewModal({
             display: none;
           }
 
-          .po-preview-actions button {
+          .po-preview-actions button:not(.pdf-export-button) {
             width: 38px;
             padding: 0;
             font-size: 0;
@@ -1102,11 +1181,8 @@ export function PoPrintPreviewModal({
             padding: 10px;
           }
 
-          .po-print-root {
-            zoom: 0.46;
-          }
         }
       `}</style>
-    </div>
+    </>
   );
 }

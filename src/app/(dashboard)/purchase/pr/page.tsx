@@ -4,7 +4,7 @@ import {
   type PurchaseRequisitionStatus,
   type PurchaseRequisitionSummary,
 } from "@/lib/purchase-requisitions";
-import type { PurchaseRequisitionItem } from "@/lib/purchase-requisition-form";
+import { totalInventoryByItem, type PurchaseRequisitionItem } from "@/lib/purchase-requisition-form";
 import { formatDatabaseError, isMissingPurchaseCatalogRpc } from "@/lib/purchase-requisition-catalog";
 import { getCompanyDocumentContext } from "@/lib/company-settings.server";
 import { createClient } from "@/utils/supabase/server";
@@ -20,19 +20,15 @@ type PurchaseRequisitionRow = Omit<PurchaseRequisitionSummary, "status"> & {
   status: string;
 };
 
-type CatalogRow = { source: "raw_material" | "item_master"; source_id: number; item_code: string; item_name: string; item_description: string; type_code: string; type_name: string; unit_id: number; unit_name: string; unit_symbol: string; allows_decimal: boolean };
-type LegacyRawMaterialRow = { id: number; material_code: string; material_name: string; thickness_mm: number; width_mm: number; length_mm: number; grade: { grade_name: string } | { grade_name: string }[] | null; unit: { id: number; unit_name: string; symbol: string; allows_decimal: boolean; status: string } | { id: number; unit_name: string; symbol: string; allows_decimal: boolean; status: string }[] | null };
+type PurchaseOrderAllocationRow = {
+  purchase_order: { status: string } | { status: string }[] | null;
+  quantity: number;
+  requisition_id: number;
+};
 
+type CatalogRow = { source: "raw_material" | "item_master"; source_id: number; item_code: string; item_name: string; item_description: string; type_code: string; type_name: string; unit_id: number; unit_name: string; unit_symbol: string; allows_decimal: boolean };
 function normalizeCatalogItem(row: CatalogRow): PurchaseRequisitionItem {
   return { allowsDecimal: Boolean(row.allows_decimal), code: row.item_code, description: row.item_description || row.item_name, gradeName: "", id: Number(row.source_id), lengthMm: 0, name: row.item_name, source: row.source, thicknessMm: 0, typeCode: row.type_code, typeName: row.type_name, unitId: Number(row.unit_id), unitName: row.unit_name, unitSymbol: row.unit_symbol || row.unit_name, widthMm: 0 };
-}
-
-function normalizeLegacyRawMaterial(row: LegacyRawMaterialRow): PurchaseRequisitionItem | null {
-  const grade = Array.isArray(row.grade) ? row.grade[0] : row.grade;
-  const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
-  if (!grade || !unit || unit.status !== "active") return null;
-  const description = `${row.material_name} ${grade.grade_name} ${Number(row.thickness_mm).toFixed(2)} × ${Number(row.width_mm).toLocaleString("en-US")} × ${Number(row.length_mm).toLocaleString("en-US")} มม.`;
-  return { allowsDecimal: Boolean(unit.allows_decimal), code: row.material_code, description, gradeName: grade.grade_name, id: Number(row.id), lengthMm: Number(row.length_mm), name: row.material_name, source: "raw_material", thicknessMm: Number(row.thickness_mm), typeCode: "RM", typeName: "วัตถุดิบ", unitId: Number(unit.id), unitName: unit.unit_name, unitSymbol: unit.symbol, widthMm: Number(row.width_mm) };
 }
 
 function toIsoDate(value: Date) {
@@ -122,8 +118,10 @@ export default async function PurchaseRequisitionPage({
     requisitionResult,
     catalogResult,
     authResult,
-    ownerResult,
+    reviewResult,
+    returnResult,
     documentContext,
+    inventoryResult,
   ] = await Promise.all([
     supabase
       .from("purchase_requisitions")
@@ -135,8 +133,10 @@ export default async function PurchaseRequisitionPage({
       .limit(180),
     supabase.rpc("get_purchase_requisition_catalog"),
       supabase.auth.getUser(),
-      supabase.rpc("is_current_user_owner"),
+      supabase.rpc("authorize", { requested_permission: "pr.approve" }),
+      supabase.rpc("authorize", { requested_permission: "pr.reject" }),
       getCompanyDocumentContext(),
+      supabase.from("item_inventory_balances").select("item_master_id,on_hand_qty"),
     ]);
 
   if (requisitionResult.error) {
@@ -182,10 +182,43 @@ export default async function PurchaseRequisitionPage({
   } else {
     console.error("Error loading purchasable PR catalog:", formatDatabaseError(catalogResult.error));
   }
+  if (inventoryResult.error) {
+    console.error("Error loading PR catalog inventory balances:", formatDatabaseError(inventoryResult.error));
+  } else {
+    const totals = totalInventoryByItem(inventoryResult.data ?? []);
+    materials = materials.map((item) => ({ ...item, onHandQty: item.source === "item_master" ? (totals.get(item.id) ?? 0) : null }));
+  }
 
-  const requisitions = ((requisitionResult.data ?? []) as PurchaseRequisitionRow[]).map(
+  const requisitionRows = (requisitionResult.data ?? []) as PurchaseRequisitionRow[];
+  const allocationByRequisition = new Map<number, number>();
+  if (requisitionRows.length > 0) {
+    const allocationResult = await supabase
+      .from("purchase_order_items")
+      .select("requisition_id, quantity, purchase_order:purchase_orders!purchase_order_items_purchase_order_id_fkey(status)")
+      .in("requisition_id", requisitionRows.map((row) => row.id));
+
+    if (allocationResult.error) {
+      console.error("Error loading PR purchase-order allocation:", allocationResult.error);
+    } else {
+      for (const row of (allocationResult.data ?? []) as PurchaseOrderAllocationRow[]) {
+        const purchaseOrder = Array.isArray(row.purchase_order) ? row.purchase_order[0] : row.purchase_order;
+        if (!purchaseOrder || ["cancelled", "rejected"].includes(purchaseOrder.status)) continue;
+        allocationByRequisition.set(
+          row.requisition_id,
+          (allocationByRequisition.get(row.requisition_id) ?? 0) + Number(row.quantity),
+        );
+      }
+    }
+  }
+
+  const requisitions = requisitionRows.map(
     (row) => ({
       ...row,
+      po_status: (allocationByRequisition.get(row.id) ?? 0) >= Number(row.requested_total_qty)
+        ? "complete" as const
+        : (allocationByRequisition.get(row.id) ?? 0) > 0
+          ? "partial" as const
+          : "none" as const,
       status: normalizePurchaseRequisitionStatus(row.status),
     }),
   );
@@ -214,7 +247,8 @@ export default async function PurchaseRequisitionPage({
   return (
     <section className="space-y-4">
       <PrListPage
-        canDecide={ownerResult.data === true && !isPreviewData}
+        canReview={reviewResult.data === true && !isPreviewData}
+        canReturn={returnResult.data === true && !isPreviewData}
         documentContext={documentContext}
         initialDepartments={departments}
         initialDocumentDate={toIsoDate(today)}

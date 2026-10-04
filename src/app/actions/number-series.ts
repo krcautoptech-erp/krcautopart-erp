@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 
-export type ReservableNumberSeries = "CT" | "GR" | "PO" | "PR" | "VG";
+export type ReservableNumberSeries = "AD" | "CT" | "GR" | "IS" | "PO" | "PR" | "VG";
 
 type ReserveNumberResult =
   | { success: true; number: string }

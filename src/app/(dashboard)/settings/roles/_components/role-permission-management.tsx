@@ -2,6 +2,7 @@
 
 import { Plus, Search, ShieldCheck, UserRoundCog, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { CompanyFormLogo } from "@/components/company-logo";
 import {
   startTransition,
   Fragment,
@@ -20,44 +21,32 @@ import {
   filterPermissionGroups,
   getPermissionSelectionState,
   groupPermissionsByModule,
+  PERMISSION_MODULE_CATEGORIES,
   toggleModulePermissions,
+  togglePermissionWithViewDependency,
   type PermissionMatrixGroup,
 } from "./permission-matrix";
+import { useHasPermission } from "@/components/permission-context";
+import { useUnsavedChanges } from "@/components/unsaved-changes";
 
 const ACTION_COLUMNS = [
   { action: "view", label: "ดู" },
   { action: "create", label: "สร้าง" },
+  { action: "count", label: "ตรวจนับ" },
+  { action: "review", label: "ตรวจสอบ" },
   { action: "edit", label: "แก้ไข" },
   { action: "delete", label: "ลบ" },
   { action: "deactivate", label: "ระงับ" },
   { action: "cancel", label: "ยกเลิก" },
   { action: "approve", label: "อนุมัติ" },
   { action: "reject", label: "ปฏิเสธ" },
+  { action: "export", label: "ส่งออก" },
 ] as const;
-
-const MODULE_CATEGORIES: { label: string; modules: string[] }[] = [
-  { label: "ข้อมูลกลาง", modules: ["items", "assets", "partners"] },
-  { label: "จัดซื้อและคลังสินค้า", modules: ["pr", "po", "inventory"] },
-  {
-    label: "ตั้งค่าระบบ",
-    modules: [
-      "company",
-      "partner_settings",
-      "material_settings",
-      "item_types",
-      "document_terms",
-      "warehouses",
-      "departments",
-    ],
-  },
-  { label: "ผู้ใช้งานและความปลอดภัย", modules: ["users", "roles"] },
-  { label: "Legacy / เดิม", modules: ["mdm"] },
-];
 
 function groupByCategory(groups: PermissionMatrixGroup[]) {
   const remaining = new Set(groups.map((group) => group.moduleCode));
 
-  return MODULE_CATEGORIES.map((category) => {
+  return PERMISSION_MODULE_CATEGORIES.map((category) => {
     const categoryGroups = groups.filter((group) =>
       category.modules.includes(group.moduleCode),
     );
@@ -85,6 +74,7 @@ export function RolePermissionManagement({
   tabs?: ReactNode;
 }) {
   const router = useRouter();
+  const canManageRoles = useHasPermission("roles.manage");
   const firstRole = initialData.roles[0] ?? null;
   const [selectedRoleId, setSelectedRoleId] = useState(firstRole?.id ?? 0);
   const [draftPermissionIds, setDraftPermissionIds] = useState<Set<number>>(
@@ -97,6 +87,17 @@ export function RolePermissionManagement({
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileGroupCode, setMobileGroupCode] = useState<string | null>(null);
+  const [mobileGroupSnapshot, setMobileGroupSnapshot] = useState<Set<number> | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const floatingScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScrollRef = useRef(false);
+  const [floatingScroll, setFloatingScroll] = useState({
+    visible: false,
+    left: 0,
+    width: 0,
+    scrollWidth: 0,
+  });
 
   const selectedRole =
     initialData.roles.find((role) => role.id === selectedRoleId) ?? firstRole;
@@ -112,17 +113,65 @@ export function RolePermissionManagement({
     searchQuery,
   );
   const visibleCategories = groupByCategory(visibleGroups);
+  const mobileGroup = groupedPermissions.find(
+    (group) => group.moduleCode === mobileGroupCode,
+  );
+
+  useUnsavedChanges("role-permissions", hasChanges);
 
   useEffect(() => {
-    if (!hasChanges) return;
+    const table = tableScrollRef.current;
+    if (!table) return;
 
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
+    const updateFloatingScroll = () => {
+      const rect = table.getBoundingClientRect();
+      const visible =
+        table.scrollWidth > table.clientWidth + 2 &&
+        rect.top < window.innerHeight - 60 &&
+        rect.bottom > window.innerHeight;
+
+      setFloatingScroll({
+        visible,
+        left: rect.left,
+        width: rect.width,
+        scrollWidth: table.scrollWidth,
+      });
+
+      if (visible && floatingScrollRef.current) {
+        floatingScrollRef.current.scrollLeft = table.scrollLeft;
+      }
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasChanges]);
+    updateFloatingScroll();
+    document.addEventListener("scroll", updateFloatingScroll, true);
+    window.addEventListener("resize", updateFloatingScroll, { passive: true });
+    const resizeObserver = new ResizeObserver(updateFloatingScroll);
+    resizeObserver.observe(table);
+
+    return () => {
+      document.removeEventListener("scroll", updateFloatingScroll, true);
+      window.removeEventListener("resize", updateFloatingScroll);
+      resizeObserver.disconnect();
+    };
+  }, [visibleGroups.length]);
+
+  const syncTableScroll = () => {
+    if (isSyncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    floatingScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
+
+  const syncFloatingScroll = () => {
+    if (isSyncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    tableScrollRef.current.scrollLeft = floatingScrollRef.current.scrollLeft;
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
 
   const handleRoleSelect = (roleId: number) => {
     if (
@@ -138,27 +187,51 @@ export function RolePermissionManagement({
     setSavedPermissionIds(new Set(rolePermissions));
     setFeedback(null);
     setSearchQuery("");
+    setMobileGroupCode(null);
+    setMobileGroupSnapshot(null);
+  };
+
+  const openMobileGroup = (group: PermissionMatrixGroup) => {
+    setMobileGroupCode(group.moduleCode);
+    setMobileGroupSnapshot(
+      new Set(
+        group.permissions
+          .map((permission) => permission.id)
+          .filter((permissionId) => draftPermissionIds.has(permissionId)),
+      ),
+    );
+  };
+
+  const closeMobileGroup = (restore: boolean) => {
+    if (restore && mobileGroup && mobileGroupSnapshot) {
+      const groupIds = new Set(
+        mobileGroup.permissions.map((permission) => permission.id),
+      );
+      setDraftPermissionIds((current) => {
+        const next = new Set(
+          [...current].filter((permissionId) => !groupIds.has(permissionId)),
+        );
+        mobileGroupSnapshot.forEach((permissionId) => next.add(permissionId));
+        return next;
+      });
+    }
+    setMobileGroupCode(null);
+    setMobileGroupSnapshot(null);
   };
 
   const handleModuleToggle = (group: PermissionMatrixGroup) => {
-    if (selectedRole?.isOwner) return;
+    if (selectedRole?.isOwner || !canManageRoles) return;
     setDraftPermissionIds((current) =>
       toggleModulePermissions(current, group),
     );
   };
 
-  const handlePermissionToggle = (permissionId: number) => {
-    if (selectedRole?.isOwner) return;
+  const handlePermissionToggle = (group: PermissionMatrixGroup, permissionId: number) => {
+    if (selectedRole?.isOwner || !canManageRoles) return;
 
-    setDraftPermissionIds((current) => {
-      const next = new Set(current);
-      if (next.has(permissionId)) {
-        next.delete(permissionId);
-      } else {
-        next.add(permissionId);
-      }
-      return next;
-    });
+    setDraftPermissionIds((current) =>
+      togglePermissionWithViewDependency(current, group, permissionId),
+    );
   };
 
   const handleCancel = () => {
@@ -167,7 +240,7 @@ export function RolePermissionManagement({
   };
 
   const handleSave = async () => {
-    if (!selectedRole || selectedRole.isOwner || !hasChanges) return;
+    if (!selectedRole || selectedRole.isOwner || !canManageRoles || !hasChanges) return;
 
     setIsSaving(true);
     const result = await saveRolePermissionsAction(
@@ -195,30 +268,31 @@ export function RolePermissionManagement({
   }
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-[22px] font-bold leading-tight tracking-[-0.02em] text-on-surface">
+    <div className="space-y-2">
+      <header className="flex items-center justify-between gap-2">
+        <div className="min-w-0 sm:flex sm:items-baseline sm:gap-3">
+          <h1 className="shrink-0 text-[20px] font-bold leading-tight tracking-[-0.02em] text-on-surface">
             ผู้ใช้งานและสิทธิ์
           </h1>
-          <p className="mt-1 text-[13px] font-medium text-secondary">
+          <p className="mt-0.5 hidden truncate text-[12px] font-medium text-secondary sm:mt-0 sm:block">
             จัดการบัญชีผู้ใช้งาน Role และขอบเขตการเข้าถึงระบบ
           </p>
         </div>
         <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[14px] font-bold text-white transition-colors hover:bg-primary/95"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[4px] bg-primary px-3 text-[12px] font-bold text-white transition-colors hover:bg-primary/95 sm:px-4 sm:text-[13px]"
           onClick={() => {
             setFeedback(null);
             setIsCreateOpen(true);
           }}
+          disabled={!canManageRoles}
           type="button"
         >
-          <Plus size={18} strokeWidth={2.2} />
+          <Plus size={16} strokeWidth={2.2} />
           เพิ่ม Role
         </button>
       </header>
 
-      {tabs}
+      {tabs ? <Fragment key="access-tabs">{tabs}</Fragment> : null}
 
       {feedback ? (
         <div
@@ -233,7 +307,78 @@ export function RolePermissionManagement({
         </div>
       ) : null}
 
-      <div className="grid min-h-[calc(100vh-175px)] grid-cols-1 border border-outline-variant bg-surface-container-lowest lg:grid-cols-[245px_minmax(0,1fr)]">
+      <div className="space-y-0 border border-outline-variant bg-surface-container-lowest lg:hidden">
+        <label className="block border-b border-outline-variant p-3">
+          <span className="mb-1 block text-[11px] font-bold text-secondary">Role ที่กำลังจัดการ</span>
+          <select
+            className="h-11 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest px-3 text-[14px] font-bold text-on-surface outline-none focus:border-primary"
+            onChange={(event) => handleRoleSelect(Number(event.target.value))}
+            value={selectedRole.id}
+          >
+            {initialData.roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.code} — {role.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="border-b border-outline-variant p-3">
+          <label className="relative block">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
+              size={18}
+            />
+            <input
+              aria-label="ค้นหาสิทธิ์บนมือถือ"
+              className="h-11 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest pl-10 pr-3 text-[14px] outline-none placeholder:text-secondary focus:border-primary"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="ค้นหาโมดูลหรือสิทธิ์..."
+              value={searchQuery}
+            />
+          </label>
+        </div>
+
+        {visibleCategories.map((category) => (
+          <section key={category.label}>
+            <h2 className="border-b border-outline-variant bg-primary/[0.035] px-3 py-2 text-[13px] font-black text-primary">
+              {category.label}
+            </h2>
+            {category.groups.map((group) => {
+              const selectedCount = group.permissions.filter((permission) =>
+                draftPermissionIds.has(permission.id),
+              ).length;
+              return (
+                <button
+                  className="flex min-h-14 w-full items-center gap-3 border-b border-outline-variant px-3 text-left transition-colors hover:bg-surface-container-low"
+                  key={group.moduleCode}
+                  onClick={() => openMobileGroup(group)}
+                  type="button"
+                >
+                  <span className="min-w-0 flex-1 text-[14px] font-bold text-on-surface">
+                    {group.moduleName}
+                  </span>
+                  <span className="shrink-0 text-[12px] font-semibold tabular-nums text-secondary">
+                    {selectedCount}/{group.permissions.length}
+                  </span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-[20px] text-on-surface">
+                    chevron_right
+                  </span>
+                </button>
+              );
+            })}
+          </section>
+        ))}
+
+        {visibleGroups.length === 0 ? (
+          <p className="px-4 py-12 text-center text-[13px] font-medium text-secondary">
+            ไม่พบโมดูลหรือสิทธิ์ที่ค้นหา
+          </p>
+        ) : null}
+      </div>
+
+      <div className="hidden min-h-[calc(100vh-145px)] grid-cols-1 border border-outline-variant bg-surface-container-lowest lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="border-b border-outline-variant lg:border-b-0 lg:border-r">
           <div className="flex h-11 items-center justify-between border-b border-outline-variant px-3.5">
             <h2 className="text-[14px] font-bold text-on-surface">รายการ Role</h2>
@@ -314,7 +459,7 @@ export function RolePermissionManagement({
             </button>
             <button
               className="h-8 min-w-[104px] rounded-[3px] bg-primary px-3 text-[12px] font-bold text-white transition-colors hover:bg-primary/95 disabled:cursor-not-allowed disabled:opacity-45"
-              disabled={selectedRole.isOwner || !hasChanges || isSaving}
+              disabled={selectedRole.isOwner || !canManageRoles || !hasChanges || isSaving}
               onClick={handleSave}
               type="button"
             >
@@ -322,22 +467,26 @@ export function RolePermissionManagement({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="erp-data-table min-w-[980px]">
+          <div className="border-b border-primary/25 bg-primary/8 px-4 py-2 text-[12px] font-semibold text-on-surface">
+            เลือกสิทธิ์ดำเนินการ ระบบจะเปิดสิทธิ์ “ดู” ของโมดูลนั้นให้อัตโนมัติ เพื่อให้ผู้ใช้เข้าถึงงานที่ได้รับมอบหมายได้
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-auto" onScroll={syncTableScroll} ref={tableScrollRef}>
+            <table className="erp-data-table w-[856px] min-w-[856px] table-fixed">
               <colgroup>
-                <col className="w-[500px]" />
+                <col className="w-[240px]" />
                 {ACTION_COLUMNS.map((column) => (
-                  <col className="w-[60px]" key={column.action} />
+                  <col className="w-[56px]" key={column.action} />
                 ))}
               </colgroup>
               <thead className="sticky top-0 z-10 bg-surface-container-lowest">
                 <tr className="h-9 border-b border-outline-variant bg-surface-container-low">
-                  <th className="px-4 text-left text-[14px] font-bold text-on-surface">
+                  <th className="sticky left-0 z-20 border-r border-outline-variant bg-surface-container-low px-3 text-left text-[13px] font-bold text-on-surface">
                     สิทธิ์
                   </th>
                   {ACTION_COLUMNS.map((column) => (
                     <th
-                      className="px-0 text-center text-[13px] font-bold text-on-surface"
+                      className="px-0 text-center text-[12px] font-bold text-on-surface"
                       key={column.action}
                     >
                       {column.label}
@@ -360,7 +509,7 @@ export function RolePermissionManagement({
                       <PermissionModuleRow
                         draftPermissionIds={draftPermissionIds}
                         group={group}
-                        isLocked={selectedRole.isOwner}
+                        isLocked={selectedRole.isOwner || !canManageRoles}
                         key={group.moduleCode}
                         onModuleToggle={() => handleModuleToggle(group)}
                         onPermissionToggle={handlePermissionToggle}
@@ -383,6 +532,104 @@ export function RolePermissionManagement({
           </div>
         </section>
       </div>
+
+      {floatingScroll.visible ? (
+        <div
+          aria-hidden="true"
+          className="fixed bottom-0 z-40 overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 shadow-[0_-4px_12px_rgba(0,0,0,0.15)] backdrop-blur-md"
+          onScroll={syncFloatingScroll}
+          ref={floatingScrollRef}
+          style={{
+            left: floatingScroll.left,
+            width: floatingScroll.width,
+            height: 14,
+          }}
+        >
+          <div style={{ width: floatingScroll.scrollWidth, height: 1 }} />
+        </div>
+      ) : null}
+
+      {mobileGroup ? (
+        <div className="fixed inset-0 z-[70] flex items-end bg-black/35 lg:hidden" role="presentation">
+          <section
+            aria-label={`กำหนดสิทธิ์ ${mobileGroup.moduleName}`}
+            aria-modal="true"
+            className="flex max-h-[78dvh] w-full flex-col rounded-t-[8px] border border-outline-variant bg-surface-container-lowest shadow-[0_-8px_24px_rgb(0_0_0/0.16)]"
+            role="dialog"
+          >
+            <div className="mx-auto mt-2 h-1 w-12 rounded-full bg-outline-variant" />
+            <header className="border-b border-outline-variant px-4 pb-3 pt-2">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[20px] font-bold text-on-surface">{mobileGroup.moduleName}</h2>
+                  <p className="mt-0.5 text-[12px] font-medium text-secondary">
+                    กำหนดสิทธิ์สำหรับ {selectedRole.code}
+                  </p>
+                </div>
+                <button
+                  aria-label="ปิดหน้าต่างสิทธิ์"
+                  className="grid size-11 place-items-center text-on-surface"
+                  onClick={() => closeMobileGroup(true)}
+                  type="button"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+              <label className="mt-2 flex min-h-11 items-center gap-2 text-[13px] font-bold text-primary">
+                <MatrixCheckbox
+                  label={`เลือกสิทธิ์ทั้งหมดของ ${mobileGroup.moduleName}`}
+                  locked={selectedRole.isOwner || !canManageRoles}
+                  onChange={() => handleModuleToggle(mobileGroup)}
+                  permissionIds={mobileGroup.permissions.map((permission) => permission.id)}
+                  selectedPermissionIds={draftPermissionIds}
+                />
+                เลือกทั้งหมด
+              </label>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4">
+              {ACTION_COLUMNS.map((column) => {
+                const permission = mobileGroup.permissionsByAction[column.action];
+                if (!permission) return null;
+                return (
+                  <label
+                    className="flex min-h-14 items-center gap-3 border-b border-outline-variant py-2"
+                    key={column.action}
+                  >
+                    <span className="min-w-0 flex-1 text-[15px] font-bold text-on-surface">
+                      {column.label}
+                    </span>
+                    <MatrixCheckbox
+                      label={`${mobileGroup.moduleName}: ${column.label}`}
+                      locked={selectedRole.isOwner || !canManageRoles}
+                      onChange={() => handlePermissionToggle(mobileGroup, permission.id)}
+                      permissionIds={[permission.id]}
+                      selectedPermissionIds={draftPermissionIds}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+
+            <footer className="grid grid-cols-2 gap-2 border-t border-outline-variant bg-surface-container-lowest p-3">
+              <button
+                className="h-11 rounded-[3px] border border-primary text-[14px] font-bold text-primary"
+                onClick={() => closeMobileGroup(true)}
+                type="button"
+              >
+                ยกเลิก
+              </button>
+              <button
+                className="h-11 rounded-[3px] bg-primary text-[14px] font-bold text-white"
+                onClick={() => closeMobileGroup(false)}
+                type="button"
+              >
+                ยืนยัน {mobileGroup.permissions.filter((permission) => draftPermissionIds.has(permission.id)).length} สิทธิ์
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {isCreateOpen ? (
         <CreateRoleModal
@@ -467,11 +714,11 @@ function PermissionModuleRow({
   group: PermissionMatrixGroup;
   isLocked: boolean;
   onModuleToggle: () => void;
-  onPermissionToggle: (permissionId: number) => void;
+  onPermissionToggle: (group: PermissionMatrixGroup, permissionId: number) => void;
 }) {
   return (
-    <tr className="h-10 border-b border-outline-variant transition-colors hover:bg-surface-container-low/50">
-      <th className="px-3 py-1 text-left align-middle">
+    <tr className="group h-10 border-b border-outline-variant transition-colors hover:bg-surface-container-low/50">
+      <th className="sticky left-0 z-[5] border-r border-outline-variant bg-surface-container-lowest px-3 py-1 text-left align-middle group-hover:bg-surface-container-low">
         <span className="flex min-h-7 items-center gap-2 whitespace-normal">
           <MatrixCheckbox
             label={`เลือกสิทธิ์ทั้งหมดของ ${group.moduleName}`}
@@ -485,9 +732,6 @@ function PermissionModuleRow({
           <span className="py-0.5 text-[14px] font-bold leading-6 text-on-surface">
             {group.moduleName}
           </span>
-          <span className="shrink-0 py-0.5 text-[11px] font-semibold uppercase leading-5 text-secondary">
-            {group.moduleCode}
-          </span>
         </span>
       </th>
       {ACTION_COLUMNS.map((column) => {
@@ -499,7 +743,7 @@ function PermissionModuleRow({
               label={`${group.moduleName}: ${column.label}`}
               locked={isLocked}
               onChange={() => {
-                if (permission) onPermissionToggle(permission.id);
+                if (permission) onPermissionToggle(group, permission.id);
               }}
               permissionIds={permission ? [permission.id] : []}
               selectedPermissionIds={draftPermissionIds}
@@ -552,9 +796,7 @@ function CreateRoleModal({
       >
         <header className="flex h-14 items-center justify-between border-b border-outline-variant px-5">
           <div className="flex items-center gap-3">
-            <span className="rounded-[3px] bg-primary px-2.5 py-1 text-[11px] font-black tracking-wider text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo />
             <h2 className="text-[19px] font-bold text-on-surface">เพิ่ม Role</h2>
           </div>
           <button

@@ -1,5 +1,22 @@
+"use client";
+
 import Image from "next/image";
+import { createContext, useContext, type ReactNode } from "react";
 import type { CompanyBranding } from "@/lib/company-settings";
+
+const CompanyBrandingContext = createContext<CompanyBranding | null>(null);
+
+export const useCompanyBranding = () => useContext(CompanyBrandingContext);
+
+export function CompanyBrandingProvider({ branding, children }: { branding: CompanyBranding; children: ReactNode }) {
+  return <CompanyBrandingContext.Provider value={branding}>{children}</CompanyBrandingContext.Provider>;
+}
+
+export function CompanyFormLogo({ className = "" }: { className?: string }) {
+  const branding = useContext(CompanyBrandingContext);
+  if (!branding) return null;
+  return <span className={`company-form-logo ${className}`}><CompanyLogo branding={branding} size="compact" /></span>;
+}
 
 type CompanyLogoProps = {
   alt?: string;

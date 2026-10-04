@@ -4,9 +4,11 @@ import {
   filterPermissionGroups,
   getPermissionSelectionState,
   groupPermissionsByModule,
+  PERMISSION_MODULE_CATEGORIES,
   toggleActionPermissions,
   toggleModulePermissions,
   togglePermissionIds,
+  togglePermissionWithViewDependency,
 } from "./permission-matrix.ts";
 
 const permissions = [
@@ -42,17 +44,33 @@ const permissions = [
     moduleName: "ใบขอซื้อ (PR)",
     name: "ยกเลิกใบขอซื้อ",
   },
+  {
+    action: "export",
+    code: "inventory_cost.export",
+    id: 5,
+    moduleCode: "inventory_cost",
+    moduleName: "ต้นทุนสินค้าคงคลัง",
+    name: "ส่งออกต้นทุนสินค้าคงคลัง",
+  },
 ];
 
 test("groups permissions into one row per module", () => {
   const groups = groupPermissionsByModule(permissions);
 
-  assert.equal(groups.length, 2);
+  assert.equal(groups.length, 3);
   assert.deepEqual(
     groups[0]?.permissions.map((permission) => permission.id),
     [1, 2, 4],
   );
   assert.equal(groups[1]?.permissionsByAction.edit?.id, 3);
+});
+
+test("keeps cost export separate from cost view", () => {
+  const costGroup = groupPermissionsByModule(permissions).find(
+    (group) => group.moduleCode === "inventory_cost",
+  );
+  assert.equal(costGroup?.permissionsByAction.export?.code, "inventory_cost.export");
+  assert.equal(costGroup?.permissionsByAction.view, undefined);
 });
 
 test("toggles every supported permission in one module", () => {
@@ -132,4 +150,56 @@ test("reports checked and indeterminate selection states", () => {
 test("toggles a supplied set of permissions as one selection", () => {
   assert.deepEqual([...togglePermissionIds(new Set([1]), [1, 2])].sort(), [1, 2]);
   assert.deepEqual([...togglePermissionIds(new Set([1, 2]), [1, 2])], []);
+});
+
+test("categorizes every current inventory permission module", () => {
+  const inventoryCategory = PERMISSION_MODULE_CATEGORIES.find(
+    (category) => category.label === "จัดซื้อและคลังสินค้า",
+  );
+  assert.ok(inventoryCategory?.modules.includes("inventory"));
+  assert.ok(inventoryCategory?.modules.includes("inventory_issue"));
+  assert.ok(inventoryCategory?.modules.includes("inventory_adjustment"));
+  assert.ok(inventoryCategory?.modules.includes("inventory_cost"));
+  assert.ok(inventoryCategory?.modules.includes("stock_count"));
+});
+
+test("keeps stock count execution and review as separate actions", () => {
+  const [group] = groupPermissionsByModule([
+    {
+      action: "count",
+      code: "stock_count.count",
+      id: 6,
+      moduleCode: "stock_count",
+      moduleName: "ตรวจนับสต็อก",
+      name: "บันทึกผลตรวจนับ",
+    },
+    {
+      action: "review",
+      code: "stock_count.review",
+      id: 7,
+      moduleCode: "stock_count",
+      moduleName: "ตรวจนับสต็อก",
+      name: "ตรวจสอบผลตรวจนับ",
+    },
+  ]);
+
+  assert.equal(group?.permissionsByAction.count?.id, 6);
+  assert.equal(group?.permissionsByAction.review?.id, 7);
+});
+
+test("granting an action also grants view and removing view clears dependent actions", () => {
+  const [group] = groupPermissionsByModule(permissions);
+  assert.ok(group);
+
+  const withCreate = togglePermissionWithViewDependency(new Set(), group, 2);
+  assert.deepEqual([...withCreate].sort(), [1, 2]);
+
+  const withoutView = togglePermissionWithViewDependency(withCreate, group, 1);
+  assert.deepEqual([...withoutView], []);
+});
+
+test("removing the view column clears dependent actions in every module", () => {
+  const groups = groupPermissionsByModule(permissions);
+  const selected = toggleActionPermissions(new Set([1, 2, 4]), groups, "view");
+  assert.deepEqual([...selected], []);
 });

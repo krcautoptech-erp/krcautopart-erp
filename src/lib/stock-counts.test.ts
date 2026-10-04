@@ -2,11 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canTransitionStockCount,
+  friendlyStockCountError,
+  validateStockCountCreate,
+  validateStockCountReview,
   stockCountDifference,
   stockCountProgress,
+  isStockCountDateInRange,
   validateCountEntry,
   type CountEntry,
 } from "./stock-counts.ts";
+
+test("maps database failures to safe Thai messages", () => {
+  assert.equal(friendlyStockCountError("stale_stock_count_snapshot"), "ยอดสต็อกเปลี่ยนหลังสร้างรอบ กรุณายกเลิกรอบนี้แล้วสร้างใหม่");
+  assert.equal(friendlyStockCountError("lot_unit_cost_unavailable"), "ไม่พบต้นทุนของ Lot ที่มียอดเพิ่ม กรุณาตรวจสอบต้นทุนก่อนอนุมัติ");
+  assert.equal(friendlyStockCountError("permission_denied"), "คุณไม่มีสิทธิ์ทำรายการนี้");
+  assert.equal(friendlyStockCountError("relation public.stock_counts failed"), "ไม่สามารถบันทึกรอบตรวจนับได้");
+});
+
+test("validates a stock count round before creation", () => {
+  assert.equal(validateStockCountCreate({ documentDate: "", warehouseId: 0, assignedTo: "", itemMasterIds: [], selectionScope: "all" }), "กรุณาระบุวันที่ตรวจนับ");
+  assert.equal(validateStockCountCreate({ documentDate: "2026-10-02", warehouseId: 1, assignedTo: "u", itemMasterIds: [1, 1], selectionScope: "selected" }), "พบสินค้าซ้ำในรายการตรวจนับ");
+  assert.equal(validateStockCountCreate({ documentDate: "2026-10-02", warehouseId: 1, assignedTo: "u", itemMasterIds: [1, 2], selectionScope: "selected" }), null);
+});
+
+test("requires complete counts and variance reasons before review", () => {
+  assert.equal(validateStockCountReview([{ systemQty: 1, countedQty: null, reason: "" }]), "กรุณาตรวจนับให้ครบทุกรายการ");
+  assert.equal(validateStockCountReview([{ systemQty: 1, countedQty: 2, reason: "" }]), "กรุณาระบุเหตุผลของรายการที่มียอดต่าง");
+  assert.equal(validateStockCountReview([{ systemQty: 1, countedQty: 2, reason: "ตรวจพบเกิน" }]), null);
+});
 
 test("calculates four-decimal lot differences without floating drift", () => {
   assert.equal(stockCountDifference(10.0001, 10.0002), 0.0001);
@@ -50,6 +73,12 @@ test("counts zero as completed and null as pending", () => {
   ];
   assert.deepEqual(stockCountProgress(entries), { completed: 1, total: 2 });
   assert.deepEqual(stockCountProgress([]), { completed: 0, total: 0 });
+});
+
+test("filters stock count dates inclusively", () => {
+  assert.equal(isStockCountDateInRange("2026-10-02", "2026-10-02", "2026-10-02"), true);
+  assert.equal(isStockCountDateInRange("2026-10-01", "2026-10-02", ""), false);
+  assert.equal(isStockCountDateInRange("2026-10-03", "", "2026-10-02"), false);
 });
 
 test("keeps opposite lot differences even when item net difference is zero", () => {

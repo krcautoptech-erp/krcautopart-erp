@@ -23,6 +23,8 @@ import {
   type DepartmentSettingsData,
 } from "@/app/actions/departments";
 import { ActiveStatusBadge } from "@/components/status-badge";
+import { MobileEntityList } from "@/components/mobile-entity-list";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 import {
   normalizeDepartmentInput,
   validateDepartmentInput,
@@ -261,7 +263,14 @@ export function DepartmentManagement({
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <MobileListFilters
+          activeCount={statusFilter === "all" ? 0 : 1}
+          onClear={() => { setStatusFilter("all"); setCurrentPage(1); }}
+          search={<ListSearchField onChange={(value) => { setSearchQuery(value); setCurrentPage(1); }} placeholder="ค้นหารหัสแผนก ชื่อแผนก หรือหัวหน้า..." value={searchQuery} />}
+        >
+          <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }} value={statusFilter}><option value="all">ทั้งหมด</option><option value="active">ใช้งาน</option><option value="inactive">ระงับ</option></ListFilterSelect>
+        </MobileListFilters>
+        <div className="hidden flex-col gap-3 md:flex md:flex-row md:items-center">
           <label className="relative block w-full sm:max-w-[520px]">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
@@ -295,7 +304,22 @@ export function DepartmentManagement({
         </div>
 
         <div className="overflow-hidden rounded-[5px] border border-outline-variant bg-surface-container-lowest">
-          <div className="overflow-x-auto">
+          <div className="sm:hidden">
+            <MobileEntityList
+              actionLabel={(department) => `แก้ไข ${department.name}`}
+              disabled={isPending}
+              emptyText="ไม่พบข้อมูลแผนกตามเงื่อนไขที่ค้นหา"
+              getKey={(department) => department.id}
+              items={pageItems}
+              meta={(department) => <>หัวหน้า: {department.managerName ?? "ยังไม่กำหนด"} · {department.userCount} ผู้ใช้งาน</>}
+              onAction={initialData.canManage ? (department) => openEditModal(department) : undefined}
+              onOpen={initialData.canManage ? openEditModal : undefined}
+              primary={(department) => department.code}
+              secondary={(department) => department.name}
+              status={(department) => <ActiveStatusBadge active={department.status === "active"} />}
+            />
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="erp-data-table min-w-[900px]">
               <thead className="bg-surface-container-low">
                 <tr className="h-10 border-b border-outline-variant">

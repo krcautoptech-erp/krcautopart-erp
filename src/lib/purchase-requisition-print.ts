@@ -20,14 +20,14 @@ export type PurchaseRequisitionPrintApproval = {
 };
 
 const PURCHASE_REQUISITION_HISTORY_LABELS: Record<string, string> = {
-  approved: "อนุมัติ",
+  approved: "พร้อมออก PO",
   cancelled: "ยกเลิกเอกสาร",
   created: "สร้างเอกสาร",
   edited: "แก้ไขเอกสาร",
   printed: "พิมพ์เอกสาร",
-  rejected: "ปฏิเสธ",
+  rejected: "ส่งกลับแก้ไข",
   returned: "ส่งกลับแก้ไข",
-  submitted: "ส่งอนุมัติ",
+  submitted: "ส่งให้ฝ่ายจัดซื้อตรวจสอบ",
 };
 
 export function getPurchaseRequisitionHistoryLabel(action: string) {
@@ -48,24 +48,44 @@ export type PurchaseRequisitionPrintDetail = {
   status: PurchaseRequisitionStatus;
 };
 
-export function paginatePurchaseRequisitionItems<T>(items: readonly T[]): T[][] {
+function getPrItemSlotWeight<T>(item: T): number {
+  if (!item || typeof item !== "object") return 1;
+  const desc =
+    (item as { description?: string; name?: string }).description ||
+    (item as { name?: string }).name;
+  if (!desc) return 1;
+  if (desc.includes("\n") || desc.length > 45) return 2;
+  return 1;
+}
+
+export function paginatePurchaseRequisitionItems<T>(
+  items: readonly T[],
+): T[][] {
   if (items.length === 0) {
     return [[]];
   }
 
   const pages: T[][] = [];
+  let currentPage: T[] = [];
+  let currentWeight = 0;
 
-  for (
-    let index = 0;
-    index < items.length;
-    index += PURCHASE_REQUISITION_PRINT_ROWS_PER_PAGE
-  ) {
-    pages.push(
-      items.slice(
-        index,
-        index + PURCHASE_REQUISITION_PRINT_ROWS_PER_PAGE,
-      ),
-    );
+  for (const item of items) {
+    const weight = getPrItemSlotWeight(item);
+    if (
+      currentPage.length > 0 &&
+      currentWeight + weight > PURCHASE_REQUISITION_PRINT_ROWS_PER_PAGE
+    ) {
+      pages.push(currentPage);
+      currentPage = [item];
+      currentWeight = weight;
+    } else {
+      currentPage.push(item);
+      currentWeight += weight;
+    }
+  }
+
+  if (currentPage.length > 0) {
+    pages.push(currentPage);
   }
 
   return pages;

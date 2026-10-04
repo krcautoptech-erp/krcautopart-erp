@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export type ItemTypeRecord = ItemTypeInput & { id: number; itemCount: number };
 export type CatalogItem = { id: string; sourceId: number | string; code: string; name: string; typeCode: string; typeName: string; unit: string; control: string; status: "active" | "inactive"; source: "product" | "raw_material" | "item_master"; form: Partial<GenericItemInput> };
-type ItemLookup = { id: number; name: string };
+type ItemLookup = { id: number; name: string; code?: string };
 export type ItemCatalogPagination = {
   totalCount: number;
   page: number;
@@ -105,10 +105,6 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function itemStatus(value: unknown): "active" | "inactive" {
-  return value === "inactive" || value === "ระงับการใช้งาน" ? "inactive" : "active";
-}
-
 function nextCodeFromRows(
   prefix: string,
   rows: { code: string | null }[],
@@ -167,7 +163,7 @@ async function loadLookups(supabase: Client, force = false) {
 
   const [units, warehouses, groups, grades, vendors] = await Promise.all([
     supabase.from("raw_material_units").select("id, unit_name, symbol").eq("status", "active").order("sort_order"),
-    supabase.from("raw_material_warehouses").select("id, warehouse_name").eq("status", "active").order("sort_order"),
+    supabase.from("raw_material_warehouses").select("id, warehouse_code, warehouse_name").eq("status", "active").order("sort_order"),
     supabase.from("raw_material_groups").select("id, group_name").eq("status", "active").order("sort_order"),
     supabase.from("raw_material_grades").select("id, grade_name").eq("status", "active").order("sort_order"),
     supabase.from("vendors").select("id, vendor_name").eq("status", "ใช้งาน").order("vendor_name"),
@@ -178,7 +174,7 @@ async function loadLookups(supabase: Client, force = false) {
 
   const result = {
     units: (units.data ?? []).map((row) => ({ id: Number(row.id), name: `${row.unit_name}${row.symbol ? ` (${row.symbol})` : ""}` })),
-    warehouses: (warehouses.data ?? []).map((row) => ({ id: Number(row.id), name: row.warehouse_name })),
+    warehouses: (warehouses.data ?? []).map((row) => ({ id: Number(row.id), code: row.warehouse_code, name: row.warehouse_name })),
     groups: (groups.data ?? []).map((row) => ({ id: Number(row.id), name: row.group_name })),
     grades: (grades.data ?? []).map((row) => ({ id: Number(row.id), name: row.grade_name })),
     vendors: (vendors.data ?? []).map((row) => ({ id: Number(row.id), name: row.vendor_name })),

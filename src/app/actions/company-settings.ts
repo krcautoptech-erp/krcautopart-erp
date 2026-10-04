@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   COMPANY_ASSET_BUCKET,
   createCompanyBranding,
@@ -13,6 +13,7 @@ import {
   type CompanySettingsData,
 } from "@/lib/company-settings";
 import { getThaiPostalCode } from "@/lib/vendors/thai-address";
+import { COMPANY_BRANDING_CACHE_TAG } from "@/lib/company-settings.server";
 import { createClient } from "@/utils/supabase/server";
 
 const SETTINGS_PATH = "/settings/company";
@@ -377,6 +378,7 @@ export async function saveCompanySettingsAction(formData: FormData) {
 
     revalidatePath("/", "layout");
     revalidatePath(SETTINGS_PATH);
+    revalidateTag(COMPANY_BRANDING_CACHE_TAG, { expire: 0 });
     return { success: true as const };
   } catch (error) {
     console.error("saveCompanySettingsAction error:", error);

@@ -11,6 +11,7 @@ export type PurchaseRequisitionItem = {
   isStocked?: boolean;
   lengthMm: number;
   name: string;
+  onHandQty?: number | null;
   source: PurchaseRequisitionItemSource;
   thicknessMm: number;
   trackingMethod?: "none" | "lot" | "serial";
@@ -21,6 +22,12 @@ export type PurchaseRequisitionItem = {
   unitSymbol: string;
   widthMm: number;
 };
+
+export function totalInventoryByItem(rows: { item_master_id: number; on_hand_qty: number | string }[]) {
+  const totals = new Map<number, number>();
+  for (const row of rows) totals.set(Number(row.item_master_id), (totals.get(Number(row.item_master_id)) ?? 0) + Number(row.on_hand_qty));
+  return totals;
+}
 
 export type PurchaseRequisitionMaterial = PurchaseRequisitionItem;
 

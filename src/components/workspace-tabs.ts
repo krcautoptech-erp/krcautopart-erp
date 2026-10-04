@@ -9,6 +9,28 @@ export type WorkspaceTab = {
 const WORKSPACE_TAB_REGISTRY: WorkspaceTab[] = [
   {
     closable: true,
+    href: "/notifications",
+    icon: "notifications",
+    pinned: false,
+    title: "การแจ้งเตือนทั้งหมด",
+  },
+  { closable: true, href: "/reports/inventory/stock-movements", icon: "monitoring", pinned: false, title: "รายงานความเคลื่อนไหวสต็อก" },
+  {
+    closable: true,
+    href: "/reports/purchase/pending-receipts",
+    icon: "monitoring",
+    pinned: false,
+    title: "รายงานสินค้าค้างรับและติดตามกำหนดส่ง",
+  },
+  {
+    closable: true,
+    href: "/reports",
+    icon: "assessment",
+    pinned: false,
+    title: "ศูนย์รวมรายงาน",
+  },
+  {
+    closable: true,
     href: "/items",
     icon: "inventory_2",
     pinned: false,
@@ -58,6 +80,13 @@ const WORKSPACE_TAB_REGISTRY: WorkspaceTab[] = [
   },
   {
     closable: true,
+    href: "/inventory/issues",
+    icon: "outbox",
+    pinned: false,
+    title: "ใบเบิกใช้สินค้า",
+  },
+  {
+    closable: true,
     href: "/partner-settings",
     icon: "tune",
     pinned: false,
@@ -93,6 +122,13 @@ const WORKSPACE_TAB_REGISTRY: WorkspaceTab[] = [
   },
   {
     closable: true,
+    href: "/settings/signature-approval",
+    icon: "draw",
+    pinned: false,
+    title: "ลายเซ็นและการอนุมัติ",
+  },
+  {
+    closable: true,
     href: "/settings/users",
     icon: "manage_accounts",
     pinned: false,
@@ -104,6 +140,13 @@ const WORKSPACE_TAB_REGISTRY: WorkspaceTab[] = [
     icon: "domain",
     pinned: false,
     title: "ข้อมูลบริษัท",
+  },
+  {
+    closable: true,
+    href: "/settings",
+    icon: "settings",
+    pinned: false,
+    title: "ตั้งค่าระบบ",
   },
 ];
 

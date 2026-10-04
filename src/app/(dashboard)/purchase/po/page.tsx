@@ -52,6 +52,9 @@ export default async function PurchaseOrderPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
+  const requestedOrderId = Number(firstValue(params.po));
+  const initialOpenOrderId = Number.isSafeInteger(requestedOrderId) && requestedOrderId > 0
+    ? requestedOrderId : null;
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const query = firstValue(params.q).trim().slice(0, 100);
@@ -101,7 +104,8 @@ export default async function PurchaseOrderPage({
     vendorsResult,
     authResult,
     documentContext,
-    ownerResult,
+    approveResult,
+    rejectResult,
   ] =
     await Promise.all([
     ordersQuery
@@ -124,7 +128,8 @@ export default async function PurchaseOrderPage({
       .limit(1000),
       supabase.auth.getUser(),
       getCompanyDocumentContext(),
-      supabase.rpc("is_current_user_owner"),
+      supabase.rpc("authorize", { requested_permission: "po.approve" }),
+      supabase.rpc("authorize", { requested_permission: "po.reject" }),
     ]);
 
   if (ordersResult.error) {
@@ -175,9 +180,11 @@ export default async function PurchaseOrderPage({
   return (
     <PoListPage
       buyerName={buyerName}
-      canDecide={ownerResult.data === true}
+      canApprove={approveResult.data === true}
+      canReject={rejectResult.data === true}
       documentContext={documentContext}
       documentDate={toIsoDate(today)}
+      initialOpenOrderId={initialOpenOrderId}
       filters={{
         endDate,
         query,

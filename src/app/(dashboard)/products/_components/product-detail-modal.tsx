@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Image as ImageIcon, X } from "lucide-react";
 import { useApp } from "@/components/app-context";
+import { PdfExportButton } from "@/components/pdf-export-button";
+import { printHtmlDocument } from "@/lib/document-print";
 import type { ProductRecord } from "./product-catalog";
 
 interface ProductDetailModalProps {
@@ -136,6 +138,34 @@ function buildFontFaceCss() {
       font-display: swap;
     }
     @font-face {
+      font-family: "Sarabun";
+      src: url("/fonts/Sarabun-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Sarabun";
+      src: url("/fonts/Sarabun-Medium.ttf") format("truetype");
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Sarabun";
+      src: url("/fonts/Sarabun-SemiBold.ttf") format("truetype");
+      font-weight: 600;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Sarabun";
+      src: url("/fonts/Sarabun-Bold.ttf") format("truetype");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
       font-family: "Noto Sans Thai";
       src: url("/fonts/NotoSansThai-Regular.ttf") format("truetype");
       font-weight: 400;
@@ -205,7 +235,7 @@ function buildSpecificationHtml(product: ProductRecord, isDarkMode: boolean) {
         background: ${palette.appBackground};
       }
       body {
-        font-family: "Inter", "Noto Sans Thai", sans-serif;
+        font-family: "Inter", "Sarabun", "Noto Sans Thai", sans-serif;
         color: ${palette.body};
       }
       .sheet {
@@ -394,123 +424,19 @@ function buildSpecificationHtml(product: ProductRecord, isDarkMode: boolean) {
 </html>`;
 }
 
-function openPrintWindow(html: string, title: string) {
-  const iframe = document.createElement("iframe");
-  let hasPrinted = false;
-
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.title = title;
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  iframe.style.opacity = "0";
-  iframe.style.pointerEvents = "none";
-
-  const cleanup = () => {
-    window.setTimeout(() => {
-      iframe.remove();
-    }, 300);
-  };
-
-  iframe.onload = () => {
-    if (hasPrinted) {
-      return;
-    }
-
-    const frameWindow = iframe.contentWindow;
-    if (!frameWindow) {
-      cleanup();
-      return;
-    }
-
-    hasPrinted = true;
-
-    const handleAfterPrint = () => {
-      frameWindow.removeEventListener("afterprint", handleAfterPrint);
-      cleanup();
-    };
-
-    frameWindow.addEventListener("afterprint", handleAfterPrint);
-    frameWindow.focus();
-
-    window.setTimeout(() => {
-      frameWindow.print();
-    }, 250);
-  };
-
-  document.body.appendChild(iframe);
-
-  const frameDocument = iframe.contentDocument;
-  if (!frameDocument) {
-    cleanup();
-    return;
-  }
-
-  frameDocument.open();
-  frameDocument.write(html);
-  frameDocument.close();
-}
-
 async function exportSpecificationPdf({
   filename,
   html,
-  isDarkMode,
 }: {
   filename: string;
   html: string;
   isDarkMode: boolean;
 }) {
-  const html2pdf = (await import("html2pdf.js")).default;
-  const parser = new DOMParser();
-  const documentHtml = parser.parseFromString(html, "text/html");
-  const sheet = documentHtml.querySelector<HTMLElement>(".sheet");
-
-  if (!sheet) {
-    throw new Error("Specification sheet template is missing.");
-  }
-
-  const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.left = "-10000px";
-  container.style.top = "0";
-  container.style.width = "210mm";
-  container.style.height = "148mm";
-  container.style.background = isDarkMode ? DARK_THEME.appBackground : LIGHT_THEME.appBackground;
-  documentHtml.querySelectorAll("style").forEach((style) => {
-    container.appendChild(style.cloneNode(true));
+  await printHtmlDocument(html, {
+    title: filename,
+    paperSize: "A5",
+    orientation: "landscape",
   });
-  container.appendChild(sheet);
-  document.body.appendChild(container);
-
-  try {
-    await document.fonts.ready;
-
-    await html2pdf()
-      .set({
-        filename,
-        html2canvas: {
-          backgroundColor: isDarkMode ? DARK_THEME.appBackground : LIGHT_THEME.appBackground,
-          scale: 2,
-          useCORS: true,
-          windowHeight: 560,
-          windowWidth: 794,
-        },
-        image: { quality: 0.98, type: "jpeg" },
-        jsPDF: {
-          format: [210, 148],
-          orientation: "landscape",
-          unit: "mm",
-        },
-        margin: 0,
-      })
-      .from(sheet)
-      .save();
-  } finally {
-    container.remove();
-  }
 }
 
 function DetailField({
@@ -561,9 +487,13 @@ export function ProductDetailModal({
   const handlePrintLabel = () => {
     const currentDarkMode = getCurrentDarkMode(isDarkMode);
 
-    openPrintWindow(
+    void printHtmlDocument(
       buildSpecificationHtml(detailProduct, currentDarkMode),
-      `product-spec-${detailProduct.part_number || detailProduct.id}`,
+      {
+        title: `product-spec-${detailProduct.part_number || detailProduct.id}`,
+        paperSize: "A5",
+        orientation: "landscape",
+      },
     );
   };
 
@@ -723,17 +653,9 @@ export function ProductDetailModal({
                 </span>
                 Print Label
               </button>
-              <button
+              <PdfExportButton
                 onClick={handleExportPdf}
-                className="group flex items-center gap-2 text-[11px] uppercase tracking-[0.15em] text-on-surface-variant transition-colors hover:text-primary"
-                style={{ fontWeight: 700 }}
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[18px] transition-transform group-hover:scale-110">
-                  file_download
-                </span>
-                Export PDF
-              </button>
+              />
             </div>
 
             <div className="flex items-center gap-4">

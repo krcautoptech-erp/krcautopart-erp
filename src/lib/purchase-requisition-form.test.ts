@@ -4,8 +4,16 @@ import {
   formatPurchaseRequisitionItemDescription,
   getPurchaseRequisitionItemKey,
   normalizePurchaseRequisitionRows,
+  totalInventoryByItem,
   validatePurchaseRequisitionSubmission,
 } from "./purchase-requisition-form.ts";
+
+test("totals stock from every warehouse for the product picker", () => {
+  assert.deepEqual(
+    [...totalInventoryByItem([{ item_master_id: 1, on_hand_qty: "20" }, { item_master_id: 1, on_hand_qty: 31 }, { item_master_id: 2, on_hand_qty: 800 }])],
+    [[1, 51], [2, 800]],
+  );
+});
 
 const items = [
   {

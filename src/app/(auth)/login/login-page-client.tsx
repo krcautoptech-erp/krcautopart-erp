@@ -1,9 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useState } from "react";
+
 import { CompanyLogo } from "@/components/company-logo";
 import { useApp } from "@/components/app-context";
 import { LoginForm } from "@/components/login-form";
 import type { CompanyBranding } from "@/lib/company-settings";
+
+const ErpHelpCenter = dynamic(
+  () => import("@/components/erp-help-center").then((module) => module.ErpHelpCenter),
+  { ssr: false },
+);
 
 export function LoginPageClient({
   branding,
@@ -11,11 +19,12 @@ export function LoginPageClient({
   branding: CompanyBranding;
 }) {
   const { toggleDarkMode, isDarkMode } = useApp();
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen">
       <div className="relative hidden overflow-hidden bg-primary lg:flex lg:w-1/2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img
           alt="Industrial Machinery"
           className="absolute inset-0 h-full w-full object-cover grayscale mix-blend-multiply opacity-50"
@@ -50,6 +59,14 @@ export function LoginPageClient({
           >
             {isDarkMode ? "light_mode" : "dark_mode"}
           </button>
+          <button
+            aria-label="เปิดคู่มือเข้าสู่ระบบ"
+            className="material-symbols-outlined ml-md cursor-pointer text-secondary transition-colors hover:text-primary dark:text-on-surface"
+            onClick={() => setIsHelpOpen(true)}
+            type="button"
+          >
+            help
+          </button>
         </header>
 
         <main className="flex flex-grow items-center justify-center p-gutter">
@@ -75,6 +92,14 @@ export function LoginPageClient({
           </span>
         </footer>
       </div>
+      {isHelpOpen ? (
+        <ErpHelpCenter
+          guideIds={["login"]}
+          onClose={() => setIsHelpOpen(false)}
+          pathname="/login"
+          permissionCodes={[]}
+        />
+      ) : null}
     </div>
   );
 }

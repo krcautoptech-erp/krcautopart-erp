@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { clearItemsServerCache } from "@/app/actions/items";
 import {
   normalizeRawMaterialSettingInput,
   validateRawMaterialSettingInput,
@@ -101,7 +102,8 @@ function buildMutationPayload(
   return payload;
 }
 
-function revalidateSettingPaths() {
+async function revalidateSettingPaths() {
+  await clearItemsServerCache();
   revalidatePath(SETTINGS_PATH);
   revalidatePath(INVENTORY_MATERIALS_PATH);
 }
@@ -178,7 +180,7 @@ export async function createRawMaterialSettingAction(
 
     if (error) return { error: error.message };
 
-    revalidateSettingPaths();
+    await revalidateSettingPaths();
     return {
       success: true as const,
       data: mapSettingRow(kind, data as unknown as Record<string, unknown>),
@@ -222,7 +224,7 @@ export async function updateRawMaterialSettingAction(
 
     if (error) return { error: error.message };
 
-    revalidateSettingPaths();
+    await revalidateSettingPaths();
     return {
       success: true as const,
       data: mapSettingRow(kind, data as unknown as Record<string, unknown>),
@@ -254,7 +256,7 @@ export async function toggleRawMaterialSettingStatusAction(
 
     if (error) return { error: error.message };
 
-    revalidateSettingPaths();
+    await revalidateSettingPaths();
     return {
       success: true as const,
       data: mapSettingRow(kind, data as unknown as Record<string, unknown>),
@@ -282,7 +284,7 @@ export async function deleteRawMaterialSettingAction(
     }
     if (error) return { error: error.message };
 
-    revalidateSettingPaths();
+    await revalidateSettingPaths();
     return { success: true as const };
   } catch (error) {
     console.error("deleteRawMaterialSettingAction error:", error);

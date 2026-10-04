@@ -29,7 +29,10 @@ export type AppPermissionRecord = {
     | "cancel"
     | "approve"
     | "reject"
-    | "manage";
+    | "manage"
+    | "export"
+    | "count"
+    | "review";
 };
 
 export type RolePermissionSettingsData = {
@@ -42,7 +45,7 @@ const SETTINGS_PATH = "/settings/users";
 
 function getFriendlyRoleError(message: string) {
   if (message.includes("insufficient_privilege")) {
-    return "เฉพาะ OWNER เท่านั้นที่สามารถจัดการ Role และสิทธิ์ได้";
+    return "คุณไม่มีสิทธิ์จัดการ Role และสิทธิ์";
   }
   if (message.includes("owner_role_is_locked")) {
     return "OWNER เป็น Role สูงสุดและไม่สามารถแก้ไขสิทธิ์ได้";
@@ -133,7 +136,7 @@ export async function getRolePermissionSettingsAction() {
           action: permission.action_code as AppPermissionRecord["action"],
           code: String(permission.permission_code),
           id: Number(permission.id),
-          moduleCode: String(permission.module_code),
+          moduleCode: String(permission.module_code).trim().toLowerCase(),
           moduleName: String(permission.module_name),
           name: String(permission.permission_name),
         })),

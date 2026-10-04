@@ -1,8 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import type { ButtonHTMLAttributes } from "react";
 import { Loader2 } from "lucide-react";
+import { useHasPermission } from "@/components/permission-context";
+import { getExportPermission } from "@/lib/access-control";
 
 type ExcelExportButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   isLoading?: boolean;
@@ -19,6 +22,9 @@ export function ExcelExportButton({
   type = "button",
   ...props
 }: ExcelExportButtonProps) {
+  const canExport = useHasPermission(getExportPermission(usePathname()));
+  if (!canExport) return null;
+
   return (
     <button
       {...props}

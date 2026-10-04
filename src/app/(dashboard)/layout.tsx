@@ -7,6 +7,7 @@ import {
 } from "@/lib/notifications";
 import { getPublicCompanyBranding } from "@/lib/company-settings.server";
 import { createClient } from "@/utils/supabase/server";
+import { UnsavedChangesProvider } from "@/components/unsaved-changes";
 
 export default async function DashboardLayout({
   children,
@@ -21,9 +22,10 @@ export default async function DashboardLayout({
   let notifications: AppNotification[] = [];
   let unreadNotificationCount = 0;
   let isOwner = false;
+  let permissionCodes: string[] = [];
 
   if (user) {
-    const [feedResult, unreadResult, ownerResult] = await Promise.all([
+    const [feedResult, unreadResult, ownerResult, permissionsResult] = await Promise.all([
       supabase
         .from("notification_recipients")
         .select(
@@ -41,13 +43,14 @@ export default async function DashboardLayout({
         )
         .eq("recipient_user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(7),
       supabase
         .from("notification_recipients")
-        .select("notification_id", { count: "exact", head: true })
+        .select("notification_id, notification:notifications!inner(id)", { count: "exact", head: true })
         .eq("recipient_user_id", user.id)
         .is("read_at", null),
       supabase.rpc("is_current_user_owner"),
+      supabase.rpc("get_current_user_permission_codes"),
     ]);
 
     if (feedResult.error || unreadResult.error) {
@@ -67,18 +70,35 @@ export default async function DashboardLayout({
       unreadNotificationCount = unreadResult.count ?? 0;
     }
     isOwner = ownerResult.data === true;
+    if (permissionsResult.error) {
+      if (permissionsResult.error.code !== "PGRST202") {
+        console.error("Unable to load permissions:", permissionsResult.error);
+      }
+      if (isOwner) {
+        const { data } = await supabase
+          .from("app_permissions")
+          .select("permission_code")
+          .eq("status", "active");
+        permissionCodes = (data ?? []).map((permission) => permission.permission_code);
+      }
+    } else {
+      permissionCodes = (permissionsResult.data ?? []) as string[];
+    }
   }
 
   return (
+    <UnsavedChangesProvider>
     <AppShell
       branding={branding}
       initialNotifications={notifications}
       initialUnreadNotificationCount={unreadNotificationCount}
       isOwner={isOwner}
+      permissionCodes={permissionCodes}
       userId={user?.id ?? null}
     >
       {children}
       <BackToTopButton />
     </AppShell>
+    </UnsavedChangesProvider>
   );
 }

@@ -20,6 +20,7 @@ export type PurchaseRequisitionSummary = {
   requested_total_qty: number;
   requester_name: string;
   status: PurchaseRequisitionStatus;
+  po_status?: "none" | "partial" | "complete";
 };
 
 export const PURCHASE_REQUISITION_STATUS_META: Record<
@@ -36,7 +37,7 @@ export const PURCHASE_REQUISITION_STATUS_META: Record<
   approved: {
     chipClass:
       "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
-    label: "อนุมัติแล้ว",
+    label: "พร้อมออก PO",
     summaryClass:
       "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-500",
   },
@@ -50,14 +51,14 @@ export const PURCHASE_REQUISITION_STATUS_META: Record<
   pending_approval: {
     chipClass:
       "border-amber-500 bg-amber-500 text-white dark:border-amber-600 dark:bg-amber-600",
-    label: "รออนุมัติ",
+    label: "รอตรวจสอบ",
     summaryClass:
       "border-amber-500 bg-amber-500 text-white dark:border-amber-600 dark:bg-amber-600",
   },
   rejected: {
     chipClass:
       "border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500",
-    label: "ปฏิเสธ",
+    label: "ส่งกลับแก้ไข",
     summaryClass:
       "border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-500",
   },
@@ -102,6 +103,9 @@ export function formatDisplayDate(value: string | null) {
 
 export function getPurchaseRequisitionStatusLabel(
   status: PurchaseRequisitionStatus,
+  poStatus: PurchaseRequisitionSummary["po_status"] = "none",
 ) {
+  if (status === "approved" && poStatus === "complete") return "ออก PO แล้ว";
+  if (status === "approved" && poStatus === "partial") return "ออก PO บางส่วน";
   return PURCHASE_REQUISITION_STATUS_META[status].label;
 }

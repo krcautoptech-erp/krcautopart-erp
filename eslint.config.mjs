@@ -19,9 +19,25 @@ const eslintConfig = defineConfig([
     "outputs/**",
     ".agent/**",
     ".agents/**",
+    ".superpowers/**",
     ".playwright-cli/**",
     "supabase/**",
   ]),
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+      "@next/next/no-page-custom-font": "off",
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

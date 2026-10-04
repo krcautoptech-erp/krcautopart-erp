@@ -3,6 +3,7 @@
 import {
   AlertCircle,
   CalendarDays,
+  Download,
   FileSpreadsheet,
   Plus,
   Save,
@@ -11,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import React, { useEffect, useMemo, useState, useTransition } from "react";
+import React, { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { reserveBusinessNumberAction } from "@/app/actions/number-series";
 import {
@@ -35,8 +36,16 @@ import {
 } from "@/lib/purchase-requisitions";
 import { ItemTypeBadge } from "@/components/item-type-badge";
 import { toast } from "@/components/toast";
+import { focusKeyboardTarget, runEnterAction } from "@/components/keyboard-workflow";
+import { ItemPicker } from "@/components/item-picker";
+import { CompanyFormLogo } from "@/components/company-logo";
+import { downloadCsvTemplate, readSpreadsheet } from "@/lib/spreadsheet-import";
+
+import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
 
 type PrCreateModalProps = {
+  onPrint: (id: number) => Promise<void>;
+  onNext: () => void;
   documentDate: string;
   materials: PurchaseRequisitionMaterial[];
   onClose: () => void;
@@ -125,6 +134,21 @@ function MaterialSearchModal({
 
   if (!isOpen) return null;
 
+  return <ItemPicker
+    columns={[{ key: "balance", label: "คงเหลือ", className: "item-picker-balance", render: (item) => item.value.onHandQty == null ? "—" : item.value.onHandQty.toLocaleString("en-US", { maximumFractionDigits: 4 }) }]}
+    context="ใบขอซื้อ (PR)"
+    initialSelectedIds={[]}
+    items={filtered.map((material) => {
+      const id = getPurchaseRequisitionItemKey(material);
+      return { id, code: material.code, name: material.name, unit: material.unitSymbol, meta: material.description !== material.name ? material.description : undefined, searchText: `${material.description} ${material.typeCode} ${material.typeName}`, group: `${material.typeCode} — ${material.typeName}`, disabled: alreadySelectedSet.has(id), value: material };
+    })}
+    onClose={onClose}
+    onConfirm={onSelect}
+    single={singleSelectMode}
+  />;
+
+  /* Legacy markup remains below only until all callers finish the shared-picker rollout. */
+
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
     if (next.has(id)) {
@@ -177,6 +201,10 @@ function MaterialSearchModal({
               placeholder="พิมพ์รหัส ชื่อ รายละเอียด หรือประเภท..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(event) => runEnterAction(event, () => {
+                const first = filtered.find((item) => !alreadySelectedSet.has(getPurchaseRequisitionItemKey(item)));
+                if (first) { onSelect([first]); onClose(); }
+              })}
               className="h-[32px] w-full rounded-[6px] border border-outline-variant bg-background pl-9 pr-3 text-[12px] font-medium outline-none focus:border-primary"
               autoFocus
             />
@@ -249,7 +277,7 @@ function MaterialSearchModal({
                         <td className="px-2 py-2 leading-5 [overflow-wrap:anywhere]" title={m.name}>
                           <div className="font-bold text-on-surface">{m.name}</div>
                           {m.description && m.description !== m.name ? (
-                            <div className="truncate text-[10px] font-medium text-secondary" title={m.description}>
+                            <div className="whitespace-normal text-[12px] font-medium text-secondary" title={m.description}>
                               {m.description}
                             </div>
                           ) : null}
@@ -306,11 +334,16 @@ export function PrCreateModal({
   materials,
   onClose,
   requester,
+  onPrint,
+  onNext,
   editPrId,
   initialData,
 }: PrCreateModalProps) {
   const router = useRouter();
-  const isReadOnly = initialData?.status ? initialData.status !== "draft" : false;
+  const [saved, setSaved] = useState<SavedDocument | null>(null);
+  const saveLock = useRef(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const isReadOnly = Boolean(saved) || (initialData?.status ? !["draft", "rejected"].includes(initialData.status) : false);
   const [objective, setObjective] = useState(initialData?.remarks ?? "");
   const [neededByDate, setNeededByDate] = useState(initialData?.neededByDate ?? documentDate);
   const [searchQuery, setSearchQuery] = useState("");
@@ -410,6 +443,7 @@ export function PrCreateModal({
   };
 
   const handleSearchModalSelect = (selectedMaterials: PurchaseRequisitionMaterial[]) => {
+    const quantityTargetId = searchModal.targetRowId ?? items.find((item) => !item.itemKey)?.id ?? (items.length > 0 ? Math.max(...items.map((item) => item.id)) + 1 : 1);
     if (searchModal.targetRowId !== null) {
       if (selectedMaterials[0]) {
         handleMaterialChange(searchModal.targetRowId, selectedMaterials[0]);
@@ -417,6 +451,7 @@ export function PrCreateModal({
     } else {
       handleBulkAddMaterials(selectedMaterials);
     }
+    if (selectedMaterials.length > 0) focusKeyboardTarget(`pr-quantity-${quantityTargetId}`);
   };
 
   const handleBulkAddMaterials = (selectedMaterials: PurchaseRequisitionMaterial[]) => {
@@ -518,6 +553,46 @@ export function PrCreateModal({
     ]);
   };
 
+  const handleImport = async (file?: File) => {
+    if (!file) return;
+    try {
+      const { headers, rows } = await readSpreadsheet(file);
+      const normalized = headers.map((header) => header.trim().toLowerCase().replace(/[\s._-]/g, ""));
+      const column = (...names: string[]) => normalized.findIndex((header) => names.includes(header));
+      const codeColumn = column("รหัสสินค้า", "รหัส", "itemcode", "code");
+      const quantityColumn = column("จำนวน", "qty", "quantity");
+      const noteColumn = column("หมายเหตุ", "note", "remark", "remarks");
+      const dateColumn = column("วันที่ต้องการ", "neededbydate", "requireddate");
+      if (codeColumn < 0 || quantityColumn < 0) throw new Error("ต้องมีคอลัมน์ รหัสสินค้า และ จำนวน");
+
+      const materialByCode = new Map(materials.map((material) => [material.code.trim().toLowerCase(), material]));
+      const unknown: string[] = [];
+      const imported = rows.flatMap((row) => {
+        const code = row[codeColumn]?.trim();
+        const material = materialByCode.get(code?.toLowerCase());
+        const quantity = Number((row[quantityColumn] ?? "").replace(/,/g, ""));
+        if (!material || !Number.isFinite(quantity) || quantity <= 0) {
+          unknown.push(code || "(ไม่มีรหัส)");
+          return [];
+        }
+        return [{ material, quantity: String(quantity), note: row[noteColumn] ?? "", neededByDate: row[dateColumn] || neededByDate }];
+      });
+      if (!imported.length) throw new Error("ไม่พบรายการที่นำเข้าได้");
+
+      setItems((current) => imported.reduce((next, entry) => {
+        const itemKey = getPurchaseRequisitionItemKey(entry.material);
+        const existing = next.find((item) => item.itemKey === itemKey);
+        if (existing) return next.map((item) => item.id === existing.id ? { ...item, quantity: entry.quantity, note: entry.note, neededByDate: entry.neededByDate } : item);
+        const empty = next.find((item) => !item.itemKey);
+        if (empty) return next.map((item) => item.id === empty.id ? { ...item, itemKey, quantity: entry.quantity, note: entry.note, neededByDate: entry.neededByDate } : item);
+        return [...next, { id: Math.max(0, ...next.map((item) => item.id)) + 1, itemKey, quantity: entry.quantity, note: entry.note, neededByDate: entry.neededByDate }];
+      }, [...current]));
+      toast.success(`นำเข้า ${imported.length} รายการแล้ว`, unknown.length ? `ข้าม ${unknown.length} รายการที่ไม่พบรหัสหรือจำนวนไม่ถูกต้อง` : "ตรวจสอบรายการก่อนบันทึก");
+    } catch (error) {
+      toast.error("นำเข้าไม่สำเร็จ", error instanceof Error ? error.message : "ไม่สามารถอ่านไฟล์ได้");
+    }
+  };
+
   const handleRemoveItem = (id: number) => {
     if (items.length === 1) {
       // Keep at least one row, just reset it
@@ -536,6 +611,7 @@ export function PrCreateModal({
   };
 
   const handleSave = (status: "draft" | "pending_approval") => {
+    if (saveLock.current || saved || isReadOnly) return;
     setFeedback(null);
 
     if (!editPrId && !reservedPrNumber) {
@@ -570,7 +646,9 @@ export function PrCreateModal({
       }
     }
 
+    saveLock.current = true;
     startTransition(async () => {
+      try {
       const res =
         status === "draft"
           ? await savePurchaseRequisitionDraftAction(payload, editPrId)
@@ -584,31 +662,30 @@ export function PrCreateModal({
         const successMsg =
           status === "draft"
             ? `บันทึกร่างใบขอซื้อ ${prNumber} เรียบร้อยแล้ว`
-            : `ส่งใบขอซื้อ ${prNumber} เพื่ออนุมัติเรียบร้อยแล้ว`;
+            : `ส่งใบขอซื้อ ${prNumber} ให้ฝ่ายจัดซื้อตรวจสอบเรียบร้อยแล้ว`;
         setFeedback({
           tone: "success",
           message: successMsg,
         });
-        toast.success(status === "draft" ? "บันทึกร่างสำเร็จ" : "ส่งขออนุมัติสำเร็จ", prNumber);
-        setTimeout(() => {
-          router.refresh();
-          onClose();
-        }, 1200);
+        toast.success(status === "draft" ? "บันทึกร่างสำเร็จ" : "ส่งให้ฝ่ายจัดซื้อตรวจสอบสำเร็จ", prNumber);
+        setSaved({ id: res.requisitionId, number: prNumber });
+        setReservedPrNumber(prNumber);
+        router.refresh();
       }
+      } catch { setFeedback({ tone: "error", message: "ไม่สามารถยืนยันผลการบันทึก กรุณาตรวจสอบรายการก่อนลองอีกครั้ง" }); }
+      finally { saveLock.current = false; }
     });
   };
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-0 backdrop-blur-sm sm:p-2.5">
-      <div className="flex h-[100dvh] w-full max-w-[1120px] flex-col overflow-hidden border border-red-200 bg-white shadow-2xl dark:border-red-500/25 dark:bg-[#171313] sm:h-auto sm:max-h-[90dvh] sm:rounded-[8px]">
+      <div className="document-form flex h-[100dvh] w-full max-w-[1120px] flex-col overflow-hidden border border-red-200 bg-white shadow-2xl dark:border-red-500/25 dark:bg-[#171313] sm:h-auto sm:max-h-[90dvh] sm:rounded-[8px]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-red-100 px-3 py-2.5 dark:border-red-500/20 sm:px-4">
+        <div className="document-form-header flex items-center justify-between border-b border-red-100 px-3 py-2.5 dark:border-red-500/20 sm:px-4">
           <div className="flex items-center gap-3">
-            <span className="rounded-[4px] bg-primary px-2.5 py-1 text-[11px] font-bold tracking-[0.08em] text-white">
-              KRC ERP
-            </span>
+            <CompanyFormLogo className="document-brand" />
             <h2 className="text-[16px] font-bold text-on-surface">
-              {editPrId ? "แก้ไขใบขอซื้อ (PR)" : "เปิดใบขอซื้อ (PR)"}
+              {editPrId ? "แก้ไขใบขอซื้อ (PR)" : "สร้างใบขอซื้อ (PR)"}
             </h2>
           </div>
 
@@ -624,8 +701,8 @@ export function PrCreateModal({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto">
-          <div className="space-y-0">
-            {isReadOnly && (
+          <fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
+            {isReadOnly && !saved && (
               <div className="px-4 pt-3">
                 <div className="flex items-center gap-2 p-3 rounded-[6px] text-[13px] font-bold bg-amber-50 border border-amber-200 text-amber-900 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-300">
                   <AlertCircle size={16} className="text-amber-800 dark:text-amber-400 shrink-0" />
@@ -651,18 +728,27 @@ export function PrCreateModal({
 
             {/* Document Info Section */}
             <section className="border-b border-red-100 px-3 py-2.5 dark:border-red-500/20 sm:px-4">
-              <SectionHeading number="01" title="ข้อมูลเอกสาร" />
-
-              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-[1.08fr_0.8fr_0.94fr_1.1fr_0.94fr]">
+              <div className="document-fields">
                 <ReadOnlyField
                   description="ระบบสร้างให้อัตโนมัติเมื่อกดบันทึก"
                   label="เลขที่ PR"
-                  value={editPrId ? "เลขเอกสารเดิม" : reservedPrNumber || "กำลังสร้างเลข..."}
+                  value={saved?.number || (editPrId ? "เลขเอกสารเดิม" : reservedPrNumber || "กำลังสร้างเลข...")}
                 />
                 <ReadOnlyField
                   description="ระบบกำหนดให้อัตโนมัติ"
                   label="วันที่เอกสาร"
                   value={formatDisplayDate(documentDate)}
+                />
+
+                <ReadOnlyField
+                  description="ผู้ขอซื้อดึงจากบัญชีผู้ใช้งาน"
+                  label="ผู้ขอซื้อ"
+                  value={requester.name}
+                />
+                <ReadOnlyField
+                  description="แผนกดึงจากบัญชีผู้ใช้งาน"
+                  label="แผนก"
+                  value={requester.departmentName}
                 />
                 <IconField
                   icon={<CalendarDays size={16} />}
@@ -681,23 +767,13 @@ export function PrCreateModal({
                   value={neededByDate}
                   disabled={isPending || isReadOnly}
                 />
-                <ReadOnlyField
-                  description="ผู้ขอซื้อดึงจากบัญชีผู้ใช้งาน"
-                  label="ผู้ขอซื้อ"
-                  value={requester.name}
-                />
-                <ReadOnlyField
-                  description="แผนกดึงจากบัญชีผู้ใช้งาน"
-                  label="แผนก"
-                  value={requester.departmentName}
-                />
               </div>
             </section>
 
             {/* Line Items Section */}
             <section className="px-3 py-2.5 sm:px-4">
-              <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
-                <SectionHeading number="02" title="รายการขอซื้อ" />
+              <div className="document-toolbar">
+                <SectionHeading number="02" title="รายการสินค้า" />
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <label className="relative min-w-0 flex-[1_1_100%] sm:min-w-[280px] xl:flex-none">
@@ -716,6 +792,13 @@ export function PrCreateModal({
 
                   {!isReadOnly && (
                     <>
+                      <input
+                        accept=".xlsx,.csv,.xls,.xml"
+                        className="hidden"
+                        onChange={(event) => { void handleImport(event.target.files?.[0]); event.target.value = ""; }}
+                        ref={importInputRef}
+                        type="file"
+                      />
                       <button
                         className="inline-flex h-[32px] items-center gap-1.5 rounded-[6px] bg-primary px-3.5 text-[12px] font-bold text-white transition-colors hover:bg-primary/95 disabled:opacity-50 border-none cursor-pointer"
                         onClick={() => openSearchModal(null)}
@@ -738,12 +821,21 @@ export function PrCreateModal({
 
                       <button
                         className="inline-flex h-[32px] items-center gap-1.5 rounded-[6px] border border-red-200 bg-white px-3.5 text-[12px] font-bold text-on-surface transition-colors hover:bg-surface-container-low disabled:opacity-50 dark:border-red-500/25 dark:bg-[#171313]"
-                        onClick={() => toast.info("ฟังก์ชันนำเข้าจาก Excel อยู่ระหว่างการพัฒนา")}
+                        onClick={() => importInputRef.current?.click()}
                         type="button"
                         disabled={isPending}
                       >
                         <FileSpreadsheet size={15} />
                         นำเข้าจาก Excel
+                      </button>
+                      <button
+                        className="inline-flex h-[32px] items-center gap-1.5 rounded-[6px] border border-outline-variant bg-white px-3 text-[12px] font-bold text-on-surface hover:bg-surface-container-low dark:bg-[#171313]"
+                        onClick={() => downloadCsvTemplate("pr-item-import-template.csv", [["รหัสสินค้า", "จำนวน", "วันที่ต้องการ", "หมายเหตุ"], ["RM001", "10", neededByDate, ""]])}
+                        type="button"
+                        disabled={isPending}
+                      >
+                        <Download size={14} />
+                        แม่แบบ
                       </button>
                     </>
                   )}
@@ -753,7 +845,7 @@ export function PrCreateModal({
               {/* Items Table */}
               <div className="mt-2.5 overflow-hidden rounded-[7px] border border-red-100 dark:border-red-500/20">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1020px] border-collapse text-left table-fixed">
+                  <table className="document-entry-table document-pr-table w-full border-collapse text-left table-fixed">
                     <thead className="bg-gray-50 text-[10px] font-bold text-on-surface dark:bg-white/5">
                       <tr className="h-[32px]">
                         <th className="w-[6%] border-b border-r border-red-100 px-3 dark:border-red-500/20">
@@ -812,9 +904,9 @@ export function PrCreateModal({
                             <td className="border-r border-red-100 px-3 py-1.5 text-[11px] text-secondary dark:border-red-500/15" title={selectedMat?.name ?? ""}>
                               {selectedMat ? (
                                 <div>
-                                  <div className="font-bold text-on-surface">{selectedMat.name}</div>
+                                  <DocumentProductName name={selectedMat.name} />
                                   {selectedMat.description && selectedMat.description !== selectedMat.name ? (
-                                    <div className="truncate text-[10px] font-medium text-secondary" title={selectedMat.description}>
+                                    <div className="whitespace-normal text-[12px] font-medium text-secondary" title={selectedMat.description}>
                                       {selectedMat.description}
                                     </div>
                                   ) : null}
@@ -825,6 +917,7 @@ export function PrCreateModal({
                             </td>
                             <td className="border-r border-red-100 px-2 dark:border-red-500/15">
                               <input
+                                data-keyboard-target={`pr-quantity-${item.id}`}
                                 type="number"
                                 step={selectedMat?.allowsDecimal ? "any" : "1"}
                                 min="0.001"
@@ -898,47 +991,13 @@ export function PrCreateModal({
                 />
               </div>
             </section>
-          </div>
+          </fieldset>
         </div>
 
         {/* Modal Footer Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-red-100 px-4 py-2.5 dark:border-red-500/20">
-          {isReadOnly ? (
-            <div />
-          ) : (
-            <button
-              className="inline-flex h-[32px] items-center gap-1.5 rounded-[6px] border border-primary px-3.5 text-[12px] font-bold text-primary transition-colors hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-500/10"
-              onClick={() => handleSave("draft")}
-              type="button"
-              disabled={isPending}
-            >
-              <Save size={14} />
-              บันทึกร่าง
-            </button>
-          )}
-
-          <div className="flex items-center gap-3">
-            <button
-              className="h-[32px] rounded-[6px] border border-red-200 px-6 text-[12px] font-bold text-on-surface transition-colors hover:bg-surface-container disabled:opacity-50 dark:border-red-500/25"
-              onClick={onClose}
-              type="button"
-              disabled={isPending}
-            >
-              {isReadOnly ? "ปิด" : "ยกเลิก"}
-            </button>
-            {!isReadOnly && (
-              <button
-                className="inline-flex h-[32px] items-center gap-1.5 rounded-[6px] bg-primary px-6 text-[12px] font-bold text-white transition-colors hover:bg-primary/95 disabled:opacity-50"
-                onClick={() => handleSave("pending_approval")}
-                type="button"
-                disabled={isPending}
-              >
-                <SendHorizontal size={14} />
-                {isPending ? "กำลังส่งอนุมัติ..." : "ส่งอนุมัติ"}
-              </button>
-            )}
-          </div>
-        </div>
+        <DocumentFormFooter saved={saved} pending={isPending} summary={<>{items.filter(item => item.itemKey).length} รายการ</>} onClose={onClose} onPrint={onPrint} onNext={onNext}>
+          {!isReadOnly && <><button type="button" disabled={isPending} onClick={() => handleSave("draft")}><Save size={15} className="inline mr-2" />บันทึกร่าง</button><button className="primary" type="button" disabled={isPending} onClick={() => handleSave("pending_approval")}><SendHorizontal size={15} className="inline mr-2" />{isPending ? "กำลังบันทึก..." : "ส่งตรวจสอบ"}</button></>}
+        </DocumentFormFooter>
       </div>
 
       {searchModal.isOpen ? (
@@ -958,7 +1017,7 @@ export function PrCreateModal({
 function SectionHeading({ number, title }: { number: string; title: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[13px] font-bold tracking-[0.08em] text-primary">{number}</span>
+      <span className="document-section-number">{number}</span>
       <h3 className="text-[16px] font-bold text-on-surface">{title}</h3>
     </div>
   );
@@ -974,16 +1033,12 @@ function ReadOnlyField({
   value: string;
 }) {
   return (
-    <div className="block">
+    <div className="document-field">
       <span className="mb-1.5 block text-[12px] font-bold text-on-surface">{label}</span>
       <div className="flex h-[36px] items-center rounded-[6px] border border-red-100 bg-gray-50 px-3 text-[13px] font-semibold text-secondary dark:border-red-500/20 dark:bg-white/5">
         {value}
       </div>
-      {description ? (
-        <span className="mt-1 block text-[10px] font-medium text-secondary/70">
-          {description}
-        </span>
-      ) : null}
+      {description ? <small>{description}</small> : null}
     </div>
   );
 }
@@ -1012,7 +1067,7 @@ function IconField({
   const editable = typeof onValueChange === "function" && !disabled;
 
   return (
-    <div className="block">
+    <div className="document-field">
       <span className="mb-1.5 block text-[12px] font-bold text-on-surface">{label}</span>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-secondary">
@@ -1033,11 +1088,7 @@ function IconField({
           </span>
         ) : null}
       </div>
-      {description ? (
-        <span className="mt-1 block text-[10px] font-medium text-secondary/70">
-          {description}
-        </span>
-      ) : null}
+      {description ? <small>{description}</small> : null}
     </div>
   );
 }
@@ -1058,7 +1109,7 @@ function TextAreaField({
   disabled?: boolean;
 }) {
   return (
-    <div className="block">
+    <div className="document-note">
       <span className="mb-1.5 block text-[12px] font-bold text-on-surface">{label}</span>
       <div className="relative">
         <textarea

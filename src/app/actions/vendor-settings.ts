@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { clearItemsServerCache } from "@/app/actions/items";
 import { createClient } from "@/utils/supabase/server";
 import { reserveBusinessNumberAction } from "@/app/actions/number-series";
 
@@ -238,6 +239,7 @@ export async function createVendorSettingAction(
     }
 
     revalidatePath(PARTNER_SETTINGS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: data as VendorSettingRecord };
   } catch (error) {
     console.error("Vendor setting create exception:", error);
@@ -276,6 +278,7 @@ export async function updateVendorSettingAction(
     }
 
     revalidatePath(PARTNER_SETTINGS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: data as VendorSettingRecord };
   } catch (error) {
     console.error("Vendor setting update exception:", error);
@@ -301,6 +304,7 @@ export async function deleteVendorSettingAction(
     }
 
     revalidatePath(PARTNER_SETTINGS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: null };
   } catch (error) {
     console.error("Vendor setting delete exception:", error);
@@ -335,6 +339,7 @@ export async function toggleVendorSettingStatusAction(
     }
 
     revalidatePath(PARTNER_SETTINGS_PATH);
+    await clearItemsServerCache();
     return { success: true, data: data as VendorSettingRecord };
   } catch (error) {
     console.error("Vendor setting toggle exception:", error);

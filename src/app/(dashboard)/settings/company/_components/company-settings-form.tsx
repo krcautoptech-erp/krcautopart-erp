@@ -95,14 +95,16 @@ function SectionHeading({
 
 export function CompanySettingsForm({
   initialData,
+  initialTab = "company",
 }: {
   initialData: CompanySettingsData;
+  initialTab?: SettingsTab;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const lightInputRef = useRef<HTMLInputElement>(null);
   const darkInputRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("company");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [profile, setProfile] = useState<CompanyProfile>(initialData.profile);
   const [documentSettings, setDocumentSettings] =
     useState<CompanyDocumentSettings>(initialData.documentSettings);
@@ -309,14 +311,14 @@ export function CompanySettingsForm({
         </button>
       </header>
 
-      <nav className="flex h-11 items-end gap-8 border-b border-outline-variant px-6">
+      <nav className="flex min-w-0 items-end gap-2 overflow-x-auto border-b border-outline-variant px-3 sm:gap-8 sm:px-6">
         {[
           { id: "company" as const, label: "ข้อมูลบริษัท" },
           { id: "branches" as const, label: "สาขาและที่อยู่" },
           { id: "documents" as const, label: "รูปแบบเอกสาร" },
         ].map((tab) => (
           <button
-            className={`h-11 border-b-2 px-4 text-[13px] font-bold transition-colors ${
+            className={`h-11 shrink-0 whitespace-nowrap border-b-2 px-2 text-[13px] font-bold transition-colors sm:px-4 ${
               activeTab === tab.id
                 ? "border-primary text-primary"
                 : "border-transparent text-secondary hover:text-on-surface"
@@ -344,14 +346,14 @@ export function CompanySettingsForm({
       ) : null}
 
       <div
-        className={`min-h-[660px] grid-cols-1 divide-y divide-outline-variant xl:grid-cols-[58%_42%] xl:divide-x xl:divide-y-0 ${
+        className={`grid-cols-1 divide-y divide-outline-variant xl:min-h-[660px] xl:grid-cols-[58%_42%] xl:divide-x xl:divide-y-0 ${
           activeTab === "company" ? "grid" : "hidden"
         }`}
       >
-          <div className="space-y-5 px-6 py-5">
+          <div className="min-w-0 space-y-5 px-3 py-5 sm:px-6">
             <section className="space-y-3">
               <SectionHeading number="01" title="ข้อมูลนิติบุคคล" />
-              <div className="grid grid-cols-[180px_1fr] items-center gap-x-4 gap-y-2">
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <span className="text-[12px] font-semibold">
                   ชื่อบริษัทภาษาไทย <b className="text-primary">*</b>
                 </span>
@@ -440,7 +442,7 @@ export function CompanySettingsForm({
 
             <section className="space-y-3">
               <SectionHeading number="02" title="ที่อยู่จดทะเบียน" />
-              <div className="grid grid-cols-[180px_1fr] items-center gap-x-4 gap-y-2">
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <span className="text-[12px] font-semibold">
                   เลขที่/อาคาร/ถนน
                 </span>
@@ -522,7 +524,7 @@ export function CompanySettingsForm({
 
             <section className="space-y-3">
               <SectionHeading number="03" title="ข้อมูลติดต่อ" />
-              <div className="grid grid-cols-[180px_1fr] items-center gap-x-4 gap-y-2">
+              <div className="grid grid-cols-1 items-center gap-x-4 gap-y-2 sm:grid-cols-[180px_minmax(0,1fr)]">
                 <span className="text-[12px] font-semibold">เบอร์โทรศัพท์</span>
                 <input
                   className={inputClass}
@@ -561,7 +563,7 @@ export function CompanySettingsForm({
             </section>
           </div>
 
-          <aside className="space-y-5 px-6 py-5">
+          <aside className="min-w-0 space-y-5 px-3 py-5 sm:px-6">
             <input
               accept="image/png,image/jpeg,image/webp"
               className="hidden"
@@ -596,7 +598,7 @@ export function CompanySettingsForm({
                     โหมดสว่าง
                   </div>
                   <div className="flex h-40 items-center justify-center bg-white p-5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    { }
                     <img
                       alt="ตัวอย่างโลโก้โหมดสว่าง"
                       className="max-h-24 max-w-full object-contain"
@@ -610,7 +612,7 @@ export function CompanySettingsForm({
                     โหมดมืด
                   </div>
                   <div className="flex h-40 items-center justify-center bg-[#171717] p-5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    { }
                     <img
                       alt="ตัวอย่างโลโก้โหมดมืด"
                       className={`max-h-24 max-w-full object-contain ${
@@ -629,7 +631,7 @@ export function CompanySettingsForm({
               <h2 className="text-[14px] font-bold text-on-surface">
                 การตั้งค่าโลโก้
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   className="flex h-9 items-center gap-2 rounded-[3px] border border-primary px-4 text-[12px] font-bold text-primary hover:bg-primary/5 disabled:opacity-50"
                   disabled={!canManage}
@@ -648,7 +650,7 @@ export function CompanySettingsForm({
                 <h3 className="mb-2 text-[12px] font-bold text-on-surface">
                   โลโก้สำหรับโหมดมืด
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {[
                     {
                       description: "ระบบแปลงโลโก้หลักเป็นสีขาว",
@@ -701,7 +703,7 @@ export function CompanySettingsForm({
       </div>
 
       {activeTab === "branches" ? (
-        <div className="space-y-5 px-6 py-5">
+        <div className="min-w-0 space-y-5 px-3 py-5 sm:px-6">
           <div className="flex items-center justify-between border-b border-outline-variant pb-3">
             <div>
               <h2 className="text-[16px] font-bold text-on-surface">
@@ -715,8 +717,8 @@ export function CompanySettingsForm({
               {initialData.branches.length || 1} สาขา
             </span>
           </div>
-          <div className="overflow-hidden border border-outline-variant">
-            <table className="w-full border-collapse text-[12px]">
+          <div className="max-w-full overflow-x-auto border border-outline-variant">
+            <table className="w-full min-w-[680px] border-collapse text-[12px]">
               <thead className="bg-surface-container-low text-left">
                 <tr>
                   <th className="border-b border-r border-outline-variant px-4 py-2.5">
@@ -787,14 +789,14 @@ export function CompanySettingsForm({
       ) : null}
 
       <div
-        className={`min-h-[590px] grid-cols-1 divide-y divide-outline-variant xl:grid-cols-[44%_56%] xl:divide-x xl:divide-y-0 ${
+        className={`grid-cols-1 divide-y divide-outline-variant xl:min-h-[590px] xl:grid-cols-[44%_56%] xl:divide-x xl:divide-y-0 ${
           activeTab === "documents" ? "grid" : "hidden"
         }`}
       >
-          <div className="space-y-6 px-6 py-5">
+          <div className="min-w-0 space-y-6 px-3 py-5 sm:px-6">
             <section className="space-y-3">
               <SectionHeading number="01" title="รูปแบบหัวเอกสาร" />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="รูปแบบหัวเอกสาร">
                   <select
                     className={inputClass}
@@ -920,7 +922,7 @@ export function CompanySettingsForm({
             </section>
           </div>
 
-          <aside className="space-y-5 px-6 py-5">
+          <aside className="min-w-0 space-y-5 px-3 py-5 sm:px-6">
             <DocumentPreview
               context={previewDocumentContext}
             />

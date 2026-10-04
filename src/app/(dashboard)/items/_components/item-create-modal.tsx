@@ -66,7 +66,7 @@ const fieldSections: { id: string; title: string; keys: ItemFormFieldKey[] }[] =
     },
   ];
 
-function emptyForm(typeId: number, unitId: number | null): GenericItemInput {
+function emptyForm(typeId: number, unitId: number | null, warehouseId: number | null = null): GenericItemInput {
   return {
     typeId,
     code: "",
@@ -76,7 +76,7 @@ function emptyForm(typeId: number, unitId: number | null): GenericItemInput {
     unitId,
     shelfLifeDays: null,
     reorderPoint: null,
-    warehouseId: null,
+    warehouseId,
     groupId: null,
     vendorId: null,
     thickness: null,
@@ -189,11 +189,12 @@ export function ItemCreateModal({
     types.find((type) => type.id === item?.form.typeId) ??
     types.find((type) => type.code === initialTypeCode) ??
     types[0];
+  const fgWarehouseId = data.warehouses.find((warehouse) => warehouse.code === "WH01")?.id ?? null;
   const isEdit = Boolean(item);
   const [form, setForm] = useState(() =>
     item
       ? formFromItem(item, initialType?.id ?? 0, data.units[0]?.id ?? null)
-      : emptyForm(initialType?.id ?? 0, data.units[0]?.id ?? null),
+      : emptyForm(initialType?.id ?? 0, data.units[0]?.id ?? null, initialType?.code === "FG" ? fgWarehouseId : null),
   );
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     main: true,
@@ -294,7 +295,7 @@ export function ItemCreateModal({
   }
   function changeType(typeId: number) {
     if (isEdit) return;
-    setForm(emptyForm(typeId, data.units[0]?.id ?? null));
+    setForm(emptyForm(typeId, data.units[0]?.id ?? null, types.find((item) => item.id === typeId)?.code === "FG" ? fgWarehouseId : null));
     setPreviewCode(null);
     setError("");
   }

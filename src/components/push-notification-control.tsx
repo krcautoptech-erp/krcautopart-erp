@@ -192,7 +192,7 @@ export function PushNotificationControl() {
 
   if (state === "install-required") {
     return (
-      <div className="border-t border-outline-variant bg-surface-container-low px-4 py-3">
+      <div className="rounded-[4px] border border-outline-variant bg-surface-container-lowest px-4 py-3">
         <p className="text-[12px] font-bold text-on-surface">
           รับการแจ้งเตือนบน iPhone
         </p>
@@ -205,7 +205,7 @@ export function PushNotificationControl() {
   }
 
   return (
-    <div className="border-t border-outline-variant bg-surface-container-low px-4 py-3">
+    <div className="rounded-[4px] border border-outline-variant bg-surface-container-lowest px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[12px] font-bold text-on-surface">

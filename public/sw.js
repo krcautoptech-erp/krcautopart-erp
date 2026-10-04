@@ -1,11 +1,55 @@
 const DEFAULT_URL = "/purchase/pr";
+const STATIC_CACHE = "krc-erp-static-v2";
+const PRECACHE_URLS = [
+  "/offline.html",
+  "/pwa/icon-192.png",
+  "/pwa/icon-192-maskable.png",
+  "/pwa/icon-512.png",
+  "/pwa/icon-512-maskable.png",
+  "/pwa/apple-touch-icon.png",
+  "/pwa/badge-96.png",
+];
 
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith("krc-erp-static-") && key !== STATIC_CACHE).map((key) => caches.delete(key)))),
+      self.clients.claim(),
+    ]),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+    return;
+  }
+  const isStaticAsset = event.request.method === "GET"
+    && url.origin === self.location.origin
+    && (url.pathname.startsWith("/pwa/") || url.pathname.startsWith("/fonts/"));
+  if (!isStaticAsset) return;
+
+  event.respondWith(
+    caches.match(event.request).then(async (cached) => {
+      if (cached) return cached;
+
+      const response = await fetch(event.request);
+      if (!response.ok) return response;
+
+      // Clone immediately. Once the original response is returned to the page,
+      // its body may be consumed before an asynchronous cache callback runs.
+      const responseForCache = response.clone();
+      const cache = await caches.open(STATIC_CACHE);
+      await cache.put(event.request, responseForCache);
+      return response;
+    }),
+  );
 });
 
 self.addEventListener("push", (event) => {

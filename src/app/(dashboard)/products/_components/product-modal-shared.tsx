@@ -3,6 +3,7 @@
 import React from "react";
 import { Upload, X } from "lucide-react";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 export type ProductDraft = {
   part_number: string;
@@ -40,9 +41,7 @@ export function ProductModalShell({
       <div className="relative flex h-[100dvh] w-full max-w-[960px] flex-col overflow-hidden border border-outline-variant bg-white shadow-2xl animate-in fade-in zoom-in duration-200 dark:bg-surface-container-lowest sm:h-auto sm:max-h-[92dvh] sm:rounded">
         <header className="relative z-10 flex min-h-12 items-start justify-between gap-sm border-b border-outline bg-white/95 px-sm py-2 backdrop-blur-sm dark:bg-surface-container-lowest/95 sm:items-center sm:px-md">
           <div className="flex min-w-0 items-center gap-sm">
-            <div className="shrink-0 rounded-sm bg-primary px-2 py-0.5 text-[11px] font-bold leading-none text-white">
-              KRC ERP
-            </div>
+            <CompanyFormLogo className="shrink-0" />
             <h1
               className="font-headline-md text-[16px] leading-tight tracking-tight text-on-surface sm:text-[18px]"
               style={{ fontWeight: 700 }}

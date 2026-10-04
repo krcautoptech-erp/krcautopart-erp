@@ -1,14 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import {
   Edit3,
@@ -16,6 +13,7 @@ import {
   Image as ImageIcon,
   MoreVertical,
   PackagePlus,
+  Plus,
   Search,
   Settings2,
   Trash2,
@@ -47,6 +45,9 @@ import {
   renderColumnValue,
 } from "./item-dynamic-columns";
 import { ItemSideDrawer } from "./item-side-drawer";
+import { MobileEntityList } from "@/components/mobile-entity-list";
+import { useHasPermission } from "@/components/permission-context";
+import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 const inputClass =
   "h-10 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest px-3 text-[14px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary disabled:!bg-surface-container-lowest disabled:text-on-surface disabled:opacity-100";
@@ -66,7 +67,9 @@ export function ItemCatalog({
   initialPageSize?: number;
   initialSearch?: string;
 }) {
-  const router = useRouter();
+  const canCreate = useHasPermission("items.create");
+  const canEdit = useHasPermission("items.edit");
+  const canDelete = useHasPermission("items.delete");
   const [type, setType] = useState(() =>
     initialData.types.some((item) => item.code === initialTypeCode)
       ? initialTypeCode
@@ -209,6 +212,8 @@ export function ItemCatalog({
     () => initialData.types.find((item) => item.code === type),
     [initialData.types, type],
   );
+
+  const mobileFilterCount = (type === "ALL" ? 0 : 1) + (pageSize === 50 ? 0 : 1);
 
   // Lookups maps for high-speed O(1) cell rendering
   const lookups = useMemo(
@@ -546,13 +551,45 @@ export function ItemCatalog({
 
   return (
     <section className="min-w-0 bg-surface-container-lowest text-on-surface">
-      <ItemMasterTabs
+      <div className="hidden md:block"><ItemMasterTabs
         activeType={type}
         itemTypes={activeTypes}
         onTypeChange={changeType}
         stayInCatalog={true}
-      />
-      <header className="mt-4 flex flex-wrap items-start justify-between gap-4 border-b border-outline-variant px-1 pb-4">
+      /></div>
+
+      <section className="md:hidden">
+        <h1 className="px-4 pt-4 text-[28px] font-extrabold leading-tight">รายการสินค้า</h1>
+        <div className="px-4 pt-4">
+          <MobileListFilters
+            activeCount={mobileFilterCount}
+            onClear={() => { changeType("ALL"); handlePageSizeChange(50); }}
+            search={<ListSearchField onChange={handleQueryChange} placeholder="ค้นหารหัส ชื่อรายการ Part No. หรือรุ่น..." value={query} />}
+          >
+            <ListFilterSelect label="ประเภทสินค้า" onChange={changeType} value={type}><option value="ALL">ทั้งหมด</option>{activeTypes.map((entry) => <option key={entry.id} value={entry.code}>{entry.name}</option>)}</ListFilterSelect>
+            <ListFilterSelect label="จำนวนรายการต่อหน้า" onChange={(value) => handlePageSizeChange(Number(value))} value={String(pageSize)}><option value="25">25 รายการ</option><option value="50">50 รายการ</option><option value="100">100 รายการ</option><option value="200">200 รายการ</option></ListFilterSelect>
+          </MobileListFilters>
+          {canCreate ? <button className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-[5px] bg-primary text-[15px] font-bold text-white" onClick={openCreate} type="button"><Plus size={23} />เพิ่มรายการ</button> : null}
+        </div>
+
+        <div className="mt-4 border-t border-outline-variant">
+          <MobileEntityList
+            actionLabel={(item) => `จัดการ ${item.code}`}
+            disabled={isFetching}
+            emptyText="ไม่พบรายการสินค้าตามเงื่อนไขที่ค้นหา"
+            getKey={(item) => item.id}
+            items={items}
+            meta={(item) => <>{item.typeName} · หน่วย {item.unit || "-"}</>}
+            onAction={(item, event) => handleToggleMenu(event, item)}
+            onOpen={setDrawerItem}
+            primary={(item) => item.code}
+            secondary={(item) => item.name}
+            status={(item) => <span className={`rounded-[4px] px-2.5 py-1 text-[12px] font-bold text-white ${item.status === "active" ? "bg-emerald-600" : "bg-neutral-500"}`}>{item.status === "active" ? "ใช้งาน" : "ระงับ"}</span>}
+          />
+        </div>
+      </section>
+
+      <header className="mt-4 hidden flex-wrap items-start justify-between gap-4 border-b border-outline-variant px-1 pb-4 md:flex">
         <div>
           <h1 className="text-[28px] font-bold leading-tight">
             รายการสินค้า
@@ -575,7 +612,7 @@ export function ItemCatalog({
             onClick={exportCsv}
             isLoading={isExporting}
           />
-          {initialData.canManage && (
+          {canCreate && (
             <button
               onClick={openCreate}
               className="flex h-10 items-center gap-2 rounded-[3px] bg-primary px-4 text-[14px] font-bold text-on-primary hover:bg-primary/90"
@@ -589,7 +626,7 @@ export function ItemCatalog({
       </header>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center gap-3 py-4">
+      <div className="hidden flex-wrap items-center gap-3 py-4 md:flex">
         <label className="relative min-w-[280px] flex-1">
           <Search className="absolute left-3 top-2.5 text-on-surface-variant" size={19} />
           <input
@@ -639,10 +676,10 @@ export function ItemCatalog({
       <div
         ref={tableContainerRef}
         onScroll={handleTableScroll}
-        className="relative overflow-x-auto border border-outline-variant overscroll-x-contain"
+        className="relative hidden overflow-x-auto border border-[#d8dde4] overscroll-x-contain dark:border-[#494343] md:block"
       >
         <table className="item-catalog-table min-w-full w-max border-collapse text-left text-[13px]">
-          <thead className="bg-surface-container">
+          <thead style={{ backgroundColor: "var(--surface-container-lowest-color)" }}>
             <tr>
               {activeColDefs.map((col) => {
                 const isStickyLeft = col.id === "index" || col.id === "code";
@@ -655,16 +692,16 @@ export function ItemCatalog({
 
                 if (col.id === "index") {
                   stickyClass =
-                    "sticky left-0 z-20 w-[48px] min-w-[48px] max-w-[48px] text-center px-1 bg-surface-container shadow-[1px_0_0_0_var(--outline-variant,#e2e8f0)]";
+                    "hidden lg:table-cell lg:sticky lg:left-0 lg:z-20 w-[48px] min-w-[48px] max-w-[48px] text-center px-1 bg-surface-container-lowest lg:shadow-[1px_0_0_0_var(--outline-variant,#e2e8f0)]";
                 } else if (col.id === "code") {
                   stickyClass =
-                    "sticky left-[48px] z-20 w-[165px] min-w-[165px] max-w-[165px] px-3 bg-surface-container border-r border-outline-variant/80 shadow-[2px_0_5px_-1px_rgba(0,0,0,0.1)]";
+                    "sticky left-0 z-20 w-[150px] min-w-[150px] max-w-[150px] px-3 bg-surface-container-lowest border-r border-outline-variant/80 shadow-[2px_0_5px_-1px_rgba(0,0,0,0.1)] lg:left-[48px] lg:w-[165px] lg:min-w-[165px] lg:max-w-[165px]";
                 } else if (col.id === "status") {
                   stickyClass =
-                    "sticky right-[54px] z-20 w-[76px] min-w-[76px] max-w-[76px] px-1 text-center bg-surface-container border-l border-outline-variant/80 shadow-[-2px_0_5px_-1px_rgba(0,0,0,0.1)]";
+                    "w-[76px] min-w-[76px] max-w-[76px] px-1 text-center bg-surface-container-lowest lg:sticky lg:right-[54px] lg:z-20 lg:border-l lg:border-outline-variant/80 lg:shadow-[-2px_0_5px_-1px_rgba(0,0,0,0.1)]";
                 } else if (col.id === "actions") {
                   stickyClass =
-                    "sticky right-0 z-20 w-[54px] min-w-[54px] max-w-[54px] px-1 text-center bg-surface-container shadow-[-1px_0_0_0_var(--outline-variant,#e2e8f0)]";
+                    "sticky right-0 z-20 w-[54px] min-w-[54px] max-w-[54px] px-1 text-center bg-surface-container-lowest shadow-[-1px_0_0_0_var(--outline-variant,#e2e8f0)]";
                 }
 
                 return (
@@ -697,13 +734,13 @@ export function ItemCatalog({
 
                   if (col.id === "index") {
                     stickyClass =
-                      "sticky left-0 z-10 w-[48px] min-w-[48px] max-w-[48px] text-center px-1 bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] shadow-[1px_0_0_0_var(--outline-variant,#e2e8f0)]";
+                      "hidden lg:table-cell lg:sticky lg:left-0 lg:z-10 w-[48px] min-w-[48px] max-w-[48px] text-center px-1 bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] lg:shadow-[1px_0_0_0_var(--outline-variant,#e2e8f0)]";
                   } else if (col.id === "code") {
                     stickyClass =
-                      "sticky left-[48px] z-10 w-[165px] min-w-[165px] max-w-[165px] px-3 bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] border-r border-outline-variant/80 shadow-[2px_0_5px_-1px_rgba(0,0,0,0.1)]";
+                      "sticky left-0 z-10 w-[150px] min-w-[150px] max-w-[150px] px-3 bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] border-r border-outline-variant/80 shadow-[2px_0_5px_-1px_rgba(0,0,0,0.1)] lg:left-[48px] lg:w-[165px] lg:min-w-[165px] lg:max-w-[165px]";
                   } else if (col.id === "status") {
                     stickyClass =
-                      "sticky right-[54px] z-10 w-[76px] min-w-[76px] max-w-[76px] px-1 text-center bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] border-l border-outline-variant/80 shadow-[-2px_0_5px_-1px_rgba(0,0,0,0.1)]";
+                      "w-[76px] min-w-[76px] max-w-[76px] px-1 text-center bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] lg:sticky lg:right-[54px] lg:z-10 lg:border-l lg:border-outline-variant/80 lg:shadow-[-2px_0_5px_-1px_rgba(0,0,0,0.1)]";
                   } else if (col.id === "actions") {
                     stickyClass =
                       "sticky right-0 z-10 w-[54px] min-w-[54px] max-w-[54px] px-1 text-center bg-white dark:bg-[#1c1a1a] group-hover:bg-[#f3f3f3] dark:group-hover:bg-[#201e1e] shadow-[-1px_0_0_0_var(--outline-variant,#e2e8f0)]";
@@ -816,7 +853,7 @@ export function ItemCatalog({
                       >
                         {imgSrc ? (
                           <div className="group/img relative inline-block">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            { }
                             <img
                               alt={item.name}
                               className="h-9 w-9 rounded border border-outline-variant bg-white object-contain p-0.5 shadow-sm transition-transform group-hover/img:scale-110 cursor-zoom-in"
@@ -904,7 +941,7 @@ export function ItemCatalog({
       {floatingScrollState.visible ? (
         <div
           aria-hidden="true"
-          className="fixed bottom-0 z-40 overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 backdrop-blur-md shadow-[0_-4px_12px_rgba(0,0,0,0.15)] transition-opacity duration-150"
+          className="fixed bottom-0 z-40 hidden overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 backdrop-blur-md shadow-[0_-4px_12px_rgba(0,0,0,0.15)] transition-opacity duration-150 md:block"
           onScroll={handleFloatingScroll}
           ref={floatingScrollRef}
           style={{
@@ -940,8 +977,8 @@ export function ItemCatalog({
         groups={initialData.groups}
         item={drawerItem}
         onClose={() => setDrawerItem(null)}
-        onEdit={initialData.canManage ? (it) => setEditingItem(it) : undefined}
-        onDelete={initialData.canManage ? (it) => handleStartDelete(it) : undefined}
+        onEdit={canEdit ? (it) => setEditingItem(it) : undefined}
+        onDelete={canDelete ? (it) => handleStartDelete(it) : undefined}
         types={initialData.types}
         vendors={initialData.vendors}
         warehouses={initialData.warehouses}
@@ -985,8 +1022,7 @@ export function ItemCatalog({
             <span>ดูรายละเอียด</span>
           </button>
 
-          {initialData.canManage ? (
-            <>
+          {canEdit ? (
               <button
                 type="button"
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-on-surface hover:bg-surface-container transition-colors"
@@ -1000,8 +1036,10 @@ export function ItemCatalog({
                 <span>แก้ไขข้อมูล</span>
               </button>
 
+          ) : null}
+          {canDelete ? (
+            <>
               <div className="my-1 border-t border-outline-variant/60" />
-
               <button
                 type="button"
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 transition-colors"
@@ -1065,7 +1103,7 @@ export function ItemCatalog({
             >
               <X size={18} />
             </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img
               alt="รูปขยาย"
               className="max-h-[80vh] max-w-[80vw] object-contain"

@@ -384,6 +384,7 @@ export type Database = {
         Row: {
           branch: string | null
           contact_name: string | null
+          created_by: string | null
           created_at: string
           credit_term_id: number
           customer_code: string
@@ -401,6 +402,7 @@ export type Database = {
         Insert: {
           branch?: string | null
           contact_name?: string | null
+          created_by?: string | null
           created_at?: string
           credit_term_id: number
           customer_code: string
@@ -418,6 +420,7 @@ export type Database = {
         Update: {
           branch?: string | null
           contact_name?: string | null
+          created_by?: string | null
           created_at?: string
           credit_term_id?: number
           customer_code?: string
@@ -1383,6 +1386,81 @@ export type Database = {
           },
         ]
       }
+      system_audit_logs: {
+        Row: {
+          action_code: string
+          action_label: string
+          actor_name: string
+          actor_role: string | null
+          actor_user_id: string | null
+          changed_fields: Json
+          device_summary: string | null
+          entity_id: string | null
+          entity_number: string | null
+          entity_type: string | null
+          id: number
+          ip_address_masked: string | null
+          metadata: Json
+          module_code: string
+          module_name: string
+          occurred_at: string
+          outcome: string
+          reason: string | null
+          request_id: string | null
+          severity: string
+          source: string
+          summary: string
+        }
+        Insert: {
+          action_code: string
+          action_label: string
+          actor_name?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          changed_fields?: Json
+          device_summary?: string | null
+          entity_id?: string | null
+          entity_number?: string | null
+          entity_type?: string | null
+          id?: never
+          ip_address_masked?: string | null
+          metadata?: Json
+          module_code: string
+          module_name: string
+          occurred_at?: string
+          outcome?: string
+          reason?: string | null
+          request_id?: string | null
+          severity?: string
+          source?: string
+          summary: string
+        }
+        Update: {
+          action_code?: string
+          action_label?: string
+          actor_name?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          changed_fields?: Json
+          device_summary?: string | null
+          entity_id?: string | null
+          entity_number?: string | null
+          entity_type?: string | null
+          id?: never
+          ip_address_masked?: string | null
+          metadata?: Json
+          module_code?: string
+          module_name?: string
+          occurred_at?: string
+          outcome?: string
+          reason?: string | null
+          request_id?: string | null
+          severity?: string
+          source?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       user_admin_audit_logs: {
         Row: {
           action_code: string
@@ -1756,6 +1834,7 @@ export type Database = {
         Row: {
           branch: string | null
           contact_name: string | null
+          created_by: string | null
           created_at: string
           credit_term_id: number
           email: string | null
@@ -1774,6 +1853,7 @@ export type Database = {
         Insert: {
           branch?: string | null
           contact_name?: string | null
+          created_by?: string | null
           created_at?: string
           credit_term_id: number
           email?: string | null
@@ -1792,6 +1872,7 @@ export type Database = {
         Update: {
           branch?: string | null
           contact_name?: string | null
+          created_by?: string | null
           created_at?: string
           credit_term_id?: number
           email?: string | null
@@ -1905,6 +1986,34 @@ export type Database = {
           requisition_number: string
         }[]
       }
+      review_purchase_requisition: {
+        Args: { p_note?: string | null; p_outcome: string; p_requisition_id: number }
+        Returns: {
+          requisition_number: string
+          review_outcome: string
+        }[]
+      }
+      save_purchase_requisition_operational: {
+        Args: {
+          p_department_name: string
+          p_document_date: string
+          p_items: Json
+          p_needed_by_date: string
+          p_remarks: string | null
+          p_requester_name: string
+          p_requisition_id: number | null
+          p_status: string
+        }
+        Returns: {
+          requisition_id: number
+          requisition_number: string
+          requisition_status: string
+        }[]
+      }
+      set_vendor_status: {
+        Args: { p_status: string; p_vendor_id: number }
+        Returns: Database["public"]["Tables"]["vendors"]["Row"]
+      }
       decide_purchase_order: {
         Args: {
           p_decision: string
@@ -1946,6 +2055,15 @@ export type Database = {
           p256dh_key: string
           subscription_id: number
           title: string
+        }[]
+      }
+      get_latest_purchase_prices: {
+        Args: { p_requisition_item_ids: number[]; p_vendor_id: number }
+        Returns: {
+          document_date: string
+          po_number: string
+          requisition_item_id: number
+          unit_price: number
         }[]
       }
       get_department_settings: {
@@ -2006,6 +2124,10 @@ export type Database = {
       is_current_user_owner: { Args: never; Returns: boolean }
       record_user_password_reset: {
         Args: { p_user_id: string }
+        Returns: undefined
+      }
+      record_audit_log_access: {
+        Args: { p_action: string }
         Returns: undefined
       }
       report_invalid_document_push_subscription: {

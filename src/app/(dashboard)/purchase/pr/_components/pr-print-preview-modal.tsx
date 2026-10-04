@@ -1,9 +1,12 @@
 "use client";
 
-import { ChevronDown, History, Printer, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, History, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
+import { CompanyDocumentFooter } from "@/components/company-document-footer";
+import { DocumentPreviewShell } from "@/components/document-preview-shell";
 import type { CompanyDocumentContext } from "@/lib/company-settings";
+import { exportElementPdf, printElement } from "@/lib/document-print";
 import {
   getPurchaseRequisitionHistoryLabel,
   paginatePurchaseRequisitionItems,
@@ -17,11 +20,12 @@ import {
 } from "@/lib/purchase-requisitions";
 
 type PrPrintPreviewModalProps = {
-  canDecide: boolean;
+  canReview: boolean;
+  canReturn: boolean;
   detail: PurchaseRequisitionPrintDetail;
   documentContext: CompanyDocumentContext;
   onDecision: (
-    decision: "approved" | "rejected",
+    decision: "ready_for_po" | "returned",
     note: string,
   ) => Promise<{ error?: string; success: boolean }>;
   onClose: () => void;
@@ -102,14 +106,15 @@ function Signature({
 }
 
 export function PrPrintPreviewModal({
-  canDecide,
+  canReview,
+  canReturn,
   detail,
   documentContext,
   onDecision,
   onClose,
 }: PrPrintPreviewModalProps) {
   const [printedAt] = useState(() => new Date());
-  const [decision, setDecision] = useState<"approved" | "rejected" | null>(
+  const [decision, setDecision] = useState<"ready_for_po" | "returned" | null>(
     null,
   );
   const [decisionError, setDecisionError] = useState<string | null>(null);
@@ -118,11 +123,8 @@ export function PrPrintPreviewModal({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const pages = paginatePurchaseRequisitionItems(detail.items);
   const approval = getApproval(detail);
-  const { documentSettings } = documentContext;
-  const footerText =
-    [documentSettings.footerTextTh, documentSettings.footerTextEn]
-      .filter(Boolean)
-      .join(" / ") || "เอกสารจากระบบ KRC ERP";
+
+  const printRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -135,7 +137,6 @@ export function PrPrintPreviewModal({
           }
           return;
         }
-
         onClose();
       }
     };
@@ -143,22 +144,34 @@ export function PrPrintPreviewModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.classList.remove("printing-purchase-requisition");
     };
   }, [decision, isDeciding, onClose]);
 
-  const handlePrint = () => {
-    const clearPrintMode = () => {
-      document.body.classList.remove("printing-purchase-requisition");
-      window.removeEventListener("afterprint", clearPrintMode);
-    };
-
-    document.body.classList.add("printing-purchase-requisition");
-    window.addEventListener("afterprint", clearPrintMode);
-    window.print();
+  const handlePrint = async () => {
+    if (printRootRef.current) {
+      await printElement(printRootRef.current, {
+        title: detail.prNumber || "purchase-requisition",
+        paperSize: "A4",
+        orientation: "portrait",
+        bodyClass: "printing-purchase-requisition",
+      });
+      return;
+    }
   };
 
-  const openDecision = (nextDecision: "approved" | "rejected") => {
+  const handleExportPdf = async () => {
+    if (printRootRef.current) {
+      await exportElementPdf(printRootRef.current, {
+        filename: detail.prNumber || "purchase-requisition",
+        paperSize: "A4",
+        orientation: "portrait",
+        bodyClass: "printing-purchase-requisition",
+      });
+      return;
+    }
+  };
+
+  const openDecision = (nextDecision: "ready_for_po" | "returned") => {
     setDecision(nextDecision);
     setDecisionError(null);
     setDecisionNote("");
@@ -174,8 +187,8 @@ export function PrPrintPreviewModal({
   const handleDecision = async () => {
     if (!decision) return;
 
-    if (decision === "rejected" && !decisionNote.trim()) {
-      setDecisionError("กรุณาระบุเหตุผลที่ปฏิเสธใบขอซื้อ");
+    if (decision === "returned" && !decisionNote.trim()) {
+      setDecisionError("กรุณาระบุเหตุผลที่ส่งใบขอซื้อกลับแก้ไข");
       return;
     }
 
@@ -185,88 +198,38 @@ export function PrPrintPreviewModal({
     setIsDeciding(false);
 
     if (!result.success) {
-      setDecisionError(result.error ?? "ไม่สามารถบันทึกผลการอนุมัติได้");
+      setDecisionError(result.error ?? "ไม่สามารถบันทึกผลการตรวจสอบได้");
     }
   };
 
-  return (
-    <div
-      aria-label={`ตัวอย่างใบขอซื้อ ${detail.prNumber}`}
-      aria-modal="true"
-      className="pr-preview-overlay"
-      role="dialog"
-    >
-      <div className="pr-preview-toolbar">
-        <div>
-          <strong>ตัวอย่างก่อนพิมพ์</strong>
-          <span>
-            A4 แนวตั้ง · {detail.items.length} รายการ · {pages.length} หน้า
-          </span>
-        </div>
-        <div className="pr-preview-actions">
-          <button onClick={onClose} type="button">
-            ปิด
-          </button>
-          <button className="pr-preview-print-button" onClick={handlePrint} type="button">
-            <Printer aria-hidden="true" size={17} />
-            พิมพ์ใบ PR
-          </button>
-          {canDecide && detail.status === "pending_approval" ? (
-            <>
-              <span aria-hidden="true" className="pr-preview-action-divider" />
-              <button
-                className="pr-preview-reject-button"
-                onClick={() => openDecision("rejected")}
-                type="button"
-              >
-                ปฏิเสธ
-              </button>
-              <button
-                className="pr-preview-change-button"
-                disabled
-                title="ระบบขอแก้ไขเอกสารจะเปิดใช้งานใน workflow ขั้นถัดไป"
-                type="button"
-              >
-                ขอแก้ไข
-              </button>
-              <button
-                className="pr-preview-approve-button"
-                onClick={() => openDecision("approved")}
-                type="button"
-              >
-                อนุมัติ
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
+  const statusDescription = detail.status === "pending_approval"
+    ? "รอฝ่ายจัดซื้อตรวจสอบเอกสาร"
+    : "เอกสารผ่านขั้นตอนการตรวจสอบแล้ว";
 
-      <div className="pr-preview-scroll">
-        <div className="pr-approval-context">
-          <span className={`pr-approval-status pr-approval-status-${detail.status}`}>
-            {getPurchaseRequisitionStatusLabel(detail.status)}
-          </span>
-          <span>
-            {detail.status === "pending_approval"
-              ? "รอผู้มีสิทธิ์อนุมัติพิจารณาเอกสาร"
-              : "เอกสารผ่านขั้นตอนการพิจารณาแล้ว"}
-          </span>
+  return (
+    <>
+    <DocumentPreviewShell
+      ariaLabel={`ตัวอย่างใบขอซื้อ ${detail.prNumber}`}
+      documentNumber={detail.prNumber}
+      extraActions={(
+        <>
           <button
-            aria-expanded={isHistoryOpen}
-            onClick={() => setIsHistoryOpen((isOpen) => !isOpen)}
+            className="inline-flex h-8 items-center gap-1 border border-outline-variant px-3 text-[12px] font-bold"
+            onClick={() => setIsHistoryOpen((value) => !value)}
             type="button"
           >
-            <History aria-hidden="true" size={14} />
-            ดูประวัติการอนุมัติ
+            <History size={14} />
+            ประวัติ
             <ChevronDown
-              aria-hidden="true"
-              className={isHistoryOpen ? "rotate-180" : undefined}
               size={14}
+              style={{
+                transform: isHistoryOpen ? "rotate(180deg)" : "rotate(0deg)",
+              }}
             />
           </button>
           {isHistoryOpen ? (
             <div className="pr-approval-history">
-              <strong>ประวัติการอนุมัติ</strong>
+              <strong>ประวัติการดำเนินการ</strong>
               {detail.approvals.length > 0 ? (
                 detail.approvals.map((item, index) => (
                   <div key={`${item.action}-${item.createdAt}-${index}`}>
@@ -282,8 +245,28 @@ export function PrPrintPreviewModal({
               )}
             </div>
           ) : null}
-        </div>
-        <div className="pr-print-root">
+          {(canReview || canReturn) && detail.status === "pending_approval" ? (
+            <>
+              {canReturn ? <button className="h-8 border border-primary px-4 text-[12px] font-bold text-primary" onClick={() => openDecision("returned")} type="button">ส่งกลับแก้ไข</button> : null}
+              {canReview ? <button className="h-8 bg-emerald-700 px-4 text-[12px] font-bold text-white" onClick={() => openDecision("ready_for_po")} type="button">พร้อมออก PO</button> : null}
+            </>
+          ) : null}
+        </>
+      )}
+      isBusy={isDeciding}
+      onClose={onClose}
+      onExportPdf={handleExportPdf}
+      onPrint={handlePrint}
+      paperHeightMm={297}
+      paperLabel="A4 (แนวตั้ง)"
+      paperWidthMm={210}
+      statusDate={formatDisplayDate(approval?.createdAt ?? detail.documentDate)}
+      statusDescription={statusDescription}
+      statusLabel={getPurchaseRequisitionStatusLabel(detail.status)}
+      title="ตัวอย่างก่อนพิมพ์ใบขอซื้อ"
+      totalPages={pages.length}
+    >
+        <div className="pr-print-root" ref={printRootRef}>
           {pages.map((items, pageIndex) => {
             const rows = Array.from(
               { length: PURCHASE_REQUISITION_PRINT_ROWS_PER_PAGE },
@@ -387,25 +370,27 @@ export function PrPrintPreviewModal({
 
                 <div aria-hidden="true" className="pr-signature-spacer" />
 
-                <footer className="pr-document-footer">
-                  <span>พิมพ์โดย : {detail.requesterName}</span>
-                  <span className="pr-footer-center">พิมพ์วันที่ : {formatPrintedAt(printedAt)}</span>
-                  <span className="pr-footer-right">
-                    หน้า {pageIndex + 1} / {pages.length}
-                  </span>
-                </footer>
+                <CompanyDocumentFooter
+                  context={documentContext}
+                  currentPage={pageIndex + 1}
+                  printedAt={formatPrintedAt(printedAt)}
+                  printedBy={detail.requesterName}
+                  placement="page"
+                  totalPages={pages.length}
+                  variant="standard"
+                />
               </article>
             );
           })}
         </div>
-      </div>
+    </DocumentPreviewShell>
 
       {decision ? (
         <div
           aria-label={
-            decision === "approved"
-              ? "ยืนยันการอนุมัติใบขอซื้อ"
-              : "ยืนยันการปฏิเสธใบขอซื้อ"
+            decision === "ready_for_po"
+              ? "ยืนยันว่าใบขอซื้อพร้อมออก PO"
+              : "ยืนยันการส่งใบขอซื้อกลับแก้ไข"
           }
           aria-modal="true"
           className="pr-decision-overlay"
@@ -415,9 +400,9 @@ export function PrPrintPreviewModal({
             <header className="flex h-13 items-center justify-between border-b border-outline-variant px-5">
               <div>
                 <h2 className="text-[17px] font-bold">
-                  {decision === "approved"
-                    ? "ยืนยันการอนุมัติ PR"
-                    : "ยืนยันการปฏิเสธ PR"}
+                  {decision === "ready_for_po"
+                    ? "ยืนยันพร้อมออก PO"
+                    : "ยืนยันส่งกลับแก้ไข"}
                 </h2>
                 <p className="text-[12px] font-medium text-secondary">
                   {detail.prNumber}
@@ -436,15 +421,15 @@ export function PrPrintPreviewModal({
 
             <div className="space-y-3 p-5">
               <p className="text-[13px] font-medium leading-5 text-secondary">
-                {decision === "approved"
-                  ? "ตรวจสอบรายการเรียบร้อยแล้วและต้องการอนุมัติใบขอซื้อนี้ใช่หรือไม่"
-                  : "ระบุเหตุผลเพื่อแจ้งกลับไปยังผู้สร้างใบขอซื้อ"}
+                {decision === "ready_for_po"
+                  ? "ตรวจสอบรายการเรียบร้อยแล้วและพร้อมนำใบขอซื้อนี้ไปจัดทำ PO ใช่หรือไม่"
+                  : "ระบุเหตุผลและสิ่งที่ต้องแก้ไขเพื่อแจ้งกลับผู้สร้างใบขอซื้อ"}
               </p>
               <label className="block">
                 <span className="mb-1.5 block text-[13px] font-bold">
-                  {decision === "approved"
+                  {decision === "ready_for_po"
                     ? "หมายเหตุ (ถ้ามี)"
-                    : "เหตุผลที่ปฏิเสธ *"}
+                    : "เหตุผลที่ส่งกลับแก้ไข *"}
                 </span>
                 <textarea
                   autoFocus
@@ -455,9 +440,9 @@ export function PrPrintPreviewModal({
                     setDecisionError(null);
                   }}
                   placeholder={
-                    decision === "approved"
+                    decision === "ready_for_po"
                       ? "ระบุหมายเหตุเพิ่มเติม"
-                      : "ระบุเหตุผลที่ปฏิเสธใบขอซื้อ"
+                      : "ระบุเหตุผลและสิ่งที่ต้องแก้ไข"
                   }
                   value={decisionNote}
                 />
@@ -486,7 +471,7 @@ export function PrPrintPreviewModal({
               </button>
               <button
                 className={`h-9 min-w-28 rounded-[4px] px-5 text-[13px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-                  decision === "approved"
+                  decision === "ready_for_po"
                     ? "bg-emerald-700 hover:bg-emerald-800"
                     : "bg-primary hover:bg-primary/90"
                 }`}
@@ -496,9 +481,9 @@ export function PrPrintPreviewModal({
               >
                 {isDeciding
                   ? "กำลังบันทึก..."
-                  : decision === "approved"
-                    ? "ยืนยันอนุมัติ"
-                    : "ยืนยันปฏิเสธ"}
+                  : decision === "ready_for_po"
+                    ? "ยืนยันพร้อมออก PO"
+                    : "ยืนยันส่งกลับแก้ไข"}
               </button>
             </footer>
           </section>
@@ -568,9 +553,19 @@ export function PrPrintPreviewModal({
         }
 
         .pr-preview-actions .pr-preview-print-button {
-          border-color: #a9a9a9;
+          border-color: #bd0d1a;
+          background: #bd0d1a;
+          color: #ffffff;
+        }
+
+        .pr-preview-actions .pr-preview-export-button {
+          border-color: #bd0d1a;
           background: #ffffff;
-          color: #171717;
+          color: #bd0d1a;
+        }
+
+        .pr-preview-actions .pr-preview-export-button:hover {
+          background: #fdf2f2;
         }
 
         .pr-preview-actions .pr-preview-reject-button {
@@ -736,12 +731,14 @@ export function PrPrintPreviewModal({
           flex-direction: column;
           align-items: center;
           gap: 18px;
-          zoom: 0.67;
         }
 
         .pr-print-page {
           box-sizing: border-box;
+          position: relative;
           display: grid;
+          --document-footer-bottom: 3mm;
+          --document-page-padding-inline: 7.5mm;
           width: 210mm;
           height: 297mm;
           grid-template-rows: 30mm 16mm 15mm 163mm 14mm 37mm 8mm 8mm;
@@ -1095,7 +1092,7 @@ export function PrPrintPreviewModal({
             display: none;
           }
 
-          .pr-preview-actions button {
+          .pr-preview-actions button:not(.pdf-export-button) {
             width: 38px;
             padding: 0;
             font-size: 0;
@@ -1129,9 +1126,6 @@ export function PrPrintPreviewModal({
             padding: 10px;
           }
 
-          .pr-print-root {
-            zoom: 0.46;
-          }
 
           .pr-decision-overlay {
             align-items: flex-end;
@@ -1143,6 +1137,6 @@ export function PrPrintPreviewModal({
           }
         }
       `}</style>
-    </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 export const settingsControlClass =
   "h-9 w-full rounded-[3px] border border-outline-variant bg-surface-container-lowest px-2.5 text-[14px] outline-none transition-colors focus:border-primary disabled:bg-surface-container disabled:text-on-surface-variant";
@@ -11,7 +12,7 @@ export function SettingsField({ children, label, required = false }: { children:
 }
 
 export function SettingsModalHeader({ onClose, title }: { onClose: () => void; title: string }) {
-  return <header className="flex h-[52px] shrink-0 items-center bg-primary px-4 text-on-primary"><span className="border border-white px-2 py-1 text-[14px] font-black">KRC ERP</span><span className="mx-3 h-5 w-px bg-white/50"/><h2 className="text-[20px] font-bold">{title}</h2><button aria-label="ปิด" className="ml-auto grid h-10 w-10 place-items-center" onClick={onClose} type="button"><X size={22}/></button></header>;
+  return <header className="flex h-[58px] shrink-0 items-center border-b border-outline-variant bg-surface-container-lowest px-4 text-on-surface"><CompanyFormLogo/><span className="mx-3 h-7 w-px bg-outline-variant"/><h2 className="text-[20px] font-bold">{title}</h2><button aria-label="ปิด" className="ml-auto grid h-10 w-10 place-items-center" onClick={onClose} type="button"><X size={22}/></button></header>;
 }
 
 export function SettingsModalFooter({ completeText, disabled, onCancel, onSubmit, submitText }: { completeText?: string; disabled?: boolean; onCancel: () => void; onSubmit: () => void; submitText: string }) {

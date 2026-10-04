@@ -27,6 +27,7 @@ export type CentralStockRow = {
   formFieldConfig: Partial<Record<ItemFormFieldKey, ItemFormFieldVisibility>>;
   updatedAt: string;
   totalCount: number;
+  inventoryValue: number | null;
 };
 
 export type StockState = {

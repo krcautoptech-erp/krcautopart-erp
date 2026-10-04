@@ -1,4 +1,4 @@
-export type PurchaseRequisitionDecision = "approved" | "rejected";
+export type PurchaseRequisitionDecision = "ready_for_po" | "returned";
 
 export type PurchaseRequisitionDecisionInput = {
   decision: PurchaseRequisitionDecision;
@@ -21,9 +21,9 @@ export function validatePurchaseRequisitionDecision(
 
   const note = input.note.trim();
 
-  if (input.decision === "rejected" && !note) {
+  if (input.decision === "returned" && !note) {
     return {
-      error: "กรุณาระบุเหตุผลที่ปฏิเสธใบขอซื้อ",
+      error: "กรุณาระบุเหตุผลที่ส่งใบขอซื้อกลับแก้ไข",
       success: false as const,
     };
   }
