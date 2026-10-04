@@ -1,7 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
+**/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,8 +11,11 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# testing & reports
 /coverage
+/output/
+/outputs/
+.playwright-cli/
 
 # next.js
 /.next/
@@ -41,7 +45,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-
+# local documents, scratch scripts, and temporary files
+/docs/
+/scratch/
 tmp/
-.next/
-node_modules/
