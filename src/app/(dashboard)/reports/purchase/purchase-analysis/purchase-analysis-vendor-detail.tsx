@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, FileText, Phone, X } from "lucide-react";
 import { getPurchaseAnalysisVendorDetailAction, type PurchaseAnalysisRow, type PurchaseAnalysisVendorDetail } from "@/app/actions/purchase-analysis";
 import { DataTable, DataTableFrame } from "@/components/data-table";
@@ -87,7 +88,7 @@ export function PurchaseAnalysisVendorDrawer({ row, startDate, endDate, onClose 
                       <td className={po.pending_value > 0 ? styles.warnText : styles.goodText}>{money(po.pending_value)}</td>
                     </tr>
                     {open && <tr className={styles.poDetailRow}><td colSpan={8}>
-                      <div className={styles.orderDetailTitle}><b>รายการสินค้า ({po.items.length} รายการ)</b><a href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></a></div>
+                      <div className={styles.orderDetailTitle}><b>รายการสินค้า ({po.items.length} รายการ)</b><Link href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></Link></div>
                       <DataTableFrame className={styles.itemTableFrame}>
                         <DataTable className={styles.drawerItemTable}>
                           <thead><tr><th>#</th><th>รหัสสินค้า</th><th>รายการสินค้า</th><th>กำหนดส่ง</th><th>จำนวน</th><th>หน่วย</th><th>ราคา/หน่วย</th><th>มูลค่าสุทธิ</th><th>รับแล้ว</th><th>ค้างรับ</th></tr></thead>
@@ -112,11 +113,11 @@ export function PurchaseAnalysisVendorDrawer({ row, startDate, endDate, onClose 
                 <b className={po.pending_value > 0 ? styles.warnText : styles.goodText} data-label="ค้างรับ">{money(po.pending_value)}</b>
               </button>
               {open && <div className={styles.orderDetail}>
-                <div className={styles.orderDetailTitle}><b>รายการสินค้า ({po.items.length} รายการ)</b><a href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></a></div>
+                <div className={styles.orderDetailTitle}><b>รายการสินค้า ({po.items.length} รายการ)</b><Link href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></Link></div>
                 <div className={styles.itemTable}><div className={styles.itemHead}><span>#</span><span>รหัสสินค้า</span><span>รายการสินค้า</span><span>กำหนดส่ง</span><span>จำนวน</span><span>หน่วย</span><span>ราคา/หน่วย</span><span>มูลค่าสุทธิ</span><span>รับแล้ว</span><span>ค้างรับ</span></div>
                   {po.items.map((item) => <div className={styles.itemRow} key={item.id}><span className={styles.lineNo}>{item.line_no}</span><b>{item.item_code}</b><span className={styles.itemName}>{item.item_name}</span><span data-label="กำหนดส่ง">{date(item.delivery_date)}</span><span data-label="จำนวน">{qty(item.ordered_qty)}</span><span>{item.unit_name}</span><span data-label="ราคา/หน่วย">{money(item.unit_price)}</span><span data-label="มูลค่าสุทธิ">{money(item.net_value)}</span><span className={styles.goodText} data-label="รับแล้ว">{qty(item.received_qty)}</span><span className={item.pending_qty > 0 ? styles.warnText : styles.goodText} data-label="ค้างรับ">{qty(item.pending_qty)}</span></div>)}
                 </div>
-                <a className={styles.mobilePoLink} href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></a>
+                <Link className={styles.mobilePoLink} href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></Link>
               </div>}
             </article>; })}
             </div>

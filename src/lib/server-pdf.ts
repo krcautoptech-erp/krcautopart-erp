@@ -1,10 +1,10 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import type { Browser, LaunchOptions } from "puppeteer-core";
+import {
+  isServerlessPdfRuntime,
+  resolveChromiumPackUrl,
+} from "./server-pdf-runtime.ts";
 
 const POSSIBLE_EXECUTABLES = [
   process.env.CHROME_PATH,
@@ -62,6 +62,8 @@ export function inlineLocalAssets(html: string): string {
     "/fonts/Sarabun-Bold.ttf": "fonts/Sarabun-Bold.ttf",
     "/fonts/NotoSansThai-Regular.ttf": "fonts/NotoSansThai-Regular.ttf",
     "/fonts/NotoSansThai-Bold.ttf": "fonts/NotoSansThai-Bold.ttf",
+    "/fonts/Inter-VariableFont_opsz,wght.ttf": "fonts/Inter-VariableFont_opsz,wght.ttf",
+    "/fonts/Inter-Italic-VariableFont_opsz,wght.ttf": "fonts/Inter-Italic-VariableFont_opsz,wght.ttf",
   };
 
   for (const [urlPath, relPath] of Object.entries(fontMap)) {
@@ -134,59 +136,84 @@ export function inlineLocalAssets(html: string): string {
   return html;
 }
 
+let serverlessExecutablePathPromise: Promise<string> | null = null;
+
+async function launchPdfBrowser(): Promise<Browser> {
+  const { default: puppeteer } = await import("puppeteer-core");
+  let launchOptions: LaunchOptions;
+
+  if (isServerlessPdfRuntime(process.env)) {
+    const [{ default: chromium }, packUrl] = await Promise.all([
+      import("@sparticuz/chromium-min"),
+      Promise.resolve(resolveChromiumPackUrl(process.env)),
+    ]);
+
+    serverlessExecutablePathPromise ??= chromium.executablePath(packUrl);
+    launchOptions = {
+      args: chromium.args,
+      executablePath: await serverlessExecutablePathPromise,
+      headless: "shell",
+    };
+  } else {
+    const executablePath = findBrowserExecutable();
+    if (!executablePath) {
+      throw new Error(
+        "No supported headless browser (Chrome/Edge/Chromium) found on this server.",
+      );
+    }
+    launchOptions = {
+      executablePath,
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    };
+  }
+
+  return puppeteer.launch(launchOptions);
+}
+
 /**
- * Renders HTML to a high-fidelity vector PDF buffer using the local headless browser.
- * Operates safely with zero external font/layout distortion.
+ * Renders HTML to a high-fidelity vector PDF buffer. Local development uses the
+ * installed Chrome/Edge while serverless production uses a deployment-hosted
+ * Chromium pack, keeping the function bundle below the provider limit.
  */
 export async function renderHtmlToPdfBuffer(
   html: string,
-  _options?: ServerPdfOptions,
+  options: ServerPdfOptions = {},
 ): Promise<Buffer> {
-  const browserPath = findBrowserExecutable();
-  if (!browserPath) {
-    throw new Error(
-      "No supported headless browser (Chrome/Edge/Chromium) found on this server.",
-    );
-  }
-
-  const timestamp = Date.now();
-  const randomSuffix = Math.random().toString(36).substring(2, 8);
-  const tempDir = os.tmpdir();
-  const tempHtmlPath = path.join(tempDir, `krc_doc_${timestamp}_${randomSuffix}.html`);
-  const tempPdfPath = path.join(tempDir, `krc_doc_${timestamp}_${randomSuffix}.pdf`);
+  const browser = await launchPdfBrowser();
 
   try {
-    const processedHtml = inlineLocalAssets(html);
-    await fs.promises.writeFile(tempHtmlPath, processedHtml, "utf-8");
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      const requestUrl = request.url();
+      if (requestUrl === "about:blank" || requestUrl.startsWith("data:")) {
+        void request.continue();
+      } else {
+        void request.abort();
+      }
+    });
 
-    const args = [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      "--no-pdf-header-footer",
-      "--run-all-compositor-stages-before-draw",
-      `--print-to-pdf=${tempPdfPath}`,
-      tempHtmlPath,
-    ];
+    await page.setContent(inlineLocalAssets(html), {
+      waitUntil: "load",
+      timeout: 20_000,
+    });
+    await page.emulateMediaType("print");
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
 
-    await execFileAsync(browserPath, args, { timeout: 30000 });
-
-    if (!fs.existsSync(tempPdfPath)) {
-      throw new Error("PDF generation failed: Output file not created");
-    }
-
-    return await fs.promises.readFile(tempPdfPath);
+    const pdf = await page.pdf({
+      format: options.paperSize ?? "A4",
+      landscape: options.orientation === "landscape",
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+      tagged: true,
+      timeout: 30_000,
+    });
+    return Buffer.from(pdf);
   } finally {
-    try {
-      if (fs.existsSync(tempHtmlPath)) await fs.promises.unlink(tempHtmlPath);
-    } catch {
-      // ignore cleanup error
-    }
-    try {
-      if (fs.existsSync(tempPdfPath)) await fs.promises.unlink(tempPdfPath);
-    } catch {
-      // ignore cleanup error
-    }
+    await browser.close();
   }
 }

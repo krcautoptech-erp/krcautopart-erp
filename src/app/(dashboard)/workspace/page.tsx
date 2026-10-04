@@ -1,6 +1,7 @@
 import { getErpDashboardAction } from "@/app/actions/erp-dashboard";
 import { ErpDashboard } from "./erp-dashboard";
 
+
 export default async function WorkspacePage({
   searchParams,
 }: {

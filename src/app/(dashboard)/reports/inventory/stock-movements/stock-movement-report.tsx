@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { ArrowLeft, ChevronRight, FileSpreadsheet, FileText, Printer, Search } from "lucide-react";
 import { getStockCardAction, getStockMovementReportAction, type StockJournalRow, type StockReportResult, type StockSummaryRow } from "@/app/actions/stock-reports";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
@@ -56,7 +57,7 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
   const loadCardPage = (nextPage: number, nextPageSize = pageSize) => { if (!card) return; startTransition(async () => { const result = await getStockCardAction({ startDate: applied.startDate, endDate: applied.endDate, warehouseId: card.summary.warehouse_id, itemTypeId: null, movementKind: null, search: "", itemMasterId: card.summary.item_master_id, page: nextPage, pageSize: nextPageSize }); if (!result.data?.summary) { toast.error(result.error ?? "ไม่สามารถโหลด Stock Card ได้"); return; } setCard({ summary: result.data.summary, rows: result.data.rows as StockJournalRow[], total: result.data.total }); setPage(nextPage); }); };
   const change = (value: number) => <span className={value > 0 ? styles.positive : value < 0 ? styles.negative : ""}>{value > 0 ? "+" : ""}{number(value)}</span>;
   const badge = (row: StockJournalRow) => <StatusBadge className={styles.badge} tone={kinds[row.movement_kind]?.tone ?? "neutral"}>{kinds[row.movement_kind]?.label ?? "รายการ"}</StatusBadge>;
-  const documentLink = (row: StockJournalRow) => { const href = row.reference_doc_type === "goods_receipt" ? `/purchase/receipts?q=${encodeURIComponent(row.reference_doc_number)}&start=1900-01-01&end=9999-12-31` : row.reference_doc_type === "stock_issue" ? `/inventory/issues?q=${encodeURIComponent(row.reference_doc_number)}` : row.reference_doc_type === "stock_adjustment" ? `/inventory/adjustments?q=${encodeURIComponent(row.reference_doc_number)}` : null; return href ? <a className={styles.link} href={href}>{row.reference_doc_number}</a> : <span>{row.reference_doc_number}</span>; };
+  const documentLink = (row: StockJournalRow) => { const href = row.reference_doc_type === "goods_receipt" ? `/purchase/receipts?q=${encodeURIComponent(row.reference_doc_number)}&start=1900-01-01&end=9999-12-31` : row.reference_doc_type === "stock_issue" ? `/inventory/issues?q=${encodeURIComponent(row.reference_doc_number)}` : row.reference_doc_type === "stock_adjustment" ? `/inventory/adjustments?q=${encodeURIComponent(row.reference_doc_number)}` : null; return href ? <Link className={styles.link} href={href}>{row.reference_doc_number}</Link> : <span>{row.reference_doc_number}</span>; };
   const totals = (row: StockSummaryRow) => <dl className={styles.summaryTotals}>{[["ยกมา", row.opening, ""], ["รับเข้า", row.received, styles.positive], ["จ่ายออก", row.issued, styles.negative], ["ปรับปรุง", row.adjustment, ""], ["คงเหลือ", row.closing, styles.closing]].map(([label, value, cls]) => <div key={label}><dt>{label}</dt><dd className={String(cls)}>{number(Number(value))}</dd></div>)}</dl>;
   const preparePrint = () => startTransition(async () => {
     if (card) {

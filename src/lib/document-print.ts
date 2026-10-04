@@ -5,6 +5,11 @@
  */
 
 import { REPORT_CATALOG } from "./report-catalog.ts";
+import {
+  createBrowserPdfDeliveryAdapter,
+  deliverPdfBlob,
+  type PdfDeliveryResult,
+} from "./pdf-delivery.ts";
 
 export type DocumentPaperSize = "A4" | "A5" | "letter";
 export type DocumentOrientation = "portrait" | "landscape";
@@ -623,7 +628,7 @@ export function extractAllDocumentStyles(): string {
 export async function exportElementPdf(
   element: HTMLElement,
   options: ExportPdfOptions,
-): Promise<void> {
+): Promise<PdfDeliveryResult | undefined> {
   const sanitizedFilename = options.filename.endsWith(".pdf")
     ? options.filename
     : `${options.filename}.pdf`;
@@ -726,39 +731,27 @@ export async function exportElementPdf(
       ],
     });
 
-    try {
-      const response = await fetch("/api/documents/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          html: fullHtml,
-          filename: sanitizedFilename,
-          paperSize: options.paperSize || "A4",
-          orientation: options.orientation || "portrait",
-        }),
-      });
+    const response = await fetch("/api/documents/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html: fullHtml,
+        filename: sanitizedFilename,
+        paperSize: options.paperSize || "A4",
+        orientation: options.orientation || "portrait",
+      }),
+    });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = sanitizedFilename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-        return;
-      }
-    } catch (err) {
-      console.warn("Direct PDF generation failed, falling back to browser print:", err);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || "ไม่สามารถสร้างไฟล์ PDF ได้");
     }
+
+    const blob = await response.blob();
+    return deliverPdfBlob(blob, sanitizedFilename, createBrowserPdfDeliveryAdapter());
   }
 
-  await printElement(element, {
-    ...options,
-    title: sanitizedFilename,
-  });
+  return undefined;
 }
 
 /**
@@ -767,7 +760,7 @@ export async function exportElementPdf(
 export async function exportHtmlPdf(
   bodyHtml: string,
   options: ExportPdfOptions,
-): Promise<void> {
+): Promise<PdfDeliveryResult | undefined> {
   const sanitizedFilename = options.filename.endsWith(".pdf")
     ? options.filename
     : `${options.filename}.pdf`;
@@ -778,39 +771,27 @@ export async function exportHtmlPdf(
       title: sanitizedFilename,
     });
 
-    try {
-      const response = await fetch("/api/documents/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          html: fullHtml,
-          filename: sanitizedFilename,
-          paperSize: options.paperSize || "A4",
-          orientation: options.orientation || "portrait",
-        }),
-      });
+    const response = await fetch("/api/documents/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html: fullHtml,
+        filename: sanitizedFilename,
+        paperSize: options.paperSize || "A4",
+        orientation: options.orientation || "portrait",
+      }),
+    });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = sanitizedFilename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-        return;
-      }
-    } catch (err) {
-      console.warn("Direct PDF generation failed, falling back to browser print:", err);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || "ไม่สามารถสร้างไฟล์ PDF ได้");
     }
+
+    const blob = await response.blob();
+    return deliverPdfBlob(blob, sanitizedFilename, createBrowserPdfDeliveryAdapter());
   }
 
-  await printHtmlDocument(bodyHtml, {
-    ...options,
-    title: sanitizedFilename,
-  });
+  return undefined;
 }
 
 function escapeHtml(text: string): string {

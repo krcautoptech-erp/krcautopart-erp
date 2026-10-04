@@ -8,6 +8,7 @@ import {
   Plus,
   Printer,
   Search,
+  Share2,
 } from "lucide-react";
 import {
   useCallback,
@@ -20,7 +21,9 @@ import {
   type ReactNode,
 } from "react";
 import { PdfExportIcon } from "@/components/pdf-export-button";
+import { toast } from "@/components/toast";
 import { calculateAnchoredScroll } from "@/lib/document-preview-zoom";
+import { canUseMobilePdfShare } from "@/lib/pdf-delivery";
 import styles from "./document-preview-shell.module.css";
 
 const PX_PER_MM = 96 / 25.4;
@@ -93,6 +96,30 @@ export function DocumentPreviewShell({
     width: paperWidthMm * PX_PER_MM,
   }));
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [canSharePdf, setCanSharePdf] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setCanSharePdf(canUseMobilePdfShare());
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const handleExportPdf = useCallback(async () => {
+    if (isBusy || exportBusy) return;
+    setExportBusy(true);
+    try {
+      await onExportPdf();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "ไม่สามารถสร้างไฟล์ PDF ได้ กรุณาลองใหม่",
+        { title: "ส่งออก PDF ไม่สำเร็จ" },
+      );
+    } finally {
+      setExportBusy(false);
+    }
+  }, [exportBusy, isBusy, onExportPdf]);
 
   const fitToPage = useCallback(() => {
     const canvas = canvasRef.current;
@@ -238,7 +265,13 @@ export function DocumentPreviewShell({
         <div className={styles.railPrimary}>
           <ShellButton icon={<ArrowLeft size={25} />} label="ปิด" onClick={onClose} />
           <ShellButton disabled={isBusy} icon={<Printer size={27} />} label="พิมพ์" onClick={onPrint} primary />
-          <ShellButton disabled={isBusy} icon={<PdfExportIcon size={27} />} label="ส่งออก PDF" onClick={onExportPdf} primary />
+          <ShellButton
+            disabled={isBusy || exportBusy}
+            icon={canSharePdf ? <Share2 size={27} /> : <PdfExportIcon size={27} />}
+            label={exportBusy ? "กำลังเตรียม PDF" : canSharePdf ? "แชร์ PDF" : "ส่งออก PDF"}
+            onClick={handleExportPdf}
+            primary
+          />
           <ShellButton icon={<Maximize size={26} />} label="พอดีหน้า" onClick={fitToPage} />
           <ShellButton icon={<Search size={27} />} label="ซูม" onClick={() => setZoomOpen((value) => !value)} />
           {zoomOpen ? zoomControls : null}
@@ -308,7 +341,13 @@ export function DocumentPreviewShell({
 
       <nav aria-label="คำสั่งตัวอย่างเอกสาร" className={styles.mobileDock}>
         <ShellButton disabled={isBusy} icon={<Printer size={25} />} label="พิมพ์" onClick={onPrint} primary />
-        <ShellButton disabled={isBusy} icon={<PdfExportIcon size={25} />} label="ส่งออก PDF" onClick={onExportPdf} primary />
+        <ShellButton
+          disabled={isBusy || exportBusy}
+          icon={canSharePdf ? <Share2 size={25} /> : <PdfExportIcon size={25} />}
+          label={exportBusy ? "กำลังเตรียม" : canSharePdf ? "แชร์ PDF" : "ส่งออก PDF"}
+          onClick={handleExportPdf}
+          primary
+        />
         <ShellButton icon={<Maximize size={25} />} label="พอดีหน้า" onClick={fitToPage} />
         <ShellButton icon={<Search size={25} />} label="ซูม" onClick={() => setZoomOpen((value) => !value)} />
         {zoomOpen ? <div className={styles.mobileZoom}>{zoomControls}</div> : null}

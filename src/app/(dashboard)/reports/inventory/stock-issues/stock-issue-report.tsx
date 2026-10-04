@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowLeft, Building2, ChevronRight, FileSpreadsheet, FileText, Package, Printer, Search, X } from "lucide-react";
+import { ArrowLeft, Building2, ChevronRight, FileSpreadsheet, FileText, Package, Printer, Search, Share2, X } from "lucide-react";
 import {
   getStockIssueReportAction,
   getStockIssueReportDetailAction,
@@ -23,6 +23,7 @@ import { ListDateRangeFilter, ListFilterButton, ListFilterSelect, ListSearchFiel
 import { MobileReportActions } from "@/components/mobile-report-actions";
 import type { CompanyDocumentContext } from "@/lib/company-settings";
 import { exportElementPdf, printElement } from "@/lib/document-print";
+import { canUseMobilePdfShare } from "@/lib/pdf-delivery";
 import { stockIssueReportExportUrl, type StockIssueReportStatus, type StockIssueReportView } from "@/lib/stock-issue-report";
 import styles from "./stock-issue-report.module.css";
 
@@ -52,8 +53,16 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
   const [detailError, setDetailError] = useState("");
   const [printRows, setPrintRows] = useState<StockIssueReportRow[] | null>(null);
   const [printMode, setPrintMode] = useState<"print" | "pdf">("print");
+  const [canSharePdf, setCanSharePdf] = useState(false);
   const printRoot = useRef<HTMLDivElement>(null);
   const [applied, setApplied] = useState<Applied>({ startDate, endDate, warehouseId, departmentId, status, search: "" });
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setCanSharePdf(canUseMobilePdfShare());
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const load = (nextView: StockIssueReportView, nextPage: number, nextPageSize = pageSize, filters = applied) => startTransition(async () => {
     const result = await getStockIssueReportAction({ view: nextView, ...filters, page: nextPage, pageSize: nextPageSize });
@@ -96,7 +105,11 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
     const task = printMode === "pdf"
       ? exportElementPdf(printRoot.current, { ...options, filename: `stock-issue-report-${view}-${applied.startDate}-${applied.endDate}` })
       : printElement(printRoot.current, { ...options, title: `stock-issue-report-${view}` });
-    void task.catch(() => toast.error("ไม่สามารถเตรียมเอกสารสำหรับพิมพ์ได้")).finally(() => setPrintRows(null));
+    void task
+      .catch((error) => toast.error(
+        error instanceof Error ? error.message : printMode === "pdf" ? "ไม่สามารถสร้างไฟล์ PDF ได้" : "ไม่สามารถเตรียมเอกสารสำหรับพิมพ์ได้",
+      ))
+      .finally(() => setPrintRows(null));
   }, [applied.endDate, applied.startDate, printMode, printRows, view]);
 
   const exportUrl = stockIssueReportExportUrl({ view, ...applied });
@@ -133,7 +146,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
     </form>
     <MobileReportActions actions={[
       { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => window.open(exportUrl, "_self") },
-      { disabled: pending, icon: <FileText size={18} />, label: "บันทึก PDF", onSelect: () => preparePrint(true) },
+      { disabled: pending, icon: canSharePdf ? <Share2 size={18} /> : <FileText size={18} />, label: canSharePdf ? "แชร์ PDF" : "บันทึก PDF", onSelect: () => preparePrint(true) },
       { disabled: pending, icon: <Printer size={18} />, label: "พิมพ์ A4", onSelect: () => preparePrint() },
     ]} />
     <div className="hidden min-[901px]:block">
@@ -145,7 +158,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
       <ListSearchField className={styles.search} onChange={setQuery} placeholder="เลขที่ใบเบิก ชื่อผู้เบิก สินค้า..." value={query} />
       <ListFilterButton className={styles.searchButton} disabled={pending} icon={<Search size={18} />} tone="primary" type="submit">ค้นหา</ListFilterButton>
       <ExcelExportButton className={styles.exportButton} disabled={pending} onClick={() => window.open(exportUrl, "_self")} />
-      <PdfExportButton className={styles.pdfButton} disabled={pending} label="บันทึกเป็น PDF" onClick={() => preparePrint(true)} title="เปิดหน้าต่างพิมพ์เพื่อเลือก Save as PDF" />
+      <PdfExportButton className={styles.pdfButton} disabled={pending} label="ส่งออก PDF" onClick={() => preparePrint(true)} title="ดาวน์โหลดไฟล์ PDF" />
       <button className={styles.printButton} disabled={pending} onClick={() => preparePrint()} type="button"><Printer size={18} />พิมพ์ A4</button>
     </div></form>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, Package, X } from "lucide-react";
 import { getPurchaseAnalysisProductDetailAction, type PurchaseAnalysisProductDetail, type PurchaseAnalysisRow } from "@/app/actions/purchase-analysis";
 import { DataTable, DataTableFrame } from "@/components/data-table";
@@ -74,7 +75,7 @@ export function PurchaseAnalysisProductDrawer({ row, startDate, endDate, onClose
                     </tr>
                     {open && <tr className={styles.poDetailRow}><td colSpan={11}><div className={styles.productOrderDetail}>
                       <dl><div><dt>เลขที่ PO</dt><dd>{po.po_number}</dd></div><div><dt>ผู้ขาย</dt><dd className={styles.productVendorName}>{po.vendor_code} · {po.vendor_name}</dd></div><div><dt>วันที่เอกสาร</dt><dd>{date(po.document_date)}</dd></div><div><dt>กำหนดส่งสินค้า</dt><dd>{date(po.delivery_date)}</dd></div><div><dt>จำนวน</dt><dd>{qty(po.ordered_qty)} {detail.product.unit_name}</dd></div><div><dt>ราคา/หน่วย</dt><dd>{money(po.unit_price)}</dd></div><div><dt>มูลค่า</dt><dd>{money(po.total_value)}</dd></div><div><dt>รับแล้ว</dt><dd>{qty(po.received_qty)}</dd></div><div><dt>ค้างรับ</dt><dd>{qty(po.pending_qty)}</dd></div></dl>
-                      <a href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></a>
+                      <Link href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></Link>
                     </div></td></tr>}
                   </Fragment>; })}</tbody>
                 </DataTable>
@@ -87,7 +88,7 @@ export function PurchaseAnalysisProductDrawer({ row, startDate, endDate, onClose
                   <span className={styles.productVendorName}><b>{po.vendor_code}</b> · {po.vendor_name}</span>
                   <span data-label="วันที่เอกสาร">{date(po.document_date)}</span><span data-label="กำหนดส่งสินค้า">{date(po.delivery_date)}</span><span data-label="จำนวน">{qty(po.ordered_qty)} {detail.product.unit_name}</span><span data-label="มูลค่า">{money(po.total_value)}</span><span className={styles.goodText} data-label="รับแล้ว">{qty(po.received_qty)}</span><span className={po.pending_qty > 0 ? styles.warnText : styles.goodText} data-label="ค้างรับ">{qty(po.pending_qty)}</span>
                 </button>
-                {open && <div className={styles.productMobileDetail}><dl><div><dt>ราคา/หน่วย</dt><dd>{money(po.unit_price)}</dd></div><div><dt>สถานะรับ</dt><dd>{percent(po.received_rate)}</dd></div></dl><a href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></a></div>}
+                {open && <div className={styles.productMobileDetail}><dl><div><dt>ราคา/หน่วย</dt><dd>{money(po.unit_price)}</dd></div><div><dt>สถานะรับ</dt><dd>{percent(po.received_rate)}</dd></div></dl><Link href={`/purchase/po?q=${encodeURIComponent(po.po_number)}`}>เปิดเอกสาร PO <ExternalLink /></Link></div>}
               </article>; })}
             </div>
           </>}
