@@ -1,5 +1,7 @@
 "use client";
 
+import { useRememberedListUrl } from "@/lib/use-list-state";
+
 import {
   useCallback,
   useEffect,
@@ -46,7 +48,8 @@ import {
 } from "./item-dynamic-columns";
 import { ItemSideDrawer } from "./item-side-drawer";
 import { MobileEntityList } from "@/components/mobile-entity-list";
-import { useHasPermission } from "@/components/permission-context";
+import { useHasPermission, usePermissions } from "@/components/permission-context";
+import { canManageCatalogLifecycle } from "@/lib/permission-ui";
 import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 const inputClass =
@@ -67,9 +70,14 @@ export function ItemCatalog({
   initialPageSize?: number;
   initialSearch?: string;
 }) {
+  useRememberedListUrl();
   const canCreate = useHasPermission("items.create");
   const canEdit = useHasPermission("items.edit");
-  const canDelete = useHasPermission("items.delete");
+  const permissions = usePermissions();
+  const canDelete = canManageCatalogLifecycle(
+    permissions.codes,
+    permissions.isOwner,
+  );
   const [type, setType] = useState(() =>
     initialData.types.some((item) => item.code === initialTypeCode)
       ? initialTypeCode
@@ -95,6 +103,16 @@ export function ItemCatalog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [drawerItem, setDrawerItem] = useState<CatalogItem | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+
+  const [previousData, setPreviousData] = useState(initialData);
+  if (previousData !== initialData) {
+    setPreviousData(initialData);
+    setType(initialData.types.some((item) => item.code === initialTypeCode) ? initialTypeCode : "ALL");
+    setQuery(initialSearch); setPage(initialPage); setPageSize(initialPageSize);
+    setItems(initialData.items);
+    setTotalCount(initialData.pagination?.totalCount ?? initialData.items.length);
+    setTotalPages(initialData.pagination?.totalPages ?? 1);
+  }
 
   // Client-side memory cache for instant 0ms back-and-forth page navigation
   const pageCacheRef = useRef<

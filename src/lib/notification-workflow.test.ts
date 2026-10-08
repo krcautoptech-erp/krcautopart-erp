@@ -82,3 +82,4 @@ test("browser and push sender share one server-derived VAPID identity", () => {
   assert.doesNotMatch(client, /NEXT_PUBLIC_VAPID_PUBLIC_KEY/);
   assert.doesNotMatch(installedWebPush, /url\.parse\(/);
 });
+

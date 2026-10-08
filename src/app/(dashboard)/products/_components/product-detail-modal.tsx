@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Image as ImageIcon, X } from "lucide-react";
 import { useApp } from "@/components/app-context";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { PdfExportButton } from "@/components/pdf-export-button";
 import { printHtmlDocument } from "@/lib/document-print";
 import type { ProductRecord } from "./product-catalog";
@@ -512,23 +513,28 @@ export function ProductDetailModal({
 
   const statusActive = detailProduct.status === STATUS_ACTIVE;
   const statusLabel = getStatusLabel(detailProduct.status);
-  const a5Style = useMemo(
-    () =>
-      ({
-        width: "min(210mm, calc(100vw - 32px))",
-        height: "min(148mm, calc(100vh - 32px))",
-        minWidth: "min(210mm, calc(100vw - 32px))",
-        minHeight: "min(148mm, calc(100vh - 32px))",
-      }) satisfies React.CSSProperties,
-    [],
-  );
+
+  useBodyScrollLock(true);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-0 backdrop-blur-sm sm:p-4">
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-0 backdrop-blur-sm sm:p-4 overscroll-contain animate-in fade-in duration-200"
+        onClick={onClose}
+        role="dialog"
+        aria-modal="true"
+      >
         <div
-          className="relative flex flex-col overflow-hidden border border-outline bg-white shadow-[0_0_50px_rgba(0,0,0,0.05)] dark:border-[#333333] dark:bg-[#121212] dark:shadow-[0_0_50px_rgba(0,0,0,0.5)]"
-          style={a5Style}
+          className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-[0_0_50px_rgba(0,0,0,0.05)] dark:border-[#333333] dark:bg-[#121212] dark:shadow-[0_0_50px_rgba(0,0,0,0.5)] sm:h-[min(148mm,calc(100dvh-32px))] sm:w-[min(210mm,calc(100vw-32px))] sm:min-h-[min(148mm,calc(100dvh-32px))] sm:min-w-[min(210mm,calc(100vw-32px))] sm:rounded-lg sm:border sm:border-outline overscroll-contain animate-in zoom-in-95 duration-150"
+          onClick={(event) => event.stopPropagation()}
         >
           <button
             onClick={onClose}
@@ -558,7 +564,7 @@ export function ProductDetailModal({
             <div className="h-px w-full bg-on-surface opacity-10" />
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4 sm:px-8 md:flex-row md:gap-8 md:overflow-hidden md:py-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-8 md:flex-row md:gap-8 md:overflow-hidden md:py-6">
             <div className="flex w-full shrink-0 flex-col items-center overflow-visible md:w-[180px] md:items-stretch md:overflow-hidden">
               <div className="flex h-[180px] w-[180px] shrink-0 items-center justify-center overflow-hidden border border-outline bg-white p-4 grayscale transition-all duration-700 hover:grayscale-0 dark:border-[#333333] dark:bg-[#1e1e1e] dark:opacity-80 dark:hover:opacity-100">
                 {detailProduct.primary_image ? (
@@ -640,7 +646,7 @@ export function ProductDetailModal({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-outline/50 bg-surface-container/30 px-4 py-3 dark:border-[#333333] dark:bg-[#181818] sm:px-8 sm:py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-outline/50 bg-surface-container/30 px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] dark:border-[#333333] dark:bg-[#181818] sm:px-8 sm:py-4">
             <div className="flex gap-4 sm:gap-6">
               <button
                 onClick={handlePrintLabel}

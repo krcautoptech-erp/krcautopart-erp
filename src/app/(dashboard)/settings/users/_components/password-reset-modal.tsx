@@ -3,6 +3,7 @@
 import { KeyRound, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { validateManagedPassword } from "@/lib/user-management";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export function PasswordResetModal({
   error,
@@ -17,6 +18,7 @@ export function PasswordResetModal({
   onClose: () => void;
   onSubmit: (password: string) => void;
 }) {
+  useBodyScrollLock(true);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -37,9 +39,10 @@ export function PasswordResetModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm overscroll-contain" onClick={onClose} role="dialog" aria-modal="true">
       <form
-        className="w-full max-w-[460px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
+        className="w-full max-w-[460px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl overscroll-contain"
+        onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
       >
         <header className="flex h-14 items-center justify-between border-b border-outline-variant px-5">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { useMemo, useState, useTransition, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Ban, Eye, Loader2, MoreVertical, Plus, Printer, Search } from "lucide-react";
@@ -68,19 +70,20 @@ const GR_STATUS_META: Record<
 };
 
 export function ReceiptListPage({ initialGoodsReceipts, pendingPOs, warehouses, documentContext, filters }: Props) {
+  useListScroll();
   const router = useRouter();
   const canCreate = useHasPermission("inventory.create_gr");
   const canCancel = useHasPermission("inventory.cancel_gr");
   const [isPending, startTransition] = useTransition();
   const [createOpen, setCreateOpen] = useState(false);
   const [createVersion, setCreateVersion] = useState(0);
-  const [query, setQuery] = useState(filters.query);
-  const [poFilter, setPoFilter] = useState("all");
-  const [vendorFilter, setVendorFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | GoodsReceipt["status"]>("all");
-  const [startDate, setStartDate] = useState(filters.startDate);
-  const [endDate, setEndDate] = useState(filters.endDate);
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useListState("query", filters.query);
+  const [poFilter, setPoFilter] = useListState("poFilter", "all");
+  const [vendorFilter, setVendorFilter] = useListState("vendorFilter", "all");
+  const [statusFilter, setStatusFilter] = useListState<"all" | GoodsReceipt["status"]>("statusFilter", "all");
+  const [startDate, setStartDate] = useListState("startDate", filters.startDate);
+  const [endDate, setEndDate] = useListState("endDate", filters.endDate);
+  const [page, setPage] = useListState("page", 1);
   const [printDetail, setPrintDetail] = useState<ComponentProps<typeof GrPrintPreviewModal>["detail"] | null>(null);
   const [mobileDetail, setMobileDetail] = useState<{ detail: ComponentProps<typeof GrPrintPreviewModal>["detail"]; status: GoodsReceipt["status"] } | null>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);

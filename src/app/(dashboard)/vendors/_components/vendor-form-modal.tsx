@@ -4,6 +4,10 @@ import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
+import { matchesMemoryShape } from "@/lib/session-memory";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import type {
   VendorAddressInput,
   VendorInput,
@@ -30,7 +34,7 @@ type VendorFormModalProps = {
   lookups: Lookups;
   mode: "create" | "edit";
   onClose: () => void;
-  onSubmit: (input: VendorInput) => Promise<void>;
+  onSubmit: (input: VendorInput) => Promise<boolean>;
   vendor?: VendorRecord | null;
 };
 
@@ -148,7 +152,11 @@ function buildDraftFromVendor(vendor: VendorRecord): VendorInput {
   };
 }
 
-export function VendorFormModal({
+export function VendorFormModal(props: VendorFormModalProps) {
+  return <VendorFormEditor key={`${props.mode}:${props.vendor?.id ?? "new"}`} {...props} />;
+}
+
+function VendorFormEditor({
   lookups,
   mode,
   onClose,
@@ -163,13 +171,28 @@ export function VendorFormModal({
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [prevVendor, setPrevVendor] = useState(vendor);
-  const [prevLookups, setPrevLookups] = useState(lookups);
-  if (vendor !== prevVendor || lookups !== prevLookups) {
-    setPrevVendor(vendor);
-    setPrevLookups(lookups);
-    setDraft(vendor ? buildDraftFromVendor(vendor) : buildEmptyDraft(lookups));
-  }
+  const draftValue = { draft, addressDraft, addressModalIndex: addressModalIndex ?? -1, isAddressModalOpen };
+  const [initialDraftValue] = useState(() => draftValue);
+  const draftKey = `master-vendor:${vendor?.id ?? "new"}`;
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey, value: draftValue, initialValue: initialDraftValue,
+    revision: JSON.stringify(vendor ?? null),
+    onRestore: (value) => {
+      const restored = value.draft;
+      if (!lookups.groups.some((option) => option.id === restored.vendor_group_id) ||
+        !lookups.creditTerms.some((option) => option.id === restored.credit_term_id) ||
+        !lookups.paymentMethods.some((option) => option.id === restored.payment_method_id) ||
+        !lookups.taxTypes.some((option) => option.id === restored.tax_type_id)) throw new Error("ข้อมูลตัวเลือกในฉบับร่างเปลี่ยนแล้ว กรุณาตรวจสอบก่อนกู้คืน");
+      if (!restored.vendor_addresses.every((address) => matchesMemoryShape(address, normalizeAddressDraft(buildNewAddress(1))))) throw new Error("ข้อมูลที่อยู่ในฉบับร่างไม่สมบูรณ์");
+      setDraft({ ...restored, vendor_code: vendor?.vendor_code ?? "", vendor_addresses: restored.vendor_addresses.map((address) => normalizeAddressDraft(address)) });
+      setAddressDraft(value.addressDraft);
+      setAddressModalIndex(value.addressModalIndex < 0 ? null : value.addressModalIndex);
+      setIsAddressModalOpen(value.isAddressModalOpen);
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges);
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!isSubmitting) requestNavigation(onClose); };
 
   const updateField = <Key extends keyof VendorInput>(key: Key, value: VendorInput[Key]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -246,19 +269,21 @@ export function VendorFormModal({
     event.preventDefault();
     setIsSubmitting(true);
     try {
-      await onSubmit(draft);
+      if (await onSubmit(draft)) clearDraft();
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  useBodyScrollLock(true);
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-0 sm:p-4 backdrop-blur-sm overscroll-contain animate-in fade-in duration-150">
       <form
-        className="max-h-[92vh] w-full max-w-[1180px] overflow-hidden rounded-[10px] border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30"
+        className="flex h-[100dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-none border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30 sm:h-auto sm:max-h-[92dvh] sm:rounded-[10px]"
         onSubmit={handleSubmit}
       >
-        <div className="flex items-center justify-between border-b border-red-200 px-6 py-4 dark:border-red-500/25">
+        <div className="flex shrink-0 items-center justify-between border-b border-red-200 px-6 py-4 dark:border-red-500/25">
           <div className="flex items-center gap-3">
             <CompanyFormLogo />
             <div>
@@ -272,14 +297,15 @@ export function VendorFormModal({
           </div>
           <button
             className="grid h-9 w-9 place-items-center rounded-[6px] text-on-surface hover:bg-surface-container"
-            onClick={onClose}
+            onClick={closeForm}
             type="button"
           >
             <X size={24} />
           </button>
         </div>
 
-        <div className="max-h-[calc(92vh-146px)] overflow-y-auto">
+        {draftPrompt}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           <div className="space-y-6 p-6">
             <div className="grid items-stretch gap-0 lg:grid-cols-[0.42fr_0.58fr]">
               <section className="flex h-full flex-col gap-5 border-b border-red-100 pb-6 dark:border-red-500/20 lg:border-b-0 lg:border-r lg:pr-6 lg:pb-0">
@@ -477,7 +503,7 @@ export function VendorFormModal({
         <div className="flex justify-end gap-3 border-t border-red-200 px-6 py-4 dark:border-red-500/25">
           <button
             className="h-10 rounded-[6px] border border-red-200 px-8 text-[14px] font-bold text-on-surface hover:bg-surface-container dark:border-red-500/30"
-            onClick={onClose}
+            onClick={closeForm}
             type="button"
           >
             ยกเลิก
@@ -564,9 +590,11 @@ function AddressModal({
     });
   };
 
+  useBodyScrollLock(true);
+
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-[860px] rounded-[10px] border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-0 sm:p-4 backdrop-blur-sm overscroll-contain animate-in fade-in duration-150">
+      <div className="h-[100dvh] sm:h-auto sm:max-h-[92dvh] w-full max-w-[860px] overflow-y-auto overscroll-contain rounded-none sm:rounded-[10px] border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30">
         <div className="flex items-center justify-between border-b border-red-200 px-5 py-4 dark:border-red-500/20">
           <div>
             <h3 className="text-[20px] font-bold text-on-surface">เพิ่ม / แก้ไขที่อยู่ผู้ขาย</h3>

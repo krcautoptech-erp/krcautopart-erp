@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import type { ItemDeletableCheck } from "@/app/actions/items";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export interface ItemDeletePromptModalProps {
   isOpen: boolean;
@@ -33,13 +34,15 @@ export function ItemDeletePromptModal({
   onDeactivate,
   actionLoading,
 }: ItemDeletePromptModalProps) {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
     <div
       aria-modal="true"
       role="dialog"
-      className="fixed inset-0 z-[160] grid place-items-center bg-black/60 p-4 backdrop-blur-[3px] animate-in fade-in duration-150"
+      className="fixed inset-0 z-[160] grid place-items-center bg-black/60 p-4 backdrop-blur-[3px] animate-in fade-in duration-150 overscroll-contain"
     >
       <section className="w-full max-w-[490px] overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest text-on-surface shadow-2xl animate-in zoom-in-95 duration-150">
         {/* Header */}

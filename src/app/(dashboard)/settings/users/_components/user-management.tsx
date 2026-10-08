@@ -1,5 +1,7 @@
 "use client";
 
+import { useRememberedListUrl } from "@/lib/use-list-state";
+
 import {
   CirclePause,
   CirclePlay,
@@ -32,7 +34,8 @@ import {
 } from "@/app/actions/users";
 import { ActiveStatusBadge } from "@/components/status-badge";
 import { MobileEntityList } from "@/components/mobile-entity-list";
-import { useHasPermission } from "@/components/permission-context";
+import { usePermissions } from "@/components/permission-context";
+import { canManageUsers } from "@/lib/permission-ui";
 import { ListFilterSelect, ListSearchField, MobileListFilters } from "@/components/list-filters";
 import {
   validateCreateUserInput,
@@ -57,10 +60,12 @@ export function UserManagement({
   initialFilters: UserListFilters;
   tabs?: ReactNode;
 }) {
+  useRememberedListUrl();
   const router = useRouter();
-  const canCreate = useHasPermission("users.create");
-  const canEdit = useHasPermission("users.edit");
-  const canChangeStatus = useHasPermission("users.delete");
+  const { isOwner } = usePermissions();
+  const canCreate = canManageUsers(isOwner);
+  const canEdit = canManageUsers(isOwner);
+  const canChangeStatus = canManageUsers(isOwner);
   const [search, setSearch] = useState(initialFilters.search ?? "");
   const [departmentId, setDepartmentId] = useState(
     initialFilters.departmentId?.toString() ?? "",
@@ -79,6 +84,15 @@ export function UserManagement({
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const [previousFilters, setPreviousFilters] = useState(initialFilters);
+  if (previousFilters !== initialFilters) {
+    setPreviousFilters(initialFilters);
+    setSearch(initialFilters.search ?? "");
+    setDepartmentId(initialFilters.departmentId?.toString() ?? "");
+    setRoleId(initialFilters.roleId?.toString() ?? "");
+    setStatus(initialFilters.status ?? "");
+  }
+
   const updateUrl = useEffectEvent((nextSearch: string) => {
     const parameters = new URLSearchParams();
     if (nextSearch.trim()) parameters.set("search", nextSearch.trim());
@@ -90,9 +104,10 @@ export function UserManagement({
   });
 
   useEffect(() => {
+    if (search === (initialFilters.search ?? "")) return;
     const timer = window.setTimeout(() => updateUrl(search), 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, initialFilters.search]);
 
   const navigateWithFilters = (
     overrides: Partial<{

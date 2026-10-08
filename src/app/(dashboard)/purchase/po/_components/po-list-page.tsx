@@ -1,5 +1,7 @@
 "use client";
 
+import { useRememberedListUrl } from "@/lib/use-list-state";
+
 import {
   Ban,
   Eye,
@@ -88,6 +90,7 @@ export function PoListPage({
   total,
   vendors,
 }: PoListPageProps) {
+  useRememberedListUrl("po");
   const router = useRouter();
   const canCreate = useHasPermission("po.create");
   const canEdit = useHasPermission("po.edit");
@@ -279,7 +282,7 @@ export function PoListPage({
         </div>
       </div>
 
-      <form className="md:hidden" id="po-mobile-filters" method="get">
+      <form key={`mobile:${JSON.stringify(filters)}`} className="md:hidden" id="po-mobile-filters" method="get">
         <MobileListFilters activeCount={[filters.status, filters.vendorId].filter(Boolean).length} formId="po-mobile-filters" onClear={() => router.push("/purchase/po")} resultLabel={`แสดง ${total.toLocaleString("th-TH")} รายการ`} search={<ListSearchField defaultValue={filters.query} name="q" placeholder="ค้นหาเลขที่ PO, ผู้ขาย, เลขที่ PR..." />}>
           <ListFilterSelect defaultValue={filters.status} label="สถานะ" name="status"><option value="">ทั้งหมด</option>{PURCHASE_ORDER_STATUSES.map((status) => <option key={status} value={status}>{PURCHASE_ORDER_STATUS_META[status].label}</option>)}</ListFilterSelect>
           <ListFilterSelect defaultValue={filters.vendorId} label="ผู้ขาย" name="vendor"><option value="">ทั้งหมด</option>{vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.vendorName}</option>)}</ListFilterSelect>
@@ -287,7 +290,7 @@ export function PoListPage({
         </MobileListFilters>
       </form>
 
-      <form
+      <form key={`desktop:${JSON.stringify(filters)}`}
         className="hidden min-w-0 gap-2 md:grid md:grid-cols-2 xl:grid-cols-[1.22fr_0.88fr_0.88fr_1.18fr_auto]"
         method="get"
       >
@@ -327,8 +330,6 @@ export function PoListPage({
           defaultStartValue={filters.startDate}
           endName="end"
           minEnd={filters.startDate || undefined}
-          onEndChange={(_, event) => event.target.form?.requestSubmit()}
-          onStartChange={(_, event) => event.target.form?.requestSubmit()}
           startName="start"
         />
         <div className="flex items-center gap-2 sm:col-span-2 xl:col-span-1">

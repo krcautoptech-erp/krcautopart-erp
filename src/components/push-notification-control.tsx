@@ -32,7 +32,7 @@ function isStandalone() {
   );
 }
 
-async function ensureCurrentSubscription(
+export async function ensureCurrentSubscription(
   registration: ServiceWorkerRegistration,
   existing: PushSubscription | null,
   publicKey: string,
@@ -61,7 +61,7 @@ async function ensureCurrentSubscription(
   return subscription;
 }
 
-async function persistSubscription(subscription: PushSubscription) {
+export async function persistSubscription(subscription: PushSubscription) {
   const json = subscription.toJSON();
   if (!json.keys?.auth || !json.keys.p256dh) {
     throw new Error("PUSH_KEYS_MISSING");

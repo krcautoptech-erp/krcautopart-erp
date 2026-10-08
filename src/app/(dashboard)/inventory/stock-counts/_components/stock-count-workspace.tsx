@@ -33,11 +33,15 @@ import { useHasPermission } from "@/components/permission-context";
 import { StatusBadge, type StatusTone } from "@/components/status-badge";
 import { toast } from "@/components/toast";
 import { useUnsavedChanges } from "@/components/unsaved-changes";
+import { useFormDraft } from "@/components/form-draft";
+import { useListScroll, useListState } from "@/lib/use-list-state";
 import { formatDisplayDate } from "@/lib/purchase-requisitions";
 import type { CompanyDocumentContext } from "@/lib/company-settings";
 import { printElement } from "@/lib/document-print";
 import {
+  shouldRevealStockCountSystemQty,
   stockCountDifference,
+  stockCountPrintMode,
   stockCountStatusLabel,
   validateStockCountReview,
 } from "@/lib/stock-counts";
@@ -70,16 +74,20 @@ export function StockCountWorkspace({
   const canCancel = useHasPermission("stock_count.create");
   const canExport = useHasPermission("stock_count.export");
   const [pending, startTransition] = useTransition();
-  const printRootRef = useRef<HTMLDivElement>(null);
+  const blindPrintRootRef = useRef<HTMLDivElement>(null);
+  const resultPrintRootRef = useRef<HTMLDivElement>(null);
   const [detail, setDetail] = useState(initialDetail);
-  const [tab, setTab] = useState<"count" | "review" | "general" | "history">(
+  useListScroll();
+  const [savedTab, setTab] = useListState<"count" | "review" | "general" | "history">("tab",
     detail.header.status === "review" || detail.header.status === "approved"
       ? "review"
       : "count",
   );
-  const [query, setQuery] = useState("");
-  const [mobileIndex, setMobileIndex] = useState(0);
-  const [mobileLotIndex, setMobileLotIndex] = useState(0);
+  const tab = ["count", "review", "general", "history"].includes(savedTab) ? savedTab : "count";
+  const [query, setQuery] = useListState("query", "");
+  const [collapsedItems, setCollapsedItems] = useState<Set<number>>(
+    () => new Set(detail.items.slice(1).map((item) => item.id)),
+  );
   const [dialog, setDialog] = useState<
     null | "submit" | "return" | "approve" | "cancel"
   >(null);
@@ -99,6 +107,14 @@ export function StockCountWorkspace({
   );
   const [original, setOriginal] = useState(() => JSON.stringify(entries));
   const editable = detail.header.status === "counting" && canCount;
+  const initialDraft = useMemo(() => JSON.parse(original) as Record<number, Entry>, [original]);
+  const { draftPrompt, clearDraft } = useFormDraft({
+    key: `stock-count:${detail.header.id}`, value: entries, initialValue: initialDraft,
+    enabled: editable, revision: JSON.stringify(initialDetail),
+    onRestore: (draft) => setEntries(Object.fromEntries(
+      detail.items.flatMap((item) => item.lots.map((lot) => [lot.id, draft[lot.id] ?? entries[lot.id]])),
+    )),
+  });
   const visibleItems = useMemo(() => {
     const value = query.trim().toLocaleLowerCase("th");
     return detail.items.filter(
@@ -109,11 +125,6 @@ export function StockCountWorkspace({
           .includes(value),
     );
   }, [detail.items, query]);
-  const currentItem =
-    visibleItems[Math.min(mobileIndex, Math.max(0, visibleItems.length - 1))];
-  const currentLot = currentItem?.lots[
-    Math.min(mobileLotIndex, Math.max(0, currentItem.lots.length - 1))
-  ];
   const flat = detail.items.flatMap((item) =>
     item.lots.map((lot) => ({ ...lot, item })),
   );
@@ -126,6 +137,9 @@ export function StockCountWorkspace({
   }));
   const reviewError = validateStockCountReview(parsed);
   const completed = parsed.filter((entry) => entry.countedQty !== null).length;
+  const revealSystemQty =
+    shouldRevealStockCountSystemQty(detail.header.status) ||
+    (editable && completed === flat.length);
   const variance = parsed.filter(
     (entry) =>
       entry.countedQty !== null &&
@@ -184,6 +198,7 @@ export function StockCountWorkspace({
           return;
         }
         setOriginal(JSON.stringify(entries));
+        clearDraft();
       }
       if (thenSubmit) {
         const submitted = await submitStockCountAction(detail.header.id);
@@ -192,6 +207,7 @@ export function StockCountWorkspace({
           return;
         }
         setDialog(null);
+        clearDraft();
         toast.success("ส่งผลตรวจนับให้ผู้ตรวจสอบแล้ว");
       } else toast.success("บันทึกผลตรวจนับแล้ว");
       await refresh();
@@ -225,10 +241,13 @@ export function StockCountWorkspace({
       ...current,
       [id]: { ...current[id], ...patch },
     }));
-  const printBlindCount = async () => {
-    if (!printRootRef.current) return;
-    await printElement(printRootRef.current, {
-      title: detail.header.countNumber,
+  const printSheet = async (
+    root: HTMLDivElement | null,
+    titleSuffix: string,
+  ) => {
+    if (!root) return;
+    await printElement(root, {
+      title: `${detail.header.countNumber}-${titleSuffix}`,
       paperSize: "A4",
       orientation: "portrait",
       bodyClass: "printing-stock-count",
@@ -236,6 +255,7 @@ export function StockCountWorkspace({
   };
   return (
     <section className="stock-count-document">
+      {draftPrompt}
       <header className="stock-count-document-header">
         <div className="stock-count-title-block">
           <div>
@@ -259,13 +279,24 @@ export function StockCountWorkspace({
         </div>
         <div className="stock-count-header-actions">
           {canExport && (
-            <button
-              className="stock-count-secondary"
-              onClick={printBlindCount}
-            >
-              <Printer size={16} />
-              พิมพ์ใบตรวจนับ
-            </button>
+            <>
+              <button
+                className="stock-count-secondary"
+                onClick={() => printSheet(blindPrintRootRef.current, "blind-count")}
+              >
+                <Printer size={16} />
+                พิมพ์ใบเดินนับ
+              </button>
+              {stockCountPrintMode(detail.header.status) === "result" && (
+                <button
+                  className="stock-count-secondary"
+                  onClick={() => printSheet(resultPrintRootRef.current, "count-result")}
+                >
+                  <Printer size={16} />
+                  พิมพ์รายงานผล
+                </button>
+              )}
+            </>
           )}
           <Link
             className="stock-count-secondary"
@@ -332,10 +363,7 @@ export function StockCountWorkspace({
               <input
                 placeholder="ค้นหาสินค้า หรือ Lot..."
                 value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setMobileIndex(0);
-                }}
+                onChange={(event) => setQuery(event.target.value)}
               />
             </label>
             <span>
@@ -347,7 +375,6 @@ export function StockCountWorkspace({
               <section className="stock-count-item-group" key={item.id}>
                 <header>
                   <div>
-                <ChevronDown size={15} />
                     <strong>{item.itemCode}</strong>
                     <span>{item.itemName}</span>
                   </div>
@@ -360,10 +387,10 @@ export function StockCountWorkspace({
                       <th>Lot</th>
                       <th>วันที่รับเข้า</th>
                       <th>วันหมดอายุ</th>
-                      <th>จำนวนในระบบ</th>
+                      {revealSystemQty && <th>จำนวนในระบบ</th>}
                       <th>จำนวนที่นับได้ *</th>
-                      <th>ผลต่าง</th>
-                      <th>หมายเหตุ</th>
+                      {revealSystemQty && <th>ผลต่าง</th>}
+                      {revealSystemQty && <th>เหตุผล</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -390,9 +417,11 @@ export function StockCountWorkspace({
                               ? formatDisplayDate(lot.expiryDate)
                               : "-"}
                           </td>
-                          <td className="text-right">
-                            {qty(lot.systemQty)} {item.unitName}
-                          </td>
+                          {revealSystemQty && (
+                            <td className="text-right">
+                              {qty(lot.systemQty)} {item.unitName}
+                            </td>
+                          )}
                           <td>
                             <input
                               aria-label={`ยอดนับจริง ${item.itemCode} ${lot.lotNumber}`}
@@ -416,25 +445,29 @@ export function StockCountWorkspace({
                               }}
                             />
                           </td>
-                          <td
-                            className={`text-right font-bold ${diff && diff > 0 ? "text-emerald-700" : diff && diff < 0 ? "text-red-600" : ""}`}
-                          >
-                            {diff === null
-                              ? "—"
-                              : `${diff > 0 ? "+" : ""}${qty(diff)}`}
-                          </td>
-                          <td>
-                            <input
-                              aria-label={`เหตุผล ${item.itemCode} ${lot.lotNumber}`}
-                              disabled={!editable || !diff}
-                              maxLength={500}
-                              placeholder={diff ? "ระบุเหตุผล..." : "—"}
-                              value={entries[lot.id]?.reason ?? ""}
-                              onChange={(event) =>
-                                setEntry(lot.id, { reason: event.target.value })
-                              }
-                            />
-                          </td>
+                          {revealSystemQty && (
+                            <>
+                              <td
+                                className={`text-right font-bold ${diff && diff > 0 ? "text-emerald-700" : diff && diff < 0 ? "text-red-600" : ""}`}
+                              >
+                                {diff === null
+                                  ? "—"
+                                  : `${diff > 0 ? "+" : ""}${qty(diff)}`}
+                              </td>
+                              <td>
+                                <input
+                                  aria-label={`เหตุผล ${item.itemCode} ${lot.lotNumber}`}
+                                  disabled={!editable || !diff}
+                                  maxLength={500}
+                                  placeholder={diff ? "ระบุเหตุผล..." : "—"}
+                                  value={entries[lot.id]?.reason ?? ""}
+                                  onChange={(event) =>
+                                    setEntry(lot.id, { reason: event.target.value })
+                                  }
+                                />
+                              </td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
@@ -444,122 +477,96 @@ export function StockCountWorkspace({
             ))}
           </div>
           <div className="stock-count-entry-mobile">
-            {currentItem ? (
-              <>
-                <div className="stock-count-mobile-index">
-                  <span>
-                    รายการ {Math.min(mobileIndex + 1, visibleItems.length)} /{" "}
-                    {visibleItems.length}
-                  </span>
-                  <strong>{currentItem.itemCode}</strong>
-                  <p>{currentItem.itemName}</p>
-                </div>
-                {currentItem.lots.length > 1 && (
-                  <label className="stock-count-mobile-lot-picker">
-                    <span>Lot</span>
-                    <select
-                      value={currentLot?.id ?? ""}
-                      onChange={(event) =>
-                        setMobileLotIndex(
-                          currentItem.lots.findIndex(
-                            (lot) => lot.id === Number(event.target.value),
-                          ),
-                        )
-                      }
-                    >
-                      {currentItem.lots.map((lot) => (
-                        <option key={lot.id} value={lot.id}>
-                          {lot.lotNumber || "ไม่แยก Lot"}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                {currentLot && (() => {
-                  const lot = currentLot;
-                  const value = entries[lot.id]?.value ?? "";
-                  const counted = value === "" ? null : Number(value);
-                  const diff =
-                    counted === null
-                      ? null
-                      : stockCountDifference(lot.systemQty, counted);
-                  return (
-                    <article key={lot.id}>
-                      <header>
-                        <strong>{lot.lotNumber || "ไม่แยก Lot"}</strong>
-                        <span>
-                          ยอดระบบ {qty(lot.systemQty)} {currentItem.unitName}
-                        </span>
-                      </header>
-                      {lot.expiryDate && (
-                        <small>
-                          หมดอายุ {formatDisplayDate(lot.expiryDate)}
-                        </small>
-                      )}
-                      <dl className="stock-count-mobile-lot-meta">
-                        <div><dt>วันที่รับเข้า</dt><dd>{lot.receivedAt ? formatDisplayDate(lot.receivedAt) : "-"}</dd></div>
-                        <div><dt>วันหมดอายุ</dt><dd>{lot.expiryDate ? formatDisplayDate(lot.expiryDate) : "-"}</dd></div>
-                        <div><dt>จำนวนในระบบ</dt><dd>{qty(lot.systemQty)} {currentItem.unitName}</dd></div>
-                      </dl>
-                      <label>
-                        <span>ยอดนับจริง</span>
-                        <input
-                          disabled={!editable}
-                          inputMode="decimal"
-                          min="0"
-                          step="0.0001"
-                          type="number"
-                          value={value}
-                          onChange={(event) =>
-                            setEntry(lot.id, { value: event.target.value })
-                          }
-                        />
-                      </label>
-                      <div className={diff ? "variance" : ""}>
-                        ผลต่าง{" "}
-                        <strong>
-                          {diff === null
-                            ? "—"
-                            : `${diff > 0 ? "+" : ""}${qty(diff)}`}
-                        </strong>
-                      </div>
-                      {diff !== null && diff !== 0 && (
-                        <label>
-                          <span>เหตุผล *</span>
-                          <input
-                            disabled={!editable}
-                            value={entries[lot.id]?.reason ?? ""}
-                            onChange={(event) =>
-                              setEntry(lot.id, { reason: event.target.value })
-                            }
-                          />
-                        </label>
-                      )}
-                    </article>
-                  );
-                })()}
-                <footer>
+            {visibleItems.length ? visibleItems.map((item, itemIndex) => {
+              const completedLots = item.lots.filter(
+                (lot) => (entries[lot.id]?.value ?? "") !== "",
+              ).length;
+              const collapsed = collapsedItems.has(item.id);
+              return (
+                <section className="stock-count-mobile-item" key={item.id}>
                   <button
-                    disabled={mobileIndex === 0}
-                    onClick={() => {
-                      setMobileIndex((value) => value - 1);
-                      setMobileLotIndex(0);
-                    }}
+                    aria-expanded={!collapsed}
+                    className="stock-count-mobile-item-header"
+                    onClick={() => setCollapsedItems((current) => {
+                      const next = new Set(current);
+                      if (next.has(item.id)) next.delete(item.id);
+                      else next.add(item.id);
+                      return next;
+                    })}
+                    type="button"
                   >
-                    ก่อนหน้า
+                    <span>{itemIndex + 1}</span>
+                    <div>
+                      <strong>{item.itemCode}</strong>
+                      <p>{item.itemName}</p>
+                    </div>
+                    <small>{completedLots}/{item.lots.length} Lot</small>
+                    <ChevronDown aria-hidden="true" className={collapsed ? "" : "open"} size={17} />
                   </button>
-                  <button
-                    disabled={mobileIndex >= visibleItems.length - 1}
-                    onClick={() => {
-                      setMobileIndex((value) => value + 1);
-                      setMobileLotIndex(0);
-                    }}
-                  >
-                    รายการถัดไป
-                  </button>
-                </footer>
-              </>
-            ) : (
+                  {!collapsed && <div className="stock-count-mobile-lots">
+                    {item.lots.map((lot) => {
+                      const value = entries[lot.id]?.value ?? "";
+                      const counted = value === "" ? null : Number(value);
+                      const diff = counted === null || !Number.isFinite(counted)
+                        ? null
+                        : stockCountDifference(lot.systemQty, counted);
+                      return (
+                        <article className="stock-count-mobile-lot-row" key={lot.id}>
+                          <div className="stock-count-mobile-lot-name">
+                            <strong>{lot.lotNumber || "ไม่แยก Lot"}</strong>
+                            {lot.expiryDate && (
+                              <small>หมดอายุ {formatDisplayDate(lot.expiryDate)}</small>
+                            )}
+                            {revealSystemQty && (
+                              <small>ยอดระบบ {qty(lot.systemQty)} {item.unitName}</small>
+                            )}
+                          </div>
+                          <label>
+                            <span>ยอดนับจริง ({item.unitName})</span>
+                            <input
+                              aria-label={`ยอดนับจริง ${item.itemCode} ${lot.lotNumber}`}
+                              className="stock-count-mobile-qty"
+                              disabled={!editable}
+                              inputMode="decimal"
+                              min="0"
+                              step="0.0001"
+                              type="number"
+                              value={value}
+                              onChange={(event) => setEntry(lot.id, { value: event.target.value })}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter") return;
+                                const inputs = Array.from(
+                                  event.currentTarget
+                                    .closest(".stock-count-entry-mobile")
+                                    ?.querySelectorAll<HTMLInputElement>(".stock-count-mobile-qty:not(:disabled)") ?? [],
+                                );
+                                inputs[inputs.indexOf(event.currentTarget) + 1]?.focus();
+                              }}
+                            />
+                          </label>
+                          <span className={value ? "stock-count-mobile-done" : "stock-count-mobile-pending"}>
+                            {value ? <Check size={16} /> : "—"}
+                          </span>
+                          {revealSystemQty && diff !== null && diff !== 0 && (
+                            <div className="stock-count-mobile-variance">
+                              <b>ผลต่าง {diff > 0 ? "+" : ""}{qty(diff)}</b>
+                              <input
+                                aria-label={`เหตุผล ${item.itemCode} ${lot.lotNumber}`}
+                                disabled={!editable}
+                                maxLength={500}
+                                placeholder="ระบุเหตุผล *"
+                                value={entries[lot.id]?.reason ?? ""}
+                                onChange={(event) => setEntry(lot.id, { reason: event.target.value })}
+                              />
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>}
+                </section>
+              );
+            }) : (
               <p>ไม่พบรายการ</p>
             )}
           </div>
@@ -640,8 +647,11 @@ export function StockCountWorkspace({
             )}
         </div>
       </footer>
-      <div className="stock-count-print-root" ref={printRootRef}>
+      <div className="stock-count-print-root" ref={blindPrintRootRef}>
         <BlindCountSheet detail={detail} documentContext={documentContext} />
+      </div>
+      <div className="stock-count-print-root" ref={resultPrintRootRef}>
+        <StockCountResultSheet detail={detail} documentContext={documentContext} />
       </div>
       {dialog && (
         <div className="stock-count-dialog-overlay">
@@ -881,7 +891,7 @@ function BlindCountSheet({
   const rows = detail.items.flatMap((item) =>
     item.lots.map((lot, lotIndex) => ({ item, lot, lotIndex })),
   );
-  const rowsPerPage = 12;
+  const rowsPerPage = 14;
   const pages = Array.from(
     { length: Math.max(1, Math.ceil(rows.length / rowsPerPage)) },
     (_, pageIndex) =>
@@ -937,15 +947,101 @@ function BlindCountSheet({
                     <td>{item.unitName}</td><td></td><td></td>
                   </tr>
                 ))}
-                {Array.from({ length: rowsPerPage - pageRows.length }, (_, index) => (
-                  <tr aria-hidden="true" key={`blank-${index}`}><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-                ))}
               </tbody>
             </table>
           </div>
           <section className="stock-count-sheet-signatures" data-keep-together="true">
             <div><strong>ผู้ตรวจนับ</strong><span></span><small>วันที่ ____/____/________</small></div>
             <div><strong>ผู้ทวนสอบ</strong><span></span><small>วันที่ ____/____/________</small></div>
+          </section>
+          <CompanyDocumentFooter
+            context={documentContext}
+            currentPage={pageIndex + 1}
+            placement="page"
+            printedBy={detail.header.createdByName}
+            totalPages={pages.length}
+          />
+        </article>
+      ))}
+    </>
+  );
+}
+
+function StockCountResultSheet({
+  detail,
+  documentContext,
+}: {
+  detail: StockCountDetail;
+  documentContext: CompanyDocumentContext;
+}) {
+  const rows = detail.items.flatMap((item) =>
+    item.lots.map((lot, lotIndex) => ({ item, lot, lotIndex })),
+  );
+  const rowsPerPage = 16;
+  const pages = Array.from(
+    { length: Math.max(1, Math.ceil(rows.length / rowsPerPage)) },
+    (_, pageIndex) => rows.slice(pageIndex * rowsPerPage, (pageIndex + 1) * rowsPerPage),
+  );
+
+  return (
+    <>
+      {pages.map((pageRows, pageIndex) => (
+        <article className="stock-count-sheet" key={pageIndex}>
+          <CompanyDocumentHeader context={documentContext} priority={pageIndex === 0} />
+          <section className="stock-count-sheet-heading">
+            <div aria-hidden="true" />
+            <h1>รายงานผลตรวจนับสต็อก</h1>
+            <dl>
+              <div><dt>เลขที่ :</dt><dd>{detail.header.countNumber}</dd></div>
+              <div><dt>สถานะ :</dt><dd>{stockCountStatusLabel[detail.header.status]}</dd></div>
+            </dl>
+          </section>
+          <dl className="stock-count-sheet-meta">
+            <div><dt>คลังสินค้า</dt><dd>{detail.header.warehouseName}</dd></div>
+            <div><dt>วันที่ตรวจนับ</dt><dd>{formatDisplayDate(detail.header.documentDate)}</dd></div>
+            <div><dt>ผู้ตรวจนับ</dt><dd>{detail.header.assignedToName}</dd></div>
+            <div><dt>จุดตัดยอด</dt><dd>{new Date(detail.header.snapshotAt).toLocaleString("th-TH")}</dd></div>
+          </dl>
+          <div className="stock-count-sheet-table-wrap">
+            <table>
+              <colgroup>
+                <col className="stock-count-sheet-col-no" />
+                <col className="stock-count-sheet-col-item" />
+                <col className="stock-count-sheet-col-lot" />
+                <col className="stock-count-sheet-col-qty" />
+                <col className="stock-count-sheet-col-qty" />
+                <col className="stock-count-sheet-col-qty" />
+                <col className="stock-count-sheet-col-note" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#</th><th>รหัส / ชื่อสินค้า</th><th>Lot</th>
+                  <th>ยอดระบบ</th><th>ยอดนับจริง</th><th>ผลต่าง</th><th>เหตุผล</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map(({ item, lot, lotIndex }) => {
+                  const difference = lot.countedQty === null
+                    ? null
+                    : stockCountDifference(lot.systemQty, lot.countedQty);
+                  return (
+                    <tr key={lot.id}>
+                      <td>{lotIndex ? "" : item.lineNo}</td>
+                      <td><b>{item.itemCode}</b><span className="stock-count-sheet-item-name">{item.itemName}</span></td>
+                      <td>{lot.lotNumber || "—"}</td>
+                      <td>{qty(lot.systemQty)}</td>
+                      <td>{qty(lot.countedQty)}</td>
+                      <td>{difference === null ? "—" : `${difference > 0 ? "+" : ""}${qty(difference)}`}</td>
+                      <td>{lot.reason || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <section className="stock-count-sheet-signatures" data-keep-together="true">
+            <div><strong>ผู้ตรวจนับ</strong><span></span><small>วันที่ ____/____/________</small></div>
+            <div><strong>ผู้ตรวจสอบ / อนุมัติ</strong><span></span><small>วันที่ ____/____/________</small></div>
           </section>
           <CompanyDocumentFooter
             context={documentContext}

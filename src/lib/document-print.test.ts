@@ -63,11 +63,13 @@ test("enforces Printlogic.md typography and fragmentation standards", () => {
 
 test("uses one footer placement contract for printable documents and reports", () => {
   const footerCss = readFileSync(new URL("../components/company-document-footer.module.css", import.meta.url), "utf8");
+  const footerSource = readFileSync(new URL("../components/company-document-footer.tsx", import.meta.url), "utf8");
   assert.match(footerCss, /\.placementPage[\s\S]*position:\s*absolute/);
   assert.match(footerCss, /\.placementReport[\s\S]*position:\s*fixed/);
   assert.match(footerCss, /bottom:\s*var\(--document-footer-bottom, 3mm\)/);
   assert.match(footerCss, /left:\s*var\(--document-page-padding-inline, 6mm\)/);
   assert.doesNotMatch(footerCss, /\.footer\s*\{[^}]*width:\s*100%/);
+  assert.match(footerSource, /className=\{styles\.printMeta\} suppressHydrationWarning/);
 
   const sources = [
     "../app/(dashboard)/purchase/pr/_components/pr-print-preview-modal.tsx",
@@ -115,12 +117,18 @@ test("stock count print uses the shared print pipeline and fixed A4 footer layou
     "utf8",
   );
 
-  assert.match(source, /printElement\(printRootRef\.current/);
+  assert.match(source, /printElement\(root/);
+  assert.match(source, /blindPrintRootRef/);
+  assert.match(source, /resultPrintRootRef/);
   assert.match(source, /<CompanyDocumentHeader[\s\S]*context=\{documentContext\}/);
   assert.match(source, /<CompanyDocumentFooter[\s\S]*placement="page"/);
+  assert.match(source, /BlindCountSheet/);
+  assert.match(source, /StockCountResultSheet/);
+  assert.match(source, /พิมพ์ใบเดินนับ/);
+  assert.match(source, /พิมพ์รายงานผล/);
   assert.doesNotMatch(source, /Cut-off Snapshot/);
   assert.match(css, /\.stock-count-sheet-signatures\s*\{[\s\S]*position:\s*absolute/);
-  assert.match(css, /\.stock-count-sheet-table-wrap\s*\{[\s\S]*padding:\s*2mm 0 39mm/);
+  assert.doesNotMatch(css, /\.stock-count-sheet-table-wrap table\s*\{[\s\S]*height:\s*100%/);
 });
 
 test("builds batch document HTML with proper page break boundaries", () => {

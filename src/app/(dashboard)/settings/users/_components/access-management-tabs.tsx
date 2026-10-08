@@ -11,7 +11,7 @@ const TABS: Array<{
   label: string;
 }> = [
   {
-    href: "/settings/users",
+    href: "/settings/users?tab=users",
     id: "users",
     label: "ผู้ใช้งาน",
   },

@@ -70,7 +70,7 @@ export function CompanyDocumentFooter({
                 เอกสารสร้างโดยระบบอัตโนมัติ (KRC ERP)
               </span>
             ) : null}
-            <span className={styles.printMeta}>
+            <span className={styles.printMeta} suppressHydrationWarning>
               พิมพ์เมื่อ: {defaultPrintedAt}
               {printedBy ? ` • ผู้พิมพ์: ${printedBy}` : ""}
             </span>

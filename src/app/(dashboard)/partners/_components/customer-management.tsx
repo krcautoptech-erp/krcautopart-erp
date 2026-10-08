@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Download, Plus, Search, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
@@ -38,10 +40,11 @@ export function CustomerManagement({
   initialError,
   lookups,
 }: CustomerManagementProps) {
+  useListScroll();
   const router = useRouter();
   const [customers, setCustomers] = useState(initialCustomers);
-  const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [query, setQuery] = useListState("query", "");
+  const [typeFilter, setTypeFilter] = useListState("typeFilter", "all");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
   const [detailCustomer, setDetailCustomer] = useState<CustomerRecord | null>(null);
@@ -87,31 +90,33 @@ export function CustomerManagement({
 
     if ("error" in result) {
       toast.error("ไม่สามารถเพิ่มข้อมูลลูกหนี้ได้", result.error);
-      return;
+      return false;
     }
 
     toast.success("เพิ่มข้อมูลลูกหนี้เรียบร้อยแล้ว", input.customer_name);
     setFormMode(null);
     setSelectedCustomer(null);
     startTransition(() => router.refresh());
+    return true;
   };
 
   const handleUpdate = async (input: CustomerInput) => {
     if (!selectedCustomer) {
-      return;
+      return false;
     }
 
     const result = await updateCustomerAction(selectedCustomer.id, input);
 
     if ("error" in result) {
       toast.error("ไม่สามารถแก้ไขข้อมูลลูกหนี้ได้", result.error);
-      return;
+      return false;
     }
 
     toast.success("บันทึกข้อมูลลูกหนี้เรียบร้อยแล้ว", input.customer_name);
     setFormMode(null);
     setSelectedCustomer(null);
     startTransition(() => router.refresh());
+    return true;
   };
 
   const handleDelete = (customer: CustomerRecord) => {

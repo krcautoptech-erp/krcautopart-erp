@@ -70,14 +70,23 @@ self.addEventListener("push", (event) => {
       : DEFAULT_URL;
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: payload.body || "มีรายการใหม่ที่ต้องตรวจสอบ",
-      icon: "/pwa/icon-192.png",
-      badge: "/pwa/badge-96.png",
-      tag: payload.tag || "krc-erp",
-      renotify: true,
-      data: { actionUrl },
-    }),
+    Promise.all([
+      self.registration.showNotification(title, {
+        body: payload.body || "มีรายการใหม่ที่ต้องตรวจสอบ",
+        icon: "/pwa/icon-192.png",
+        badge: "/pwa/badge-96.png",
+        tag: payload.tag || "krc-erp",
+        renotify: true,
+        data: { actionUrl },
+      }),
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clients) => {
+          for (const client of clients) {
+            client.postMessage({ type: "KRC_NOTIFICATION_RECEIVED" });
+          }
+        }),
+    ]),
   );
 });
 
@@ -95,12 +104,16 @@ self.addEventListener("notificationclick", (event) => {
         );
 
         if (existingClient) {
-          return existingClient.focus().then(() => {
-            if ("navigate" in existingClient) {
-              return existingClient.navigate(targetUrl);
-            }
-            return undefined;
-          });
+          return existingClient
+            .focus()
+            .then((client) => {
+              const target = client || existingClient;
+              if ("navigate" in target) {
+                return target.navigate(targetUrl);
+              }
+              return undefined;
+            })
+            .catch(() => self.clients.openWindow(targetUrl));
         }
 
         return self.clients.openWindow(targetUrl);

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { DateRangePicker, type DateRangeValue } from "@/components/date-range-picker";
 
 export function ListFilterToolbar({
   children,
@@ -129,11 +130,12 @@ export function ListDateRangeFilter({
   label = "ช่วงวันที่",
   maxEnd,
   maxStart,
-  minEnd,
   onEndChange,
+  onRangeChange,
   onStartChange,
   startName,
   startValue,
+  submitOnChange = false,
 }: {
   active?: boolean;
   className?: string;
@@ -145,49 +147,50 @@ export function ListDateRangeFilter({
   maxEnd?: string;
   maxStart?: string;
   minEnd?: string;
-  onEndChange?: (value: string, event: ChangeEvent<HTMLInputElement>) => void;
-  onStartChange?: (value: string, event: ChangeEvent<HTMLInputElement>) => void;
+  onEndChange?: (value: string, event?: ChangeEvent<HTMLInputElement>) => void;
+  onRangeChange?: (value: DateRangeValue) => void;
+  onStartChange?: (value: string, event?: ChangeEvent<HTMLInputElement>) => void;
   startName?: string;
   startValue?: string;
+  submitOnChange?: boolean;
 }) {
-  const isActive = active ?? Boolean(
-    startValue || endValue || defaultStartValue || defaultEndValue,
-  );
-  const inputClass = "min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-on-surface outline-none dark:[color-scheme:dark]";
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controlled = startValue !== undefined || endValue !== undefined;
+  const [internalValue, setInternalValue] = useState<DateRangeValue>({
+    startDate: startValue ?? defaultStartValue ?? "",
+    endDate: endValue ?? defaultEndValue ?? "",
+  });
+  const value = controlled
+    ? { startDate: startValue ?? "", endDate: endValue ?? "" }
+    : internalValue;
+
+  const isActive = active ?? Boolean(value.startDate || value.endDate);
+
+  const handleRangeChange = (nextValue: DateRangeValue) => {
+    if (!controlled) setInternalValue(nextValue);
+    onRangeChange?.(nextValue);
+    if (!onRangeChange) {
+      if (nextValue.startDate !== value.startDate) onStartChange?.(nextValue.startDate);
+      if (nextValue.endDate !== value.endDate) onEndChange?.(nextValue.endDate);
+    }
+    if (submitOnChange) {
+      window.requestAnimationFrame(() => containerRef.current?.closest("form")?.requestSubmit());
+    }
+  };
 
   return (
-    <label
-      className={`relative flex h-[38px] min-w-0 items-center gap-2 rounded-[4px] border bg-surface-container-lowest px-3 transition-colors focus-within:border-primary ${
-        isActive ? "border-primary" : "border-outline-variant"
-      } ${className}`}
-    >
+    <div ref={containerRef} className={`relative min-w-0 ${isActive ? "[&_button:first-of-type]:border-primary" : ""} ${className}`}>
       <span className="pointer-events-none absolute left-3 top-0 z-10 -translate-y-1/2 bg-surface-container-lowest px-1 text-[11px] font-semibold leading-4 text-on-surface-variant">
         {label}
       </span>
-      <CalendarDays aria-hidden="true" className="shrink-0 text-on-surface-variant" size={18} />
-      <input
-        aria-label="วันที่เริ่มต้น"
-        className={inputClass}
-        defaultValue={defaultStartValue}
-        max={maxStart}
-        name={startName}
-        onChange={onStartChange ? (event) => onStartChange(event.target.value, event) : undefined}
-        type="date"
-        value={startValue}
+      <DateRangePicker
+        maxDate={maxEnd ?? maxStart}
+        onChange={handleRangeChange}
+        value={value}
       />
-      <span aria-hidden="true" className="shrink-0 text-on-surface-variant">–</span>
-      <input
-        aria-label="วันที่สิ้นสุด"
-        className={inputClass}
-        defaultValue={defaultEndValue}
-        max={maxEnd}
-        min={minEnd}
-        name={endName}
-        onChange={onEndChange ? (event) => onEndChange(event.target.value, event) : undefined}
-        type="date"
-        value={endValue}
-      />
-    </label>
+      {startName ? <input name={startName} type="hidden" value={value.startDate} /> : null}
+      {endName ? <input name={endName} type="hidden" value={value.endDate} /> : null}
+    </div>
   );
 }
 

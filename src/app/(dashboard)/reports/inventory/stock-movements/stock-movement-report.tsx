@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight, FileSpreadsheet, FileText, Printer, Search } from "lucide-react";
@@ -26,28 +28,39 @@ const kinds: Record<string, { label: string; tone: StatusTone }> = { receipt: { 
 type Applied = { startDate: string; endDate: string; warehouseId: number | null; itemTypeId: number | null; movementKind: string | null; search: string };
 
 export function StockMovementReport({ documentContext, initialData, printedBy = "KRC ERP", today }: { documentContext?: CompanyDocumentContext; initialData: StockReportResult; printedBy?: string; today: string }) {
+  useListScroll();
   const printRoot = useRef<HTMLDivElement>(null);
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useState<"summary" | "journal">("summary");
+  const [view, setView] = useListState<"summary" | "journal">("view", "summary");
   const [data, setData] = useState(initialData);
   const [printRows, setPrintRows] = useState<(StockSummaryRow | StockJournalRow)[] | null>(null);
   const [card, setCard] = useState<{ summary: StockSummaryRow; rows: StockJournalRow[]; total: number } | null>(null);
-  const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`);
-  const [endDate, setEndDate] = useState(today);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
-  const [itemTypeId, setItemTypeId] = useState<number | null>(null);
-  const [movementKind, setMovementKind] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [applied, setApplied] = useState<Applied>({ startDate, endDate, warehouseId, itemTypeId, movementKind, search: query });
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [startDate, setStartDate] = useListState("startDate", `${today.slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useListState("endDate", today);
+  const [warehouseId, setWarehouseId] = useListState<number | null>("warehouseId", null);
+  const [itemTypeId, setItemTypeId] = useListState<number | null>("itemTypeId", null);
+  const [movementKind, setMovementKind] = useListState<string | null>("movementKind", null);
+  const [query, setQuery] = useListState("query", "");
+  const [applied, setApplied] = useListState<Applied>("applied", { startDate, endDate, warehouseId, itemTypeId, movementKind, search: query });
+  const [page, setPage] = useListState("page", 1);
+  const [pageSize, setPageSize] = useListState("pageSize", 20);
   const summaries = data.rows as StockSummaryRow[];
   const journal = data.rows as StockJournalRow[];
-  const load = (nextView: "summary" | "journal", nextPage: number, nextPageSize = pageSize, filters = applied) => startTransition(async () => {
-    const result = await getStockMovementReportAction({ view: nextView, ...filters, page: nextPage, pageSize: nextPageSize });
-    if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
-    setData(result.data); setView(nextView); setPage(nextPage); setCard(null);
-  });
+  const load = (nextView: "summary" | "journal", nextPage: number, nextPageSize = pageSize, filters = applied) => {
+    setView(nextView); setPage(nextPage); setPageSize(nextPageSize); setApplied(filters); setCard(null);
+  };
+  const appliedKey = JSON.stringify(applied);
+  useEffect(() => {
+    if (card) return;
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await getStockMovementReportAction({ view, ...JSON.parse(appliedKey) as Applied, page, pageSize });
+      if (cancelled) return;
+      if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
+      setData(result.data);
+    });
+    return () => { cancelled = true; };
+  }, [view, appliedKey, page, pageSize, card]);
   const search = (event: React.FormEvent) => { event.preventDefault(); if (!startDate || !endDate || startDate > endDate || endDate > today) return toast.error("กรุณาเลือกช่วงวันที่ให้ถูกต้อง"); const filters = { startDate, endDate, warehouseId, itemTypeId, movementKind, search: query }; setApplied(filters); load(view, 1, pageSize, filters); };
   const openCard = (row: StockSummaryRow) => startTransition(async () => {
     const result = await getStockCardAction({ startDate: applied.startDate, endDate: applied.endDate, warehouseId: row.warehouse_id, itemTypeId: null, movementKind: null, search: "", itemMasterId: row.item_master_id, page: 1, pageSize });

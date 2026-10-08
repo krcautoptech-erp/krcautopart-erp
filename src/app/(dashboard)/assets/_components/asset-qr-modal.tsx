@@ -4,6 +4,7 @@ import React, { useRef } from "react";
 import { Printer, X, Tag, QrCode } from "lucide-react";
 import type { AssetRecord } from "@/lib/assets";
 import { printAssetTag } from "@/lib/asset-print";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 interface AssetQrModalProps {
   asset: AssetRecord | null;
@@ -11,6 +12,8 @@ interface AssetQrModalProps {
 }
 
 export function AssetQrModal({ asset, onClose }: AssetQrModalProps) {
+  useBodyScrollLock(Boolean(asset));
+
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   if (!asset) return null;
@@ -32,8 +35,8 @@ export function AssetQrModal({ asset, onClose }: AssetQrModalProps) {
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${qrDataText}`;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="flex w-full max-w-md flex-col rounded-sm border border-outline-variant bg-surface-container-lowest shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overscroll-contain" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="flex w-full max-w-md flex-col rounded-sm border border-outline-variant bg-surface-container-lowest shadow-2xl overscroll-contain" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <header className="flex h-12 items-center justify-between border-b border-outline-variant px-4">
           <div className="flex items-center gap-2 text-on-surface">

@@ -7,10 +7,22 @@ test("shared list filters own the standard date range and action button designs"
 
   assert.match(source, /export function ListDateRangeFilter/);
   assert.match(source, /export function ListFilterButton/);
-  assert.match(source, /CalendarDays/);
-  assert.match(source, /h-\[38px\]/);
-  assert.match(source, /focus-within:border-primary/);
-  assert.match(source, /dark:\[color-scheme:dark\]/);
+  assert.match(source, /<DateRangePicker/);
+  assert.match(source, /type="hidden"/);
+  assert.match(source, /onRangeChange/);
+});
+
+test("shared date range picker keeps mobile changes pending until confirmation", async () => {
+  const source = await readFile("src/components/date-range-picker.tsx", "utf8");
+  const styles = await readFile("src/components/date-range-picker.module.css", "utf8");
+
+  assert.match(source, /setDraftRange\(preset\.range\)/);
+  assert.match(source, /เลือกช่วงวันที่/);
+  assert.match(source, /maxDate/);
+  assert.doesNotMatch(source, /onChange\(preset\.range\)/);
+  assert.match(styles, /\.mobileHeader/);
+  assert.match(styles, /height:\s*44px/);
+  assert.match(styles, /position:\s*sticky/);
 });
 
 test("primary ERP list pages use the shared date range filter", async () => {

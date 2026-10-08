@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { AlertTriangle, Trash2, X, AlertCircle } from "lucide-react";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export type ConfirmModalProps = {
   isOpen?: boolean;
@@ -47,6 +48,7 @@ export function ConfirmModal({
   loading,
 }: ConfirmModalProps) {
   const show = isOpen ?? open ?? false;
+  useBodyScrollLock(show);
   const activeTone = (danger ? "danger" : undefined) || variant || tone || "danger";
   const activeDescription = description ?? message;
   const activePending = isPending ?? loading ?? false;
@@ -96,7 +98,7 @@ export function ConfirmModal({
     <div
       aria-modal="true"
       role="dialog"
-      className="fixed inset-0 z-[160] grid place-items-center bg-black/60 p-4 backdrop-blur-[3px] animate-in fade-in duration-150"
+      className="fixed inset-0 z-[160] grid place-items-center bg-black/60 p-4 backdrop-blur-[3px] animate-in fade-in duration-150 overscroll-contain"
     >
       <section
         className="w-full max-w-[480px] overflow-hidden rounded-[8px] border border-outline-variant bg-surface-container-lowest text-on-surface shadow-2xl animate-in zoom-in-95 duration-150"

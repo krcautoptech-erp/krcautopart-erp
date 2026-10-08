@@ -72,7 +72,7 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
     <ConfirmModal
       cancelText="อยู่หน้านี้ต่อ"
       confirmText="ออกโดยไม่บันทึก"
-      description="หากออกจากหน้านี้ การเปลี่ยนแปลงที่ยังไม่ได้บันทึกจะสูญหาย"
+      description="การเปลี่ยนแปลงยังไม่ได้บันทึกเข้าระบบ ต้องการออกจากหน้านี้หรือไม่?"
       isOpen={Boolean(pendingNavigation)}
       onClose={() => setPendingNavigation(null)}
       onConfirm={() => {

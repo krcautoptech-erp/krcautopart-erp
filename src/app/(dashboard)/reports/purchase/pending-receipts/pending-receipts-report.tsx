@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, Printer, Search } from "lucide-react";
@@ -53,13 +55,14 @@ export function PendingReceiptsReport({
   rows: PendingReceiptRow[];
   todayIso: string;
 }) {
+  useListScroll();
   const printRoot = useRef<HTMLDivElement>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [page, setPage] = useState(1);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [page, setPage] = useListState("page", 1);
+  const [query, setQuery] = useListState("query", "");
+  const [status, setStatus] = useListState("status", "");
+  const [startDate, setStartDate] = useListState("startDate", "");
+  const [endDate, setEndDate] = useListState("endDate", "");
   const activeCount = Number(Boolean(status)) + Number(Boolean(startDate)) + Number(Boolean(endDate));
   const clearFilters = () => {
     setQuery("");

@@ -1,5 +1,7 @@
 "use client";
 
+import { useRememberedListUrl } from "@/lib/use-list-state";
+
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { recordAuditExportAction, type AuditLogFilters, type AuditLogRecord } from "@/app/actions/audit-logs";
@@ -109,10 +111,17 @@ function outcomeBadge(outcome: string) {
 }
 
 export function AuditLogManagement({ filters, initialData }: { filters: AuditLogFilters; initialData: AuditLogPageData }) {
+  useRememberedListUrl();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const canExport = useHasPermission("audit_logs.export");
+  const [query, setQuery] = useState(filters.search ?? "");
+  const [previousSearch, setPreviousSearch] = useState(filters.search);
+  if (previousSearch !== filters.search) {
+    setPreviousSearch(filters.search);
+    if (query === (previousSearch ?? "")) setQuery(filters.search ?? "");
+  }
   const [selected, setSelected] = useState<AuditLogRecord | null>(null);
   const [exporting, setExporting] = useState(false);
   const activeFilters = [filters.module, filters.action, filters.outcome, filters.startDate || filters.endDate].filter(Boolean).length;
@@ -162,19 +171,19 @@ export function AuditLogManagement({ filters, initialData }: { filters: AuditLog
         {canExport ? <button className="inline-flex h-10 items-center gap-2 rounded-[3px] border border-outline-variant px-4 text-[13px] font-bold hover:border-primary hover:text-primary disabled:opacity-50" disabled={exporting || initialData.records.length === 0} onClick={exportRows} type="button"><span className="material-symbols-outlined text-[18px]">download</span>{exporting ? "กำลังส่งออก..." : "ส่งออก CSV"}</button> : null}
       </header>
 
-      <MobileListFilters activeCount={activeFilters} onClear={() => router.push(pathname)} resultLabel={`แสดง ${initialData.total.toLocaleString("th-TH")} รายการ`} search={<ListSearchField defaultValue={filters.search} onChange={(value) => navigate({ search: value })} placeholder="ค้นหาผู้ใช้ เอกสาร รายการ หรือ Request ID..." />} title="ตัวกรอง Log">
-        <ListFilterSelect defaultValue={filters.module ?? "all"} label="โมดูล" onChange={(value) => navigate({ module: value })}><option value="all">ทั้งหมด</option>{modules.map((module) => <option key={module} value={module}>{moduleLabels[module] ?? module.replaceAll("_", " ")}</option>)}</ListFilterSelect>
-        <ListFilterSelect defaultValue={filters.action ?? "all"} label="การกระทำ" onChange={(value) => navigate({ action: value })}><option value="all">ทั้งหมด</option>{actions.map((action) => <option key={action} value={action}>{action === "insert" ? "สร้างข้อมูล" : action === "update" ? "แก้ไขข้อมูล" : action === "delete" ? "ลบข้อมูล" : action === "view" ? "เปิดดู" : action === "export" ? "ส่งออก" : action}</option>)}</ListFilterSelect>
-        <ListFilterSelect defaultValue={filters.outcome ?? "all"} label="ผลลัพธ์" onChange={(value) => navigate({ outcome: value })}><option value="all">ทั้งหมด</option><option value="success">สำเร็จ</option><option value="failure">ไม่สำเร็จ</option><option value="warning">เฝ้าระวัง</option></ListFilterSelect>
-        <ListDateRangeFilter defaultEndValue={filters.endDate} defaultStartValue={filters.startDate} minEnd={filters.startDate || undefined} onEndChange={(value) => navigate({ endDate: value })} onStartChange={(value) => navigate({ startDate: value })} />
+      <MobileListFilters activeCount={activeFilters} onClear={() => { setQuery(""); router.push(pathname); }} resultLabel={`แสดง ${initialData.total.toLocaleString("th-TH")} รายการ`} search={<ListSearchField value={query} onChange={(value) => { setQuery(value); navigate({ search: value }); }} placeholder="ค้นหาผู้ใช้ เอกสาร รายการ หรือ Request ID..." />} title="ตัวกรอง Log">
+        <ListFilterSelect value={filters.module ?? "all"} label="โมดูล" onChange={(value) => navigate({ module: value })}><option value="all">ทั้งหมด</option>{modules.map((module) => <option key={module} value={module}>{moduleLabels[module] ?? module.replaceAll("_", " ")}</option>)}</ListFilterSelect>
+        <ListFilterSelect value={filters.action ?? "all"} label="การกระทำ" onChange={(value) => navigate({ action: value })}><option value="all">ทั้งหมด</option>{actions.map((action) => <option key={action} value={action}>{action === "insert" ? "สร้างข้อมูล" : action === "update" ? "แก้ไขข้อมูล" : action === "delete" ? "ลบข้อมูล" : action === "view" ? "เปิดดู" : action === "export" ? "ส่งออก" : action}</option>)}</ListFilterSelect>
+        <ListFilterSelect value={filters.outcome ?? "all"} label="ผลลัพธ์" onChange={(value) => navigate({ outcome: value })}><option value="all">ทั้งหมด</option><option value="success">สำเร็จ</option><option value="failure">ไม่สำเร็จ</option><option value="warning">เฝ้าระวัง</option></ListFilterSelect>
+        <ListDateRangeFilter defaultEndValue={filters.endDate} defaultStartValue={filters.startDate} minEnd={filters.startDate || undefined} onRangeChange={(value) => navigate({ startDate: value.startDate, endDate: value.endDate })} />
       </MobileListFilters>
 
       <div className="mb-3 hidden gap-2 lg:grid lg:grid-cols-[minmax(250px,1.4fr)_150px_150px_150px_minmax(260px,1fr)]">
-        <ListSearchField defaultValue={filters.search} onChange={(value) => navigate({ search: value })} placeholder="ค้นหาผู้ใช้ เอกสาร รายการ หรือ Request ID..." />
-        <ListFilterSelect defaultValue={filters.module ?? "all"} label="โมดูล" onChange={(value) => navigate({ module: value })}><option value="all">ทั้งหมด</option>{modules.map((module) => <option key={module} value={module}>{moduleLabels[module] ?? module.replaceAll("_", " ")}</option>)}</ListFilterSelect>
-        <ListFilterSelect defaultValue={filters.action ?? "all"} label="การกระทำ" onChange={(value) => navigate({ action: value })}><option value="all">ทั้งหมด</option>{actions.map((action) => <option key={action} value={action}>{action === "insert" ? "สร้างข้อมูล" : action === "update" ? "แก้ไขข้อมูล" : action === "delete" ? "ลบข้อมูล" : action === "view" ? "เปิดดู" : action === "export" ? "ส่งออก" : action}</option>)}</ListFilterSelect>
-        <ListFilterSelect defaultValue={filters.outcome ?? "all"} label="ผลลัพธ์" onChange={(value) => navigate({ outcome: value })}><option value="all">ทั้งหมด</option><option value="success">สำเร็จ</option><option value="failure">ไม่สำเร็จ</option><option value="warning">เฝ้าระวัง</option></ListFilterSelect>
-        <ListDateRangeFilter defaultEndValue={filters.endDate} defaultStartValue={filters.startDate} minEnd={filters.startDate || undefined} onEndChange={(value) => navigate({ endDate: value })} onStartChange={(value) => navigate({ startDate: value })} />
+        <ListSearchField value={query} onChange={(value) => { setQuery(value); navigate({ search: value }); }} placeholder="ค้นหาผู้ใช้ เอกสาร รายการ หรือ Request ID..." />
+        <ListFilterSelect value={filters.module ?? "all"} label="โมดูล" onChange={(value) => navigate({ module: value })}><option value="all">ทั้งหมด</option>{modules.map((module) => <option key={module} value={module}>{moduleLabels[module] ?? module.replaceAll("_", " ")}</option>)}</ListFilterSelect>
+        <ListFilterSelect value={filters.action ?? "all"} label="การกระทำ" onChange={(value) => navigate({ action: value })}><option value="all">ทั้งหมด</option>{actions.map((action) => <option key={action} value={action}>{action === "insert" ? "สร้างข้อมูล" : action === "update" ? "แก้ไขข้อมูล" : action === "delete" ? "ลบข้อมูล" : action === "view" ? "เปิดดู" : action === "export" ? "ส่งออก" : action}</option>)}</ListFilterSelect>
+        <ListFilterSelect value={filters.outcome ?? "all"} label="ผลลัพธ์" onChange={(value) => navigate({ outcome: value })}><option value="all">ทั้งหมด</option><option value="success">สำเร็จ</option><option value="failure">ไม่สำเร็จ</option><option value="warning">เฝ้าระวัง</option></ListFilterSelect>
+        <ListDateRangeFilter defaultEndValue={filters.endDate} defaultStartValue={filters.startDate} minEnd={filters.startDate || undefined} onRangeChange={(value) => navigate({ startDate: value.startDate, endDate: value.endDate })} />
       </div>
 
       {activeFilters > 0 ? <div className="mb-2 flex items-center gap-2 text-[12px]"><span className="font-bold text-primary">ตัวกรองที่ใช้ {activeFilters}</span><button className="font-semibold text-secondary underline" onClick={() => router.push(pathname)} type="button">ล้างตัวกรองทั้งหมด</button></div> : null}

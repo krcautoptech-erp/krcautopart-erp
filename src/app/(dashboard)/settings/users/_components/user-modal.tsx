@@ -8,6 +8,7 @@ import type {
 } from "@/app/actions/users";
 import type { UserFormInput } from "@/lib/user-management";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export type UserModalMode = "create" | "edit" | "view";
 
@@ -55,11 +56,13 @@ export function UserModal({
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const isReadOnly = mode === "view";
+  useBodyScrollLock(true);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-0 sm:p-4 backdrop-blur-sm overscroll-contain animate-in fade-in duration-150" onClick={onClose} role="dialog" aria-modal="true">
       <form
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-[920px] overflow-y-auto rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
+        className="h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)] w-full max-w-[920px] overflow-y-auto overscroll-contain rounded-none sm:rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
         onSubmit={onSubmit}
       >
         <header className="flex h-[58px] items-center justify-between border-b border-outline-variant px-5">
@@ -74,7 +77,7 @@ export function UserModal({
                     : "รายละเอียดผู้ใช้งาน"}
               </h2>
               <p className="text-[11px] font-medium text-secondary">
-                จัดการบัญชี แผนก Role และสายอนุมัติของพนักงาน
+                จัดการบัญชี แผนก Role และข้อมูลลายเซ็นของพนักงาน
               </p>
             </div>
           </div>
@@ -139,7 +142,10 @@ export function UserModal({
                   value={draft.lastName}
                 />
               </Field>
-              <Field className="sm:col-span-2" label="ตำแหน่ง">
+              <Field
+                className="sm:col-span-2"
+                label="ตำแหน่ง (ใช้ในลายเซ็นอนุมัติ)"
+              >
                 <input
                   className={inputClass}
                   disabled={isReadOnly}
@@ -194,27 +200,6 @@ export function UserModal({
                   ))}
                 </select>
               </Field>
-              <Field className="sm:col-span-2" label="ผู้อนุมัติประจำ">
-                <select
-                  className={inputClass}
-                  disabled={isReadOnly}
-                  onChange={(event) =>
-                    onChange({
-                      ...draft,
-                      approverUserId: event.target.value || null,
-                    })
-                  }
-                  value={draft.approverUserId ?? ""}
-                >
-                  <option value="">ไม่กำหนด</option>
-                  {options.approvers.map((approver) => (
-                      <option key={approver.id} value={approver.id}>
-                        {approver.employeeCode} - {approver.name}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-
               {mode === "create" ? (
                 <>
                   <Field label="รหัสผ่าน" required>

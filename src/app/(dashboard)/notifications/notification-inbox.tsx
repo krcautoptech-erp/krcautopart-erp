@@ -1,5 +1,7 @@
 "use client";
 
+import { useRememberedListUrl } from "@/lib/use-list-state";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -136,6 +138,7 @@ export function NotificationInbox({
   totalItems,
   vapidPublicKey,
 }: NotificationInboxProps) {
+  useRememberedListUrl();
   const router = useRouter();
   const [locallyReadIds, setLocallyReadIds] = useState<number[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -219,7 +222,7 @@ export function NotificationInbox({
         </div>
       </div>
 
-      <form action="/notifications" className="mb-3 hidden grid-cols-[minmax(250px,1.45fr)_190px_170px_minmax(285px,1fr)_220px] items-center gap-2 md:grid" method="get">
+      <form key={`desktop:${JSON.stringify(filters)}`} action="/notifications" className="mb-3 hidden grid-cols-[minmax(250px,1.45fr)_190px_170px_minmax(285px,1fr)_220px] items-center gap-2 md:grid" method="get">
         <ListSearchField defaultValue={filters.q} name="q" placeholder="ค้นหาหัวข้อ ข้อความ หรือเลขที่เอกสาร..." />
         <div className="grid h-[38px] grid-cols-2 overflow-hidden rounded-[4px] border border-outline-variant bg-surface-container-lowest">
           <button className={`text-[13px] font-bold transition-colors ${filters.status === "all" ? "bg-primary text-white" : "hover:text-primary"}`} name="status" type="submit" value="all">ทั้งหมด</button>
@@ -242,9 +245,8 @@ export function NotificationInbox({
           defaultEndValue={filters.endDate}
           defaultStartValue={filters.startDate}
           endName="endDate"
-          onEndChange={(_, event) => event.currentTarget.form?.requestSubmit()}
-          onStartChange={(_, event) => event.currentTarget.form?.requestSubmit()}
           startName="startDate"
+          submitOnChange
         />
         <button
           className="inline-flex h-[38px] items-center justify-center gap-2 rounded-[4px] border border-outline-variant bg-surface-container-lowest px-4 text-[13px] font-bold transition-colors hover:border-primary hover:text-primary disabled:opacity-45"
@@ -258,7 +260,7 @@ export function NotificationInbox({
         <button className="sr-only" type="submit">ค้นหา</button>
       </form>
 
-      <form action="/notifications" className="mb-3 md:hidden" id="notification-mobile-filter-form" method="get">
+      <form key={`mobile:${JSON.stringify(filters)}`} action="/notifications" className="mb-3 md:hidden" id="notification-mobile-filter-form" method="get">
         <MobileListFilters
           activeCount={activeFilterCount}
           formId="notification-mobile-filter-form"

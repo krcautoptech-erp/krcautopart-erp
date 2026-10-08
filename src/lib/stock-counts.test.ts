@@ -8,6 +8,8 @@ import {
   stockCountDifference,
   stockCountProgress,
   isStockCountDateInRange,
+  stockCountPrintMode,
+  shouldRevealStockCountSystemQty,
   validateCountEntry,
   type CountEntry,
 } from "./stock-counts.ts";
@@ -87,4 +89,15 @@ test("keeps opposite lot differences even when item net difference is zero", () 
     { systemQty: 10, countedQty: 11 },
   ];
   assert.deepEqual(lots.map(({ systemQty, countedQty }) => stockCountDifference(systemQty, countedQty!)), [-1, 1]);
+});
+
+test("keeps draft and active counting blind until the round reaches review", () => {
+  for (const status of ["draft", "counting", "recount"] as const) {
+    assert.equal(shouldRevealStockCountSystemQty(status), false);
+    assert.equal(stockCountPrintMode(status), "blind");
+  }
+  for (const status of ["review", "approved", "cancelled"] as const) {
+    assert.equal(shouldRevealStockCountSystemQty(status), true);
+    assert.equal(stockCountPrintMode(status), "result");
+  }
 });

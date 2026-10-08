@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { BadgeCheck, Copy, ScanQrCode, ShieldCheck, Smartphone } from "lucide-react";
@@ -128,6 +130,7 @@ export function SignatureApprovalSettings({
   initialData,
   initialPolicies,
 }: Props) {
+  useListScroll();
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -159,7 +162,7 @@ export function SignatureApprovalSettings({
   );
   const [isPending, startTransition] = useTransition();
   const [isMfaPending, startMfaTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<"signature" | "policy">("signature");
+  const [activeTab, setActiveTab] = useListState<"signature" | "policy">("activeTab", "signature");
   const hasSavedSignature = initialData.version > 0 || signatureSaved;
 
   useEffect(() => {

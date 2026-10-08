@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw,
@@ -46,19 +48,20 @@ export function AssetCatalog({
   initialSummary,
   lookups,
 }: AssetCatalogProps) {
+  useListScroll();
   const canManage = useHasPermission("assets.manage");
   const [items, setItems] = useState<AssetRecord[]>(initialItems);
   const [summary, setSummary] = useState<AssetSummary>(initialSummary);
-  const [page, setPage] = useState(initialPagination.currentPage);
-  const [pageSize, setPageSize] = useState(initialPagination.pageSize);
+  const [page, setPage] = useListState("page", initialPagination.currentPage);
+  const [pageSize, setPageSize] = useListState("pageSize", initialPagination.pageSize);
   const [totalCount, setTotalCount] = useState(initialPagination.totalCount);
   const [totalPages, setTotalPages] = useState(initialPagination.totalPages);
 
   // Filters
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useListState("search", "");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "ALL");
+  const [departmentFilter, setDepartmentFilter] = useListState("departmentFilter", "");
   const [isFetching, setIsFetching] = useState(false);
 
   // Modals & Drawer State
@@ -70,7 +73,6 @@ export function AssetCatalog({
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 280);
     return () => clearTimeout(timer);
   }, [search]);
@@ -100,7 +102,6 @@ export function AssetCatalog({
           setItems(catRes.data.items);
           setTotalCount(catRes.data.pagination.totalCount);
           setTotalPages(catRes.data.pagination.totalPages);
-          setPage(catRes.data.pagination.currentPage);
         }
 
         if (sumRes.success && sumRes.data) {
@@ -117,16 +118,17 @@ export function AssetCatalog({
 
   // Re-fetch on filter changes
   useEffect(() => {
+    if (search !== debouncedSearch) return;
     const timer = window.setTimeout(() => {
-      void fetchAssets(1, pageSize, debouncedSearch, statusFilter, departmentFilter);
+      void fetchAssets(page, pageSize, debouncedSearch, statusFilter, departmentFilter);
     }, 0);
     return () => window.clearTimeout(timer);
-    // fetchAssets deliberately reads the current page for manual refreshes; filter changes always request page 1.
+    // Event handlers reset the page; restoring saved filters preserves it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, departmentFilter, pageSize]);
+  }, [search, debouncedSearch, statusFilter, departmentFilter, pageSize, page]);
 
   const handlePageChange = (newPage: number) => {
-    fetchAssets(newPage, pageSize, debouncedSearch, statusFilter, departmentFilter);
+    setPage(newPage);
   };
 
   const handleSaved = (msg: string) => {
@@ -228,7 +230,7 @@ export function AssetCatalog({
       <div className="mt-4 hidden grid-cols-2 border border-outline-variant bg-surface-container-lowest sm:grid sm:grid-cols-5">
         {/* Total Assets */}
         <div
-          onClick={() => setStatusFilter("ALL")}
+          onClick={() => { setStatusFilter("ALL"); setPage(1); }}
           className={`min-h-[66px] cursor-pointer border-b border-r border-outline-variant px-3 py-2 text-center transition-colors sm:border-b-0 ${
             statusFilter === "ALL"
               ? "bg-primary/[0.04]"
@@ -243,7 +245,7 @@ export function AssetCatalog({
 
         {/* In Use */}
         <div
-          onClick={() => setStatusFilter("in_use")}
+          onClick={() => { setStatusFilter("in_use"); setPage(1); }}
           className={`min-h-[66px] cursor-pointer border-b border-outline-variant px-3 py-2 text-center transition-colors sm:border-b-0 sm:border-r ${
             statusFilter === "in_use"
               ? "bg-emerald-500/[0.05]"
@@ -258,7 +260,7 @@ export function AssetCatalog({
 
         {/* In Stock (Ready) */}
         <div
-          onClick={() => setStatusFilter("in_stock")}
+          onClick={() => { setStatusFilter("in_stock"); setPage(1); }}
           className={`min-h-[66px] cursor-pointer border-r border-outline-variant px-3 py-2 text-center transition-colors ${
             statusFilter === "in_stock"
               ? "bg-blue-500/[0.05]"
@@ -273,7 +275,7 @@ export function AssetCatalog({
 
         {/* Maintenance / Repair */}
         <div
-          onClick={() => setStatusFilter("under_repair")}
+          onClick={() => { setStatusFilter("under_repair"); setPage(1); }}
           className={`min-h-[66px] cursor-pointer border-r border-t border-outline-variant px-3 py-2 text-center transition-colors sm:border-t-0 ${
             statusFilter === "under_repair"
               ? "bg-amber-500/[0.05]"
@@ -287,7 +289,7 @@ export function AssetCatalog({
         </div>
 
         <div
-          onClick={() => setStatusFilter("disposed")}
+          onClick={() => { setStatusFilter("disposed"); setPage(1); }}
           className={`col-span-2 min-h-[66px] cursor-pointer border-t border-outline-variant px-3 py-2 text-center transition-colors sm:col-span-1 sm:border-t-0 ${
             statusFilter === "disposed" ? "bg-red-500/[0.05]" : "hover:bg-surface-container-low/60"
           }`}
@@ -301,7 +303,7 @@ export function AssetCatalog({
 
       {/* 2. Search & Filters Bar */}
       <div className="mt-4 hidden gap-3 border border-outline-variant bg-surface-container-lowest p-3 sm:grid sm:grid-cols-[minmax(280px,1fr)_180px_180px_auto] sm:items-center">
-        <ListSearchField onChange={setSearch} placeholder="ค้นหา Serial Number, รหัสสินค้า, ชื่ออุปกรณ์, หรือผู้ถือครอง..." value={search} />
+        <ListSearchField onChange={(value) => { setSearch(value); setPage(1); }} placeholder="ค้นหา Serial Number, รหัสสินค้า, ชื่ออุปกรณ์, หรือผู้ถือครอง..." value={search} />
         <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentFilter(value); setPage(1); }} value={departmentFilter}><option value="">ทั้งหมด</option>{lookups.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</ListFilterSelect>
         <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setPage(1); }} value={statusFilter}><option value="ALL">ทั้งหมด</option><option value="in_use">ใช้งานอยู่</option><option value="in_stock">พร้อมใช้งาน (ในคลัง)</option><option value="under_repair">ส่งซ่อม/เคลม</option><option value="disposed">ตัดจำหน่าย</option></ListFilterSelect>
 
@@ -324,7 +326,7 @@ export function AssetCatalog({
         </div>
       </div>
 
-      <MobileListFilters activeCount={[statusFilter !== "ALL", departmentFilter].filter(Boolean).length} onClear={() => { setStatusFilter("ALL"); setDepartmentFilter(""); setPage(1); }} resultLabel={`แสดง ${totalCount.toLocaleString("th-TH")} รายการ`} search={<ListSearchField onChange={setSearch} placeholder="ค้นหา..." value={search} />}>
+      <MobileListFilters activeCount={[statusFilter !== "ALL", departmentFilter].filter(Boolean).length} onClear={() => { setStatusFilter("ALL"); setDepartmentFilter(""); setPage(1); }} resultLabel={`แสดง ${totalCount.toLocaleString("th-TH")} รายการ`} search={<ListSearchField onChange={(value) => { setSearch(value); setPage(1); }} placeholder="ค้นหา..." value={search} />}>
         <ListFilterSelect label="แผนก" onChange={(value) => { setDepartmentFilter(value); setPage(1); }} value={departmentFilter}><option value="">ทั้งหมด</option>{lookups.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</ListFilterSelect>
         <ListFilterSelect label="สถานะ" onChange={(value) => { setStatusFilter(value); setPage(1); }} value={statusFilter}><option value="ALL">ทั้งหมด</option><option value="in_use">ใช้งานอยู่</option><option value="in_stock">พร้อมใช้งาน</option><option value="under_repair">ส่งซ่อม</option><option value="disposed">ตัดจำหน่าย</option></ListFilterSelect>
       </MobileListFilters>

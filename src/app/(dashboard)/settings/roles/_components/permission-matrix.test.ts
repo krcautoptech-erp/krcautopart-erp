@@ -163,6 +163,27 @@ test("categorizes every current inventory permission module", () => {
   assert.ok(inventoryCategory?.modules.includes("stock_count"));
 });
 
+test("categorizes audit logs under users and security", () => {
+  const securityCategory = PERMISSION_MODULE_CATEGORIES.find(
+    (category) => category.label === "ผู้ใช้งานและความปลอดภัย",
+  );
+  assert.ok(securityCategory?.modules.includes("audit_logs"));
+});
+
+test("omits retired legacy permission modules from the role editor", () => {
+  const groups = groupPermissionsByModule([
+    {
+      action: "view",
+      code: "mdm.view",
+      id: 99,
+      moduleCode: "mdm",
+      moduleName: "ข้อมูลหลัก (เดิม)",
+      name: "ดูข้อมูลหลักเดิม",
+    },
+  ]);
+  assert.deepEqual(groups, []);
+});
+
 test("keeps stock count execution and review as separate actions", () => {
   const [group] = groupPermissionsByModule([
     {

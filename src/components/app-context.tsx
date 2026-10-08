@@ -1,11 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import {
-  getDefaultWorkspaceTabs,
-  getWorkspaceTabForPath,
-  type WorkspaceTab,
-} from "@/components/workspace-tabs";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 type AppContextType = {
   searchQuery: string;
@@ -15,21 +10,14 @@ type AppContextType = {
   toggleDarkMode: () => void;
   isAddModalOpen: boolean;
   setIsAddModalOpen: (open: boolean) => void;
-  workspaceTabs: WorkspaceTab[];
-  syncWorkspaceTab: (pathname: string) => void;
-  closeWorkspaceTab: (href: string) => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-const WORKSPACE_TABS_STORAGE_KEY = "krc_workspace_tabs";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTab[]>(() =>
-    getDefaultWorkspaceTabs(),
-  );
 
   // Initialize theme from localStorage if available
   useEffect(() => {
@@ -44,37 +32,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.remove("dark");
     }
   }, []);
-
-  useEffect(() => {
-    const savedTabs = sessionStorage.getItem(WORKSPACE_TABS_STORAGE_KEY);
-    if (!savedTabs) {
-      return;
-    }
-
-    try {
-      const parsedTabs = JSON.parse(savedTabs) as WorkspaceTab[];
-      if (!Array.isArray(parsedTabs)) {
-        return;
-      }
-      const migratedTabs = parsedTabs.reduce<WorkspaceTab[]>((tabs, tab) => {
-        const normalized = ["/products", "/inventory/materials"].includes(tab.href)
-          ? { ...tab, href: "/items", icon: "inventory_2", title: "รายการสินค้า" }
-          : tab.href === "/items"
-          ? { ...tab, icon: "inventory_2", title: "รายการสินค้า" }
-          : tab;
-        return tabs.some((item) => item.href === normalized.href) ? tabs : [...tabs, normalized];
-      }, []);
-      // Restore persisted UI state after hydration and migrate legacy item tabs.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setWorkspaceTabs(migratedTabs);
-    } catch {
-      sessionStorage.removeItem(WORKSPACE_TABS_STORAGE_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    sessionStorage.setItem(WORKSPACE_TABS_STORAGE_KEY, JSON.stringify(workspaceTabs));
-  }, [workspaceTabs]);
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => {
@@ -92,31 +49,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const syncWorkspaceTab = useCallback((pathname: string) => {
-    const matchedTab = getWorkspaceTabForPath(pathname);
-    if (!matchedTab) {
-      return;
-    }
-
-    setWorkspaceTabs((prev) => {
-      const currentTabs = prev.filter(
-        (tab) =>
-          !(
-            matchedTab.href === "/settings/users" &&
-            tab.href === "/settings/roles"
-          ),
-      );
-      if (currentTabs.some((tab) => tab.href === matchedTab.href)) {
-        return currentTabs;
-      }
-      return [...currentTabs, matchedTab];
-    });
-  }, []);
-
-  const closeWorkspaceTab = useCallback((href: string) => {
-    setWorkspaceTabs((prev) => prev.filter((tab) => tab.href !== href));
-  }, []);
-
   return (
     <AppContext.Provider
       value={{
@@ -127,9 +59,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleDarkMode,
         isAddModalOpen,
         setIsAddModalOpen,
-        workspaceTabs,
-        syncWorkspaceTab,
-        closeWorkspaceTab,
       }}
     >
       {children}

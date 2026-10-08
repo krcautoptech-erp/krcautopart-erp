@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import React, {
   useCallback,
   useDeferredValue,
@@ -21,6 +23,7 @@ import { useApp } from "@/components/app-context";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { toast } from "@/components/toast";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { ProductAddModal } from "./product-add-modal";
 import { ProductDetailModal } from "./product-detail-modal";
 import { ProductEditModal } from "./product-edit-modal";
@@ -315,13 +318,15 @@ export function ProductCatalog({
     status: string;
   }[];
 }) {
+  useListScroll();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const importDropdownRef = useRef<HTMLDivElement>(null);
-  const { searchQuery, setSearchQuery, isAddModalOpen, setIsAddModalOpen } = useApp();
+  const { isAddModalOpen, setIsAddModalOpen } = useApp();
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
   const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
-  const [selectedMaterial, setSelectedMaterial] = useState("ทั้งหมด");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedMaterial, setSelectedMaterial] = useListState("selectedMaterial", "ทั้งหมด");
+  const [currentPage, setCurrentPage] = useListState("currentPage", 1);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [detailProduct, setDetailProduct] = useState<ProductRecord | null>(null);
   const [editProduct, setEditProduct] = useState<ProductRecord | null>(null);
@@ -337,6 +342,8 @@ export function ProductCatalog({
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
   const deferredQuery = useDeferredValue(searchQuery);
   const itemsPerPage = 50;
+
+  useBodyScrollLock(Boolean(previewImage));
 
   const items = useMemo(
     () => products.filter((product) => !deletedIds.has(product.id)),
@@ -643,10 +650,10 @@ export function ProductCatalog({
 
       <MobileListFilters
         activeCount={selectedMaterial === "ทั้งหมด" ? 0 : 1}
-        onClear={() => setSelectedMaterial("ทั้งหมด")}
-        search={<ListSearchField onChange={setSearchQuery} placeholder="ค้นหารหัสสินค้า ชื่อสินค้า หรือรายละเอียด..." value={searchQuery} />}
+        onClear={() => { setSelectedMaterial("ทั้งหมด"); setCurrentPage(1); }}
+        search={<ListSearchField onChange={(value) => { setSearchQuery(value); setCurrentPage(1); }} placeholder="ค้นหารหัสสินค้า ชื่อสินค้า หรือรายละเอียด..." value={searchQuery} />}
       >
-        <ListFilterSelect label="เกรดวัสดุ" onChange={setSelectedMaterial} value={selectedMaterial}><option value="ทั้งหมด">ทั้งหมด ({items.length})</option>{materialGradeFilters.map((material) => <option key={material} value={material}>{material} ({items.filter((product) => (product.material || "").trim().toUpperCase() === material).length})</option>)}</ListFilterSelect>
+        <ListFilterSelect label="เกรดวัสดุ" onChange={(value) => { setSelectedMaterial(value); setCurrentPage(1); }} value={selectedMaterial}><option value="ทั้งหมด">ทั้งหมด ({items.length})</option>{materialGradeFilters.map((material) => <option key={material} value={material}>{material} ({items.filter((product) => (product.material || "").trim().toUpperCase() === material).length})</option>)}</ListFilterSelect>
       </MobileListFilters>
       <div className="hidden flex-col gap-sm md:flex md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-sm">
@@ -655,7 +662,7 @@ export function ProductCatalog({
           </span>
           <select
             value={selectedMaterial}
-            onChange={(event) => setSelectedMaterial(event.target.value)}
+            onChange={(event) => { setSelectedMaterial(event.target.value); setCurrentPage(1); }}
             className="h-[38px] min-w-[160px] rounded-[5px] border border-outline-variant bg-background px-4 text-[14px] font-semibold text-on-surface outline-none focus:border-primary"
           >
             <option value="ทั้งหมด">ทั้งหมด ({items.length})</option>
@@ -891,6 +898,8 @@ function FeedbackModal({
   title: string;
   tone: "error" | "success";
 }) {
+  useBodyScrollLock(open);
+
   if (!open) {
     return null;
   }

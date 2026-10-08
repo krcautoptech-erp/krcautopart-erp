@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -73,11 +75,12 @@ const emptyDraft: SettingDraft = {
 };
 
 export function RawMaterialSettings({ initialData }: { initialData: RawMaterialSettingsData }) {
-  const [activeTab, setActiveTab] = useState<RawMaterialSettingKind>("group");
+  useListScroll();
+  const [activeTab, setActiveTab] = useListState<RawMaterialSettingKind>("activeTab", "group");
   const [records, setRecords] = useState(initialData);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "all");
+  const [currentPage, setCurrentPage] = useListState("currentPage", 1);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<SettingDraft>(emptyDraft);

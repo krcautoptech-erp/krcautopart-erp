@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useRememberedListUrl } from "@/lib/use-list-state";
+
 import { Plus, Search, ShieldCheck, UserRoundCog, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { CompanyFormLogo } from "@/components/company-logo";
@@ -73,6 +75,7 @@ export function RolePermissionManagement({
   initialData: RolePermissionSettingsData;
   tabs?: ReactNode;
 }) {
+  useRememberedListUrl();
   const router = useRouter();
   const canManageRoles = useHasPermission("roles.manage");
   const firstRole = initialData.roles[0] ?? null;
@@ -86,7 +89,7 @@ export function RolePermissionManagement({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
   const [mobileGroupCode, setMobileGroupCode] = useState<string | null>(null);
   const [mobileGroupSnapshot, setMobileGroupSnapshot] = useState<Set<number> | null>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -376,6 +379,25 @@ export function RolePermissionManagement({
             ไม่พบโมดูลหรือสิทธิ์ที่ค้นหา
           </p>
         ) : null}
+
+        <div className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-outline-variant bg-surface-container-lowest p-3">
+          <button
+            className="h-11 rounded-[3px] border border-outline-variant text-[14px] font-bold text-on-surface disabled:opacity-45"
+            disabled={!hasChanges || isSaving}
+            onClick={handleCancel}
+            type="button"
+          >
+            ยกเลิก
+          </button>
+          <button
+            className="h-11 rounded-[3px] bg-primary text-[14px] font-bold text-white disabled:opacity-45"
+            disabled={selectedRole.isOwner || !canManageRoles || !hasChanges || isSaving}
+            onClick={handleSave}
+            type="button"
+          >
+            {isSaving ? "กำลังบันทึก..." : "บันทึกสิทธิ์"}
+          </button>
+        </div>
       </div>
 
       <div className="hidden min-h-[calc(100vh-145px)] grid-cols-1 border border-outline-variant bg-surface-container-lowest lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">

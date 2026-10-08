@@ -86,3 +86,11 @@ export function isStockCountDateInRange(date: string, startDate: string, endDate
 export const stockCountStatusLabel: Record<StockCountStatus, string> = {
   draft: "ฉบับร่าง", counting: "กำลังตรวจนับ", review: "รอตรวจสอบ", recount: "ส่งกลับตรวจนับ", approved: "อนุมัติแล้ว", cancelled: "ยกเลิกแล้ว",
 };
+
+export function shouldRevealStockCountSystemQty(status: StockCountStatus) {
+  return status === "review" || status === "approved" || status === "cancelled";
+}
+
+export function stockCountPrintMode(status: StockCountStatus) {
+  return shouldRevealStockCountSystemQty(status) ? "result" : "blind";
+}

@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { usePermissions } from "@/components/permission-context";
 import {
-  getSystemSettingsBreadcrumb,
   getSystemSettingsGroupForPath,
   getVisibleSystemSettings,
 } from "@/lib/system-settings";
@@ -20,10 +19,6 @@ export function SettingsWorkspace({ children }: { children: ReactNode }) {
   const [navigation, setNavigation] = useState({ pathname, href: "" });
   const groups = getVisibleSystemSettings(codes, isOwner, query);
   const activeGroup = getSystemSettingsGroupForPath(pathname);
-  const breadcrumb =
-    pathname === "/settings/users" && searchParams.get("tab") === "roles"
-      ? (["ตั้งค่าระบบ", "บทบาทและสิทธิ์"] as const)
-      : getSystemSettingsBreadcrumb(pathname);
   const [groupToggle, setGroupToggle] = useState({ pathname, title: activeGroup });
   const openGroup = groupToggle.pathname === pathname ? groupToggle.title : activeGroup;
 
@@ -155,20 +150,11 @@ export function SettingsWorkspace({ children }: { children: ReactNode }) {
             <span className="block h-full w-1/3 animate-pulse bg-primary" />
           </div>
         ) : null}
-        {breadcrumb ? (
-          <div className="mb-2 flex h-7 items-center justify-between gap-2 lg:h-5">
-            <nav aria-label="เส้นทางหน้าตั้งค่า" className="flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-secondary">
-              <Link className="truncate transition-colors hover:text-primary hover:underline" href="/settings" prefetch>
-                {breadcrumb[0]}
-              </Link>
-              <span aria-hidden="true" className="material-symbols-outlined shrink-0 text-[14px]">chevron_right</span>
-              <span aria-current="page" className="truncate text-on-surface">{breadcrumb[1]}</span>
-            </nav>
-            <button aria-label="เปิดเมนูการตั้งค่า" className="grid size-7 shrink-0 place-items-center rounded-[4px] border border-outline-variant text-primary hover:bg-primary/5 lg:hidden" onClick={() => setIsMobileMenuOpen(true)} title="เมนูการตั้งค่า" type="button">
-              <span className="material-symbols-outlined text-[18px]">tune</span>
-            </button>
-          </div>
-        ) : null}
+        <div className="mb-2 flex h-7 items-center justify-end lg:hidden">
+          <button aria-label="เปิดเมนูการตั้งค่า" className="grid size-7 shrink-0 place-items-center rounded-[4px] border border-outline-variant text-primary hover:bg-primary/5 lg:hidden" onClick={() => setIsMobileMenuOpen(true)} title="เมนูการตั้งค่า" type="button">
+            <span className="material-symbols-outlined text-[18px]">tune</span>
+          </button>
+        </div>
         {children}
       </div>
     </div>

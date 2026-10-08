@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Download, Pencil, Plus, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import { CompanyFormLogo } from "@/components/company-logo";
 import { useRouter } from "next/navigation";
@@ -263,16 +265,17 @@ export function RawMaterialManagement({
   initialWarehouses,
   itemCatalogData,
 }: RawMaterialManagementProps) {
+  useListScroll();
   const router = useRouter();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importDropdownRef = useRef<HTMLDivElement>(null);
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
   const [importPreviewRows, setImportPreviewRows] = useState<RawMaterialImportInput[] | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState("all");
-  const [gradeFilter, setGradeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
+  const [groupFilter, setGroupFilter] = useListState("groupFilter", "all");
+  const [gradeFilter, setGradeFilter] = useListState("gradeFilter", "all");
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "all");
+  const [currentPage, setCurrentPage] = useListState("currentPage", 1);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [selectedMaterial, setSelectedMaterial] = useState<RawMaterialRecord | null>(null);
   const [centralFormMode, setCentralFormMode] = useState<"create" | "edit" | null>(null);

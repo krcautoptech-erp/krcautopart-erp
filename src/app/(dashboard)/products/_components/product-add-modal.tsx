@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 import { createProductAction } from "@/app/actions/products";
 import type { ProductRecord } from "./product-catalog";
 import {
@@ -57,6 +59,19 @@ export function ProductAddModal({
     }
   }
 
+  const [initialDraftValue] = useState(() => draft);
+  const draftKey = "master-product:new";
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey, value: draft, initialValue: initialDraftValue, revision: "",
+    onRestore: (value) => {
+      if (value.material && !activeMaterialGrades.includes(value.material)) throw new Error("เกรดวัสดุในฉบับร่างไม่สามารถเลือกได้แล้ว");
+      setDraft(value);
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges || tempImage !== "");
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!isSaving) requestNavigation(onClose); };
+
   const updateDraft = (key: keyof ProductDraft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
@@ -109,12 +124,13 @@ export function ProductAddModal({
     }
 
     if (result.data) {
+      clearDraft();
       onSaveSuccess(result.data as ProductRecord);
     }
   };
 
   return (
-    <ProductModalShell onClose={onClose} title="เพิ่มข้อมูลสินค้า">
+    <ProductModalShell onClose={closeForm} draftPrompt={draftPrompt} title="เพิ่มข้อมูลสินค้า">
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         <ProductImagePanel
           imageLabel="รูปตัวอย่างสินค้า"
@@ -289,7 +305,7 @@ export function ProductAddModal({
           <div className="mt-lg flex items-end justify-end border-t border-outline-variant pt-md">
             <div className="flex w-full flex-col-reverse gap-sm sm:w-auto sm:flex-row sm:gap-md">
               <button
-                onClick={onClose}
+                onClick={closeForm}
                 className="w-full rounded border border-outline-variant bg-transparent px-lg py-md font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low sm:w-auto"
                 disabled={isSaving}
                 type="button"

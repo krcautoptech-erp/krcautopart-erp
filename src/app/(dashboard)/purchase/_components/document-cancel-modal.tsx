@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useState } from "react";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 type DocumentCancelModalProps = {
   documentNumber: string;
@@ -18,6 +19,7 @@ export function DocumentCancelModal({
   onClose,
   onConfirm,
 }: DocumentCancelModalProps) {
+  useBodyScrollLock(true);
   const [reason, setReason] = useState("");
   const normalizedLength = reason.trim().replace(/\s+/g, " ").length;
   const isValid = normalizedLength >= 10 && normalizedLength <= 500;
@@ -25,7 +27,7 @@ export function DocumentCancelModal({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-[140] grid place-items-center bg-black/50 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[140] grid place-items-center bg-black/50 p-4 backdrop-blur-[2px] overscroll-contain"
       role="dialog"
     >
       <section className="w-full max-w-[520px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl">

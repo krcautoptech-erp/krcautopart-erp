@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 import { updateProductAction } from "@/app/actions/products";
 import type { ProductRecord } from "./product-catalog";
 import {
@@ -52,7 +54,11 @@ function buildDraftFromProduct(product: ProductRecord): ProductDraft {
   };
 }
 
-export function ProductEditModal({
+export function ProductEditModal(props: ProductEditModalProps) {
+  return <ProductEditEditor key={props.editProduct.id} {...props} />;
+}
+
+function ProductEditEditor({
   editProduct: initialProduct,
   onClose,
   materialGrades,
@@ -69,6 +75,19 @@ export function ProductEditModal({
   const [draft, setDraft] = useState<ProductDraft>(() => buildDraftFromProduct(initialProduct));
   const [tempImage, setTempImage] = useState(initialProduct.primary_image || "");
   const [isSaving, setIsSaving] = useState(false);
+
+  const [initialDraftValue] = useState(() => draft);
+  const draftKey = `master-product:${initialProduct.id}`;
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey, value: draft, initialValue: initialDraftValue, revision: JSON.stringify(buildDraftFromProduct(initialProduct)),
+    onRestore: (value) => {
+      if (value.material && !selectableMaterialGrades.includes(value.material)) throw new Error("เกรดวัสดุในฉบับร่างไม่สามารถเลือกได้แล้ว");
+      setDraft(value);
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges || tempImage !== (initialProduct.primary_image || ""));
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!isSaving) requestNavigation(onClose); };
 
   const updateDraft = (key: keyof ProductDraft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -122,12 +141,13 @@ export function ProductEditModal({
     }
 
     if (result.data) {
+      clearDraft();
       onUpdateSuccess(result.data as ProductRecord);
     }
   };
 
   return (
-    <ProductModalShell onClose={onClose} title="แก้ไขข้อมูลสินค้า">
+    <ProductModalShell onClose={closeForm} draftPrompt={draftPrompt} title="แก้ไขข้อมูลสินค้า">
       <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
         <ProductImagePanel
           imageLabel="รูปตัวอย่างสินค้า"
@@ -302,7 +322,7 @@ export function ProductEditModal({
           <div className="mt-lg flex items-end justify-end border-t border-outline-variant pt-md">
             <div className="flex w-full flex-col-reverse gap-sm sm:w-auto sm:flex-row sm:gap-md">
               <button
-                onClick={onClose}
+                onClick={closeForm}
                 className="w-full rounded border border-outline-variant bg-transparent px-lg py-md font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container-low sm:w-auto"
                 disabled={isSaving}
                 type="button"

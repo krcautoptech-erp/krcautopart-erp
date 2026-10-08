@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Building2, ChevronRight, FileSpreadsheet, FileText, Package, Printer, Search, Share2, X } from "lucide-react";
 import {
@@ -37,17 +39,18 @@ const date = (value?: string) => value ? new Intl.DateTimeFormat("th-TH-u-ca-gre
 const longDate = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { day: "numeric", month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00+07:00`));
 
 export function StockIssueReport({ documentContext, initialData, printedBy, today }: { documentContext: CompanyDocumentContext; initialData: StockIssueReportResult; printedBy: string; today: string }) {
+  useListScroll();
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useState<StockIssueReportView>("document");
+  const [view, setView] = useListState<StockIssueReportView>("view", "document");
   const [data, setData] = useState(initialData);
-  const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`);
-  const [endDate, setEndDate] = useState(today);
-  const [warehouseId, setWarehouseId] = useState<number | null>(null);
-  const [departmentId, setDepartmentId] = useState<number | null>(null);
-  const [status, setStatus] = useState<StockIssueReportStatus>("all");
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [startDate, setStartDate] = useListState("startDate", `${today.slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useListState("endDate", today);
+  const [warehouseId, setWarehouseId] = useListState<number | null>("warehouseId", null);
+  const [departmentId, setDepartmentId] = useListState<number | null>("departmentId", null);
+  const [status, setStatus] = useListState<StockIssueReportStatus>("status", "all");
+  const [query, setQuery] = useListState("query", "");
+  const [page, setPage] = useListState("page", 1);
+  const [pageSize, setPageSize] = useListState("pageSize", 20);
   const [detailRow, setDetailRow] = useState<StockIssueReportRow | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailError, setDetailError] = useState("");
@@ -55,7 +58,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
   const [printMode, setPrintMode] = useState<"print" | "pdf">("print");
   const [canSharePdf, setCanSharePdf] = useState(false);
   const printRoot = useRef<HTMLDivElement>(null);
-  const [applied, setApplied] = useState<Applied>({ startDate, endDate, warehouseId, departmentId, status, search: "" });
+  const [applied, setApplied] = useListState<Applied>("applied", { startDate, endDate, warehouseId, departmentId, status, search: "" });
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -64,11 +67,20 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const load = (nextView: StockIssueReportView, nextPage: number, nextPageSize = pageSize, filters = applied) => startTransition(async () => {
-    const result = await getStockIssueReportAction({ view: nextView, ...filters, page: nextPage, pageSize: nextPageSize });
-    if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
-    setData(result.data); setView(nextView); setPage(nextPage);
-  });
+  const load = (nextView: StockIssueReportView, nextPage: number, nextPageSize = pageSize, filters = applied) => {
+    setView(nextView); setPage(nextPage); setPageSize(nextPageSize); setApplied(filters);
+  };
+  const appliedKey = JSON.stringify(applied);
+  useEffect(() => {
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await getStockIssueReportAction({ view, ...JSON.parse(appliedKey) as Applied, page, pageSize });
+      if (cancelled) return;
+      if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
+      setData(result.data);
+    });
+    return () => { cancelled = true; };
+  }, [view, appliedKey, page, pageSize]);
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!startDate || !endDate || startDate > endDate || endDate > today) return toast.error("กรุณาเลือกช่วงวันที่ให้ถูกต้อง");

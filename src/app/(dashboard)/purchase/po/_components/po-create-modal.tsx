@@ -30,6 +30,8 @@ import { applyLatestPurchasePrices } from "@/lib/purchase-orders";
 import { formatDisplayDate } from "@/lib/purchase-requisitions";
 import { focusKeyboardTarget, runEnterAction } from "@/components/keyboard-workflow";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 
 type EditableLine = PurchaseOrderSourceItem & {
   deliveryDate: string;
@@ -149,6 +151,51 @@ export function PoCreateModal({
     [vendors],
   );
   const vendor = vendorById.get(vendorId) ?? vendors[0];
+  const [loadingDraft, setLoadingDraft] = useState(false);
+  const draftValue = {
+    vendorId, deliveryDate, deliveryAddress, supplierNote,
+    lines: lines.map(({ requisitionItemId, prNumber, deliveryDate, discountAmount, quantity, remarks, taxRate, unitPrice }) =>
+      ({ requisitionItemId, prNumber, deliveryDate, discountAmount, quantity, remarks, taxRate, unitPrice })),
+  };
+  const [initialDraftValue] = useState(() => draftValue);
+  const draftKey = `purchase-po:${initialData?.id ?? "new"}`;
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey,
+    value: draftValue,
+    initialValue: initialDraftValue,
+    revision: JSON.stringify(initialData ?? null),
+    enabled: !readOnly,
+    onRestore: async (draft) => {
+      if (!vendorById.has(draft.vendorId)) throw new Error("ผู้ขายในข้อมูลที่กู้คืนไม่สามารถเลือกได้แล้ว");
+      if (new Set(draft.lines.map((line) => line?.requisitionItemId)).size !== draft.lines.length || draft.lines.some((line) =>
+        !line || !Number.isSafeInteger(line.requisitionItemId) || line.requisitionItemId <= 0 ||
+        [line.prNumber, line.deliveryDate, line.discountAmount, line.quantity, line.remarks, line.taxRate, line.unitPrice].some((value) => typeof value !== "string"))) {
+        throw new Error("รายการในฉบับร่างไม่สมบูรณ์ ไม่สามารถกู้คืนได้");
+      }
+      setLoadingDraft(true);
+      try {
+        const results = await Promise.all([...new Set(draft.lines.map((line) => line.prNumber))].map((number) => searchPurchaseOrderSourceItemsAction(number)));
+        const failure = results.find((result) => !result.success);
+        if (failure) throw new Error(failure.error);
+        const sourceById = new Map([...results.flatMap((result) => result.items), ...(initialData?.lines ?? [])].map((line) => [line.requisitionItemId, line]));
+        const restored = draft.lines.map(({ requisitionItemId, deliveryDate, discountAmount, quantity, remarks, taxRate, unitPrice }) => {
+          const source = sourceById.get(requisitionItemId);
+          if (!source) throw new Error("มีรายการ PR ที่ไม่สามารถเลือกได้แล้ว กรุณาตรวจสอบข้อมูลก่อนกู้คืน");
+          return { ...source, deliveryDate, discountAmount, quantity, remarks, taxRate, unitPrice };
+        });
+        setVendorId(draft.vendorId);
+        setDeliveryDate(draft.deliveryDate);
+        setDeliveryAddress(draft.deliveryAddress);
+        setSupplierNote(draft.supplierNote);
+        setLines(restored);
+        setError(restored.some((line) => Number(line.quantity) > line.availableQuantity)
+          ? "จำนวนในข้อมูลที่กู้คืนเกินจำนวน PR ที่ค้างสั่งซื้อ กรุณาตรวจสอบก่อนบันทึก" : "");
+      } finally { setLoadingDraft(false); }
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges && !readOnly);
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!loadingDraft) requestNavigation(onClose); };
   const existingLineIds = useMemo(
     () => new Set(lines.map((line) => line.requisitionItemId)),
     [lines],
@@ -349,7 +396,7 @@ export function PoCreateModal({
   );
 
   const save = (status: "draft" | "pending_approval") => {
-    if (saveLock.current || saved || readOnly || isPending) return;
+    if (saveLock.current || saved || readOnly || isPending || loadingDraft) return;
     setError("");
     if (!reservedPoNumber) {
       setError("ระบบยังไม่สามารถสร้างเลขใบสั่งซื้อได้");
@@ -384,6 +431,7 @@ export function PoCreateModal({
         setError(result.error);
         return;
       }
+      clearDraft();
       setSaved({ id: result.poId, number: result.poNumber });
       setReservedPoNumber(result.poNumber);
       onSaved(
@@ -416,7 +464,7 @@ export function PoCreateModal({
           <button
             aria-label="ปิด"
             className="grid h-8 w-8 place-items-center text-on-surface hover:text-primary"
-            onClick={onClose}
+            onClick={closeForm}
             disabled={isPending}
             type="button"
           >
@@ -424,8 +472,9 @@ export function PoCreateModal({
           </button>
         </header>
 
+        {draftPrompt}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
+          <fieldset disabled={isPending || loadingDraft || Boolean(saved)} className="document-form-locked document-form-body">
           <section className="border-b border-outline-variant px-3.5 py-2">
 
             <div className="document-fields document-fields-po">
@@ -770,7 +819,7 @@ export function PoCreateModal({
           </p>
         ) : null}
 
-        <DocumentFormFooter saved={saved} pending={isPending} summary={<>{lines.length} รายการ · {formatAmount(totals.grandTotal)} บาท</>} onClose={onClose} onPrint={onPrint} onNext={onNext}>
+        <DocumentFormFooter saved={saved} pending={isPending || loadingDraft} summary={<>{lines.length} รายการ · {formatAmount(totals.grandTotal)} บาท</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
           {!readOnly && <><button type="button" disabled={isPending} onClick={() => save("draft")}><Save size={15} className="inline mr-2" />{initialData ? "บันทึกการแก้ไข" : "บันทึกร่าง"}</button><button className="primary" type="button" disabled={isPending} onClick={() => save("pending_approval")}><Send size={15} className="inline mr-2" />{isPending ? "กำลังบันทึก..." : "ส่งอนุมัติ"}</button></>}
         </DocumentFormFooter>
       </section>

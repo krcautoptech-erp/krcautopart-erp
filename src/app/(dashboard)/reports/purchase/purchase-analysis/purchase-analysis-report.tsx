@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { ChevronRight, Clock3, FileSpreadsheet, FileText, PackageCheck, Printer, Search, Users } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
@@ -29,26 +31,36 @@ const date = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { 
 const longDate = (value: string) => { const d = new Date(`${value}T00:00:00+07:00`); return `${d.getDate()} ${["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"][d.getMonth()]} ${d.getFullYear()}`; };
 
 export function PurchaseAnalysisReport({ documentContext, initialData, printedBy, today }: { documentContext: CompanyDocumentContext; initialData: PurchaseAnalysisResult; printedBy: string; today: string }) {
+  useListScroll();
   const printRoot = useRef<HTMLDivElement>(null);
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useState<PurchaseAnalysisView>("vendor");
+  const [view, setView] = useListState<PurchaseAnalysisView>("view", "vendor");
   const [data, setData] = useState(initialData);
-  const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`);
-  const [endDate, setEndDate] = useState(today);
-  const [vendorId, setVendorId] = useState<number | null>(null);
-  const [itemTypeId, setItemTypeId] = useState<number | null>(null);
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [startDate, setStartDate] = useListState("startDate", `${today.slice(0, 7)}-01`);
+  const [endDate, setEndDate] = useListState("endDate", today);
+  const [vendorId, setVendorId] = useListState<number | null>("vendorId", null);
+  const [itemTypeId, setItemTypeId] = useListState<number | null>("itemTypeId", null);
+  const [query, setQuery] = useListState("query", "");
+  const [page, setPage] = useListState("page", 1);
+  const [pageSize, setPageSize] = useListState("pageSize", 20);
   const [printRows, setPrintRows] = useState<PurchaseAnalysisRow[] | null>(null);
   const [detailRow, setDetailRow] = useState<PurchaseAnalysisRow | null>(null);
-  const [applied, setApplied] = useState<Applied>({ startDate, endDate, vendorId, itemTypeId, search: "" });
+  const [applied, setApplied] = useListState<Applied>("applied", { startDate, endDate, vendorId, itemTypeId, search: "" });
 
-  const load = (nextView: PurchaseAnalysisView, nextPage: number, nextPageSize = pageSize, filters = applied) => startTransition(async () => {
-    const result = await getPurchaseAnalysisAction({ view: nextView, ...filters, page: nextPage, pageSize: nextPageSize });
-    if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
-    setData(result.data); setView(nextView); setPage(nextPage);
-  });
+  const load = (nextView: PurchaseAnalysisView, nextPage: number, nextPageSize = pageSize, filters = applied) => {
+    setView(nextView); setPage(nextPage); setPageSize(nextPageSize); setApplied(filters);
+  };
+  const appliedKey = JSON.stringify(applied);
+  useEffect(() => {
+    let cancelled = false;
+    startTransition(async () => {
+      const result = await getPurchaseAnalysisAction({ view, ...JSON.parse(appliedKey) as Applied, page, pageSize });
+      if (cancelled) return;
+      if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
+      setData(result.data);
+    });
+    return () => { cancelled = true; };
+  }, [view, appliedKey, page, pageSize]);
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!startDate || !endDate || startDate > endDate || endDate > today) return toast.error("กรุณาเลือกช่วงวันที่ให้ถูกต้อง");

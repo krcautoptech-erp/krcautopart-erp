@@ -19,6 +19,9 @@ import { reserveBusinessNumberAction } from "@/app/actions/number-series";
 import { focusKeyboardTarget, runEnterAction } from "@/components/keyboard-workflow";
 import { CompanyFormLogo } from "@/components/company-logo";
 import { ConfirmModal } from "@/components/confirm-modal";
+import { DateRangePicker } from "@/components/date-range-picker";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 import {
   SUPPLIER_DOCUMENT_TYPES,
   type SupplierDocumentType,
@@ -53,6 +56,19 @@ type ReceiptLine = {
   mfgDate: string;
   expiryDate: string;
   serialNumbers: string;
+};
+
+type ReceiptDraftLine = Pick<ReceiptLine, "purchaseOrderItemId" | "quantity" | "vendorLotNo" | "mfgDate" | "expiryDate" | "serialNumbers"> & { warehouseId: string };
+type ReceiptDraft = {
+  selectedPoId: string;
+  poId: string;
+  warehouseId: string;
+  documentDate: string;
+  deliveryNoteNo: string;
+  supplierDocumentType: SupplierDocumentType;
+  supplierDocumentDate: string;
+  remarks: string;
+  lines: ReceiptDraftLine[];
 };
 
 import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
@@ -419,6 +435,42 @@ export function ReceiptCreateModal({
   const numberError =
     numberReservation.date === documentDate ? numberReservation.error : "";
   const activeWarehouses = warehouses.filter((item) => item.status === "active");
+  const draftValue: ReceiptDraft = {
+    selectedPoId, poId, warehouseId: String(warehouseId), documentDate, deliveryNoteNo,
+    supplierDocumentType, supplierDocumentDate, remarks,
+    lines: lines.map(({ purchaseOrderItemId, quantity, warehouseId, vendorLotNo, mfgDate, expiryDate, serialNumbers }) =>
+      ({ purchaseOrderItemId, quantity, warehouseId: String(warehouseId), vendorLotNo, mfgDate, expiryDate, serialNumbers })),
+  };
+  const [initialDraftValue] = useState(() => draftValue);
+  const draftKey = "purchase-receipt:new";
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey,
+    value: draftValue,
+    initialValue: initialDraftValue,
+    enabled: !saved,
+    onRestore: async (draft) => {
+      if (new Set(draft.lines.map((line) => line?.purchaseOrderItemId)).size !== draft.lines.length || draft.lines.some((line) =>
+        !line || !Number.isSafeInteger(line.purchaseOrderItemId) || line.purchaseOrderItemId <= 0 ||
+        [line.quantity, line.vendorLotNo, line.mfgDate, line.expiryDate, line.serialNumbers].some((value) => typeof value !== "string") ||
+        typeof line.warehouseId !== "string")) {
+        throw new Error("รายการในฉบับร่างไม่สมบูรณ์ ไม่สามารถกู้คืนได้");
+      }
+      const restoredPoId = draft.poId || draft.selectedPoId;
+      if (restoredPoId && !pendingPOs.some((item) => String(item.id) === restoredPoId && ["approved", "sent", "partially_received"].includes(item.status))) {
+        throw new Error("ใบ PO ในข้อมูลที่กู้คืนไม่อยู่ในรายการที่รับสินค้าได้แล้ว");
+      }
+      if (draft.poId) await loadPurchaseOrder(draft.poId, draft);
+      setSelectedPoId(draft.selectedPoId);
+      setDocumentDate(draft.documentDate);
+      setDeliveryNoteNo(draft.deliveryNoteNo);
+      setSupplierDocumentType(draft.supplierDocumentType);
+      setSupplierDocumentDate(draft.supplierDocumentDate);
+      setRemarks(draft.remarks);
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges && !saved);
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!loading) requestNavigation(onClose); };
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -469,19 +521,14 @@ export function ReceiptCreateModal({
     };
   }, [documentDate, step]);
 
-  const loadPurchaseOrder = (value: string) => {
-    setPoId(value);
-    setStep(2);
+  const loadPurchaseOrder = async (value: string, draft?: ReceiptDraft) => {
     setLoading(true);
     setError("");
-    void getPurchaseOrderItemsForReceiptAction(Number(value)).then((result) => {
-      setLoading(false);
+    try {
+      const result = await getPurchaseOrderItemsForReceiptAction(Number(value));
       if (!result.success || !result.data) {
-        setError(result.error ?? "ไม่สามารถโหลดรายการจากใบสั่งซื้อได้");
-        return;
+        throw new Error(result.error ?? "ไม่สามารถโหลดรายการจากใบสั่งซื้อได้");
       }
-      setPo(result.data.po);
-      setCanViewCost(result.data.canViewCost);
 
       // Auto-detect default warehouse
       const defaultWh =
@@ -490,8 +537,6 @@ export function ReceiptCreateModal({
         )?.warehouse_id ??
         activeWarehouses[0]?.id ??
         "";
-
-      setWarehouseId(defaultWh);
 
       const nextLines: ReceiptLine[] = result.data.items
         .filter((item) => item.quantity_remaining > 0)
@@ -517,8 +562,30 @@ export function ReceiptCreateModal({
           expiryDate: "",
           serialNumbers: "",
         }));
-      setLines(nextLines);
-    });
+      const validWarehouse = (id: string) => id === "" || activeWarehouses.some((warehouse) => warehouse.id === Number(id));
+      if (draft && (!validWarehouse(draft.warehouseId) || draft.lines.some((line) => !validWarehouse(line.warehouseId)))) {
+        throw new Error("คลังในข้อมูลที่กู้คืนไม่สามารถเลือกได้แล้ว กรุณาตรวจสอบคลังสินค้า");
+      }
+      if (draft && draft.lines.some((line) => !nextLines.some((current) => current.purchaseOrderItemId === line.purchaseOrderItemId))) {
+        throw new Error("มีรายการในข้อมูลที่กู้คืนซึ่งไม่มีจำนวนค้างรับแล้ว กรุณาตรวจสอบใบ PO");
+      }
+      const restoredLines: ReceiptLine[] = draft ? draft.lines.map(({ purchaseOrderItemId, quantity, warehouseId, vendorLotNo, mfgDate, expiryDate, serialNumbers }) => ({
+        ...nextLines.find((current) => current.purchaseOrderItemId === purchaseOrderItemId)!,
+        quantity, warehouseId: warehouseId === "" ? "" : Number(warehouseId), vendorLotNo, mfgDate, expiryDate, serialNumbers,
+      })) : nextLines;
+      setPoId(value);
+      setStep(2);
+      setPo(result.data.po);
+      setCanViewCost(result.data.canViewCost);
+      setWarehouseId(draft ? (draft.warehouseId === "" ? "" : Number(draft.warehouseId)) : defaultWh);
+      setLines(restoredLines);
+      if (draft && restoredLines.some((line) => numberValue(line.quantity) > line.quantityRemaining)) {
+        setError("จำนวนรับในข้อมูลที่กู้คืนเกินจำนวนค้างรับปัจจุบัน กรุณาแก้ไขจำนวนก่อนบันทึก");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "ไม่สามารถโหลดรายการจากใบสั่งซื้อได้");
+      if (draft) throw caught;
+    } finally { setLoading(false); }
   };
 
   const handleMainWarehouseChange = (newWhId: number | "") => {
@@ -585,7 +652,7 @@ export function ReceiptCreateModal({
   };
 
   const submit = (allowDuplicateSupplierDocument = false) => {
-    if (saveLock.current || saved || isPending) return;
+    if (saveLock.current || saved || isPending || loading) return;
     try {
       validate();
       setError("");
@@ -626,6 +693,7 @@ export function ReceiptCreateModal({
           return;
         }
         const receipt = Array.isArray(result.data) ? result.data[0] : result.data;
+        clearDraft();
         setSaved({ id: Number(receipt?.goods_receipt_id), number: String(receipt?.goods_receipt_number || grNumber) });
         onSaved("บันทึกใบรับสินค้าสำเร็จ");
         } catch { setError("ไม่สามารถยืนยันผลการบันทึก กรุณาตรวจสอบรายการก่อนลองอีกครั้ง"); }
@@ -681,7 +749,7 @@ export function ReceiptCreateModal({
           <button
             aria-label="ปิด"
             className="p-1 text-on-surface hover:text-primary"
-            onClick={onClose}
+            onClick={closeForm}
             disabled={isPending}
             type="button"
           >
@@ -689,6 +757,7 @@ export function ReceiptCreateModal({
           </button>
         </header>
 
+        {draftPrompt}
         {step === 1 && <StepIndicator currentStep={step} />}
         {error && (
           <div className="mx-5 mt-2 border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-700 dark:bg-red-950/30">
@@ -711,24 +780,16 @@ export function ReceiptCreateModal({
                   value={search}
                 />
               </label>
-              <label className="text-[10px] font-semibold">
-                ช่วงวันที่สั่งซื้อ
-                <span className="mt-1 flex h-10 items-center gap-2 border border-outline-variant px-3">
-                  <input
-                    className="min-w-0 flex-1 bg-transparent outline-none"
-                    onChange={(event) => setStartDate(event.target.value)}
-                    type="date"
-                    value={startDate}
-                  />
-                  <span>-</span>
-                  <input
-                    className="min-w-0 flex-1 bg-transparent outline-none"
-                    onChange={(event) => setEndDate(event.target.value)}
-                    type="date"
-                    value={endDate}
-                  />
-                </span>
-              </label>
+              <div className="self-end text-[10px] font-semibold">
+                <span className="mb-1 block">ช่วงวันที่สั่งซื้อ</span>
+                <DateRangePicker
+                  onChange={(range) => {
+                    setStartDate(range.startDate);
+                    setEndDate(range.endDate);
+                  }}
+                  value={{ startDate, endDate }}
+                />
+              </div>
               <label className="text-[10px] font-semibold">
                 สถานะใบสั่งซื้อ
                 <select
@@ -757,7 +818,7 @@ export function ReceiptCreateModal({
               </button>
             </div>
             <div className="grid min-h-0 flex-1 gap-3 px-5 pb-4 lg:grid-cols-[minmax(0,1fr)_270px]">
-              <div className="document-table-scroll border border-outline-variant">
+              <div className="receipt-po-list document-table-scroll min-h-0 border border-outline-variant">
                 <table className="document-entry-table document-gr-picker-table w-full table-fixed border-collapse">
                   <thead>
                     <tr className="h-10 border-b border-outline-variant bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
@@ -843,14 +904,14 @@ export function ReceiptCreateModal({
               <div className="flex gap-3">
                 <button
                   className="h-10 min-w-28 border border-outline-variant px-5 font-semibold"
-                  onClick={onClose}
+                  onClick={closeForm}
                   type="button"
                 >
                   ยกเลิก
                 </button>
                 <button
                   className="h-10 min-w-44 bg-primary px-5 font-bold text-white disabled:opacity-50"
-                  disabled={!selectedPO}
+                  disabled={!selectedPO || loading}
                   onClick={() => {
                     if (selectedPoId) loadPurchaseOrder(selectedPoId);
                   }}
@@ -863,7 +924,7 @@ export function ReceiptCreateModal({
           </>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto"><fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
+            <div className="min-h-0 flex-1 overflow-y-auto"><fieldset disabled={isPending || loading || Boolean(saved)} className="document-form-locked document-form-body">
               <section className="border-b border-outline-variant px-5 py-3">
                 <div className="document-fields">
                   <label className="document-field"><span>เลขที่ GR</span><input className={fieldClass} disabled value={saved?.number || grNumber || (numberError ? "ไม่สามารถสร้างเลขเอกสาร" : "กำลังสร้างเลขเอกสาร...")} /></label>
@@ -1014,10 +1075,10 @@ export function ReceiptCreateModal({
                               <td className="px-2 text-center">
                                 {line.trackingMethod === "serial" ? (
                                   <button
-                                    className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-[2px] border px-2.5 text-[11px] font-bold transition-colors ${
+                                    className={`inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-[4px] border px-3 py-1.5 text-[11px] font-bold leading-4 transition-colors ${
                                       isSerialComplete
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                                        : "border-primary/40 bg-red-50 text-primary hover:bg-red-100 dark:bg-red-950/30"
+                                        : "border-primary bg-primary text-white hover:bg-primary/90"
                                     }`}
                                     onClick={() =>
                                       setActiveSerialLineId(
@@ -1037,10 +1098,10 @@ export function ReceiptCreateModal({
                                   </button>
                                 ) : line.trackingMethod === "lot" ? (
                                   <button
-                                    className={`inline-flex h-7 items-center justify-center gap-1.5 rounded-[2px] border px-2.5 text-[11px] font-bold transition-colors ${
+                                    className={`inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-[4px] border px-3 py-1.5 text-[11px] font-bold leading-4 transition-colors ${
                                       hasLotData
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                                        : "border-outline-variant bg-surface-container-low hover:border-primary hover:text-primary"
+                                        : "border-primary bg-primary text-white hover:bg-primary/90"
                                     }`}
                                     onClick={() =>
                                       setActiveLotLineId(
@@ -1084,7 +1145,7 @@ export function ReceiptCreateModal({
               </section>
             </fieldset></div>
 
-            <DocumentFormFooter saved={saved} pending={isPending || loading} summary={<>{totals.itemsCount} รายการ{canViewCost && <> · {formatMoney(totals.inventoryValue)} บาท</>}</>} onClose={onClose} onPrint={onPrint} onNext={onNext}>
+            <DocumentFormFooter saved={saved} pending={isPending || loading} summary={<>{totals.itemsCount} รายการ{canViewCost && <> · {formatMoney(totals.inventoryValue)} บาท</>}</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
               <button type="button" disabled={isPending} onClick={() => { setStep(1); setError(""); }}>ย้อนกลับ</button>
               <button className="primary" type="button" disabled={isPending || loading} onClick={() => submit()}>{isPending ? "กำลังบันทึก..." : "บันทึกการรับสินค้า"}</button>
             </DocumentFormFooter>

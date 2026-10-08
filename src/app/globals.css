@@ -228,6 +228,10 @@
   --text-label-sm--font-weight: 600;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-sarabun), var(--font-inter), "Sarabun", "Noto Sans Thai", Tahoma, sans-serif;
   line-height: 1.55;

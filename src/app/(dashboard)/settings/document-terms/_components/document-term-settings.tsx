@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Edit3, GripVertical, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -19,11 +21,12 @@ const types = Object.keys(documentTypeLabels) as DocumentType[];
 const inputClass = "mt-1 h-11 w-full rounded-[2px] border border-outline-variant bg-background px-3 py-2 text-[13px] leading-6 outline-none focus:border-primary disabled:bg-surface-container";
 
 export function DocumentTermSettings({ canManage, initialTemplates }: { canManage: boolean; initialTemplates: DocumentTermTemplateRecord[] }) {
+  useListScroll();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [activeType, setActiveType] = useState<DocumentType>("po");
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeType, setActiveType] = useListState<DocumentType>("activeType", "po");
+  const [query, setQuery] = useListState("query", "");
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "all");
   const [editing, setEditing] = useState<DocumentTermTemplateRecord | "new" | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocumentTermTemplateRecord | null>(null);
   const [form, setForm] = useState<DocumentTermTemplateInput>(blank);

@@ -3,7 +3,7 @@
 import {
   classifyFulfillment,
   monthKeys,
-  normalizeAsOfDate,
+  normalizeDateRange,
   normalizeReportedPercent,
   percent,
   type FulfillmentState,
@@ -15,9 +15,16 @@ type Permission =
   "purchase" | "inventory" | "count" | "issue" | "audit" | "approvePurchase";
 
 export type DashboardData = {
+  startDate: string;
   asOf: string;
   today: string;
   roleName: string;
+  selectedWarehouseId: string;
+  warehouses: Array<{
+    id: number;
+    code: string;
+    name: string;
+  }>;
   permissions: Record<Permission, boolean>;
   kpis: {
     poValue: number;
@@ -107,6 +114,8 @@ const thaiMonths = [
 
 export async function getErpDashboardAction(
   asOfInput?: string,
+  warehouseIdInput?: string,
+  startDateInput?: string,
 ): Promise<DashboardData> {
   const supabase = await createClient();
   const {
@@ -114,10 +123,16 @@ export async function getErpDashboardAction(
   } = await supabase.auth.getUser();
   const now = new Date();
   const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-  const asOf = normalizeAsOfDate(asOfInput, today);
-  const monthStart = `${asOf.slice(0, 7)}-01`;
+  const { startDate, endDate: asOf } = normalizeDateRange(
+    startDateInput,
+    asOfInput,
+    today,
+  );
+  const selectedWarehouseId =
+    warehouseIdInput && warehouseIdInput !== "all" ? String(warehouseIdInput) : "";
   const keys = monthKeys(new Date(`${asOf}T00:00:00Z`));
   const chartStart = `${keys[0]}-01`;
+  const queryStart = startDate < chartStart ? startDate : chartStart;
   const emptyPermissions = {
     purchase: false,
     inventory: false,
@@ -126,16 +141,27 @@ export async function getErpDashboardAction(
     audit: false,
     approvePurchase: false,
   };
-  if (!user) return emptyDashboard(asOf, today, keys, emptyPermissions);
+  if (!user) return emptyDashboard(startDate, asOf, today, keys, emptyPermissions);
 
-  const [permissionResult, roleResult] = await Promise.all([
+  const [permissionResult, roleResult, warehouseResult] = await Promise.all([
     supabase.rpc("get_current_user_permission_codes"),
     supabase
       .from("user_roles")
       .select("app_roles(role_name,is_owner,status)")
       .eq("user_id", user.id)
       .limit(5),
+    supabase
+      .from("raw_material_warehouses")
+      .select("id,warehouse_code,warehouse_name")
+      .eq("status", "active")
+      .order("sort_order", { ascending: true })
+      .order("warehouse_name", { ascending: true }),
   ]);
+  const warehouses = rows(warehouseResult.data).map((w) => ({
+    id: n(w.id),
+    code: s(w.warehouse_code),
+    name: s(w.warehouse_name),
+  }));
   const codes = new Set((permissionResult.data ?? []) as string[]);
   const isOwner = rows(roleResult.data).some((item) => {
     const role = Array.isArray(item.app_roles)
@@ -179,7 +205,7 @@ export async function getErpDashboardAction(
           .select(
             "id,po_number,document_date,delivery_date,vendor_name,buyer_name,item_count,status,grand_total,ordered_total_qty,purchase_order_items(quantity,received_qty,unit_price)",
           )
-          .gte("document_date", chartStart)
+          .gte("document_date", queryStart)
           .lte("document_date", asOf)
           .neq("status", "cancelled")
           .order("delivery_date")
@@ -191,7 +217,7 @@ export async function getErpDashboardAction(
           .select(
             "id,document_date,status,goods_receipt_items(quantity_received,purchase_order_items(unit_price))",
           )
-          .gte("document_date", chartStart)
+          .gte("document_date", queryStart)
           .lte("document_date", asOf)
           .eq("status", "posted")
           .limit(1000)
@@ -200,7 +226,7 @@ export async function getErpDashboardAction(
       ? supabase.rpc("get_central_inventory_stock", {
           p_search: null,
           p_item_type_id: null,
-          p_warehouse_id: null,
+          p_warehouse_id: selectedWarehouseId ? Number(selectedWarehouseId) : null,
           p_tracking_method: null,
           p_state: "low_stock",
           p_limit: 8,
@@ -208,15 +234,19 @@ export async function getErpDashboardAction(
         })
       : Promise.resolve({ data: {} }),
     permissions.count
-      ? supabase
-          .from("stock_counts")
-          .select(
-            "id,count_number,status,document_date,assigned_to_name,stock_count_lines(item_code,stock_count_lots(lot_number,difference_qty))",
-          )
-          .lte("document_date", asOf)
-          .neq("status", "cancelled")
-          .order("document_date", { ascending: false })
-          .limit(8)
+      ? (() => {
+          let countQuery = supabase
+            .from("stock_counts")
+            .select(
+              "id,count_number,status,document_date,warehouse_id,assigned_to_name,stock_count_lines(item_code,stock_count_lots(lot_number,difference_qty))",
+            )
+            .lte("document_date", asOf)
+            .neq("status", "cancelled");
+          if (selectedWarehouseId) {
+            countQuery = countQuery.eq("warehouse_id", Number(selectedWarehouseId));
+          }
+          return countQuery.order("document_date", { ascending: false }).limit(8);
+        })()
       : Promise.resolve({ data: [] }),
     permissions.purchase
       ? supabase
@@ -248,7 +278,7 @@ export async function getErpDashboardAction(
       ? supabase
           .from("inventory_transactions")
           .select("created_at,transaction_type,quantity_change")
-          .gte("created_at", `${chartStart}T00:00:00+07:00`)
+          .gte("created_at", `${queryStart}T00:00:00+07:00`)
           .lte("created_at", `${asOf}T23:59:59.999+07:00`)
           .limit(5000)
       : Promise.resolve({ data: [] }),
@@ -256,14 +286,14 @@ export async function getErpDashboardAction(
       ? supabase
           .from("product_transactions")
           .select("created_at,transaction_type,quantity_change")
-          .gte("created_at", `${chartStart}T00:00:00+07:00`)
+          .gte("created_at", `${queryStart}T00:00:00+07:00`)
           .lte("created_at", `${asOf}T23:59:59.999+07:00`)
           .limit(5000)
       : Promise.resolve({ data: [] }),
     permissions.purchase
       ? supabase.rpc("get_purchase_analysis_report", {
           p_view: "vendor",
-          p_start_date: monthStart,
+          p_start_date: startDate,
           p_end_date: asOf,
           p_vendor_id: null,
           p_item_type_id: null,
@@ -286,7 +316,10 @@ export async function getErpDashboardAction(
   const monthMap = new Map(monthly.map((item) => [item.key, item]));
   const purchaseOrders = rows(poResult.data);
   const fulfillment = purchaseOrders
-    .filter((po) => s(po.document_date) >= monthStart)
+    .filter(
+      (po) =>
+        s(po.document_date) >= startDate && s(po.document_date) <= asOf,
+    )
     .map((po) => {
       const items = rows(po.purchase_order_items);
       const ordered =
@@ -343,10 +376,26 @@ export async function getErpDashboardAction(
   }
 
   const allCurrent = purchaseOrders.filter(
-    (po) => s(po.document_date) >= monthStart,
+    (po) =>
+      s(po.document_date) >= startDate && s(po.document_date) <= asOf,
   );
   const poValue = allCurrent.reduce((sum, po) => sum + n(po.grand_total), 0);
-  const receivedValue = monthly.at(-1)?.received ?? 0;
+  const receivedValue = rows(grResult.data)
+    .filter(
+      (gr) =>
+        s(gr.document_date) >= startDate && s(gr.document_date) <= asOf,
+    )
+    .reduce((total, gr) => {
+      return (
+        total +
+        rows(gr.goods_receipt_items).reduce((sum, item) => {
+          const relation = Array.isArray(item.purchase_order_items)
+            ? (item.purchase_order_items[0] as Row | undefined)
+            : (item.purchase_order_items as Row | undefined);
+          return sum + n(item.quantity_received) * n(relation?.unit_price);
+        }, 0)
+      );
+    }, 0);
   const orderedTotal = allCurrent.reduce(
     (sum, po) =>
       sum +
@@ -499,9 +548,12 @@ export async function getErpDashboardAction(
   for (const item of fulfillment) fulfillmentCounts[item.state] += 1;
 
   return {
+    startDate,
     asOf,
     today,
     roleName,
+    selectedWarehouseId,
+    warehouses,
     permissions,
     kpis: {
       poValue,
@@ -531,15 +583,19 @@ export async function getErpDashboardAction(
 }
 
 function emptyDashboard(
+  startDate: string,
   asOf: string,
   today: string,
   keys: string[],
   permissions: Record<Permission, boolean>,
 ): DashboardData {
   return {
+    startDate,
     asOf,
     today,
     roleName: "ผู้ใช้งาน",
+    selectedWarehouseId: "",
+    warehouses: [],
     permissions,
     kpis: {
       poValue: 0,

@@ -1,5 +1,7 @@
 "use client";
 
+import { useListScroll } from "@/lib/use-list-state";
+
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 import { ChevronDown, ChevronUp, Edit3, Eye, GripVertical, ImageIcon, Info, LockKeyhole, Paperclip, Plus, Search, Trash2, X } from "lucide-react";
@@ -212,6 +214,7 @@ export function ItemTypeSettings({
   canManage: boolean;
   initialTypes: ItemTypeRecord[];
 }) {
+  useListScroll();
   const router = useRouter();
   const [editing, setEditing] = useState<ItemTypeRecord | null | "new">(null);
   const [form, setForm] = useState<ItemTypeInput>(blank);

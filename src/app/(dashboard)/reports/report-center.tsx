@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { DataTable, DataTableEmpty, DataTableFrame } from "@/components/data-table";
@@ -14,11 +16,12 @@ type Scope = "catalog" | "favorites" | "recent";
 const PURCHASE_GROUPS = [["pr", "ใบขอซื้อ (PR)", 6], ["po", "ใบสั่งซื้อ (PO)", 8], ["vendor", "ผู้ขาย", 6], ["receipt", "การรับสินค้า", 4], ["return", "การคืนสินค้า", 4]] as const;
 
 export function ReportCenter() {
-  const [category, setCategory] = useState<Category>("purchase");
-  const [group, setGroup] = useState<ReportGroup>("all");
-  const [view, setView] = useState<"list" | "grid">("list");
-  const [scope, setScope] = useState<Scope>("catalog");
-  const [query, setQuery] = useState("");
+  useListScroll();
+  const [category, setCategory] = useListState<Category>("category", "purchase");
+  const [group, setGroup] = useListState<ReportGroup>("group", "all");
+  const [view, setView] = useListState<"list" | "grid">("view", "list");
+  const [scope, setScope] = useListState<Scope>("scope", "catalog");
+  const [query, setQuery] = useListState("query", "");
   const [favorites, setFavorites] = useState(() => new Set(["pending-receipts", "purchase-by-vendor"]));
   const [recent, setRecent] = useState<string[]>([]);
 

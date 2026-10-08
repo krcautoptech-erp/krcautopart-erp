@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Pencil, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { useDeferredValue, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import {
@@ -27,14 +29,15 @@ const emptyWarehouse = (typeId = 0): WarehouseInput => ({ code: "", locationName
 const emptyType: WarehouseTypeInput = { code: "", name: "", remarks: "", status: "active" };
 
 export function WarehouseManagement({ initialData }: { initialData: WarehouseSettingsData }) {
+  useListScroll();
   const [data, setData] = useState(initialData);
-  const [tab, setTab] = useState<"warehouses" | "types">("warehouses");
-  const [query, setQuery] = useState("");
+  const [tab, setTab] = useListState<"warehouses" | "types">("tab", "warehouses");
+  const [query, setQuery] = useListState("query", "");
   const deferredQuery = useDeferredValue(query).trim().toLocaleLowerCase("th");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useListState("typeFilter", "all");
+  const [locationFilter, setLocationFilter] = useListState("locationFilter", "all");
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "all");
+  const [page, setPage] = useListState("page", 1);
   const [warehouseModal, setWarehouseModal] = useState<{ id: number | null; value: WarehouseInput } | null>(null);
   const [typeModal, setTypeModal] = useState<{ id: number | null; value: WarehouseTypeInput } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; kind: "warehouse" | "type"; name: string } | null>(null);

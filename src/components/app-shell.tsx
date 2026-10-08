@@ -2,18 +2,16 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import React, {
   useState,
   useEffect,
-  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { useApp } from "@/components/app-context";
 import { logoutAction } from "@/app/actions/auth";
 import { createClient } from "@/utils/supabase/client";
-import { getWorkspaceTabForPath } from "@/components/workspace-tabs";
 import { NotificationBell } from "@/components/notification-bell";
 import { PushSubscriptionSynchronizer } from "@/components/push-notification-control";
 import { CompanyBrandingProvider, CompanyLogo } from "@/components/company-logo";
@@ -23,7 +21,8 @@ import { getNavigationHref } from "@/lib/access-control";
 import { PermissionProvider } from "@/components/permission-context";
 import { SettingsWorkspace } from "@/components/settings-workspace";
 import { isSystemSettingsPath, SYSTEM_SETTINGS_PERMISSIONS } from "@/lib/system-settings";
-import { useUnsavedChangesContext } from "@/components/unsaved-changes";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
+import { SessionMemoryProvider } from "@/components/session-memory-context";
 import {
   findSidebarGroupForPath,
   SIDEBAR_NAV_GROUPS,
@@ -68,15 +67,7 @@ export function AppShell({
   vapidPublicKey,
 }: AppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { requestNavigation } = useUnsavedChangesContext();
-  const {
-    toggleDarkMode,
-    isDarkMode,
-    workspaceTabs,
-    syncWorkspaceTab,
-    closeWorkspaceTab,
-  } = useApp();
+  const { toggleDarkMode, isDarkMode } = useApp();
   const isDesktop = useIsDesktop();
   const isSettingsArea = isSystemSettingsPath(pathname);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -107,8 +98,7 @@ export function AppShell({
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const activeWorkspaceHref = getWorkspaceTabForPath(pathname)?.href ?? "";
-  const activeWorkspaceTabRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock(isMobileDrawerOpen || isLogoutConfirmOpen);
 
   const handleLogoutClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -134,45 +124,12 @@ export function AppShell({
     return () => window.removeEventListener("click", handleClose);
   }, [isProfileDropdownOpen]);
 
-  useEffect(() => {
-    syncWorkspaceTab(pathname);
-  }, [pathname, syncWorkspaceTab]);
-
-  useEffect(() => {
-    if (!isDesktop || isSettingsArea) return;
-    const timeout = window.setTimeout(() => {
-      activeWorkspaceTabRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "nearest",
-      });
-    }, 320);
-    return () => window.clearTimeout(timeout);
-  }, [activeWorkspaceHref, isDesktop, isSettingsArea, isSidebarOpen]);
-
   // Extract clean username from email
   const username = userEmail ? userEmail.split("@")[0] : "ERP User";
 
-  const handleTabClose = (href: string) => {
-    const currentIndex = workspaceTabs.findIndex((tab) => tab.href === href);
-    const fallbackTab =
-      workspaceTabs[currentIndex - 1] ??
-      workspaceTabs[currentIndex + 1] ??
-      null;
-
-    if (activeWorkspaceHref !== href) {
-      closeWorkspaceTab(href);
-      return;
-    }
-
-    requestNavigation(() => {
-      closeWorkspaceTab(href);
-      router.push(fallbackTab?.href ?? "/workspace");
-    });
-  };
-
   return (
     <CompanyBrandingProvider branding={branding}>
+    <SessionMemoryProvider userId={userId}>
     <PermissionProvider codes={permissionCodes} isOwner={isOwner}>
     <div className="bg-background text-on-surface min-h-screen">
       <PushSubscriptionSynchronizer publicKey={vapidPublicKey} />
@@ -296,7 +253,7 @@ export function AppShell({
       {isSidebarOpen ? (
         <div
           aria-hidden="true"
-          className="fixed inset-0 z-[45] bg-black/45 backdrop-blur-sm lg:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 z-[45] bg-black/45 backdrop-blur-sm lg:hidden animate-in fade-in duration-200 overscroll-contain"
           onClick={() => setIsSidebarOpen(false)}
         />
       ) : null}
@@ -346,6 +303,7 @@ export function AppShell({
                 initialUnreadCount={initialUnreadNotificationCount}
                 key={`${userId}:${initialUnreadNotificationCount}:${initialNotifications.map((item) => `${item.id}:${item.readAt ?? ""}`).join(",")}`}
                 userId={userId}
+                vapidPublicKey={vapidPublicKey}
               />
             ) : null}
             <button
@@ -414,65 +372,8 @@ export function AppShell({
         </div>
       </header>
 
-      <div
-        className={`fixed right-0 top-14 z-30 hidden h-9 border-b border-outline-variant bg-surface-container-low/70 px-md backdrop-blur-sm transition-[left] duration-300 ease-in-out lg:block ${isSettingsArea ? "lg:hidden" : ""} ${isSidebarOpen ? "lg:left-[208px]" : "lg:left-0"}`}
-      >
-        <div className="flex h-full items-stretch overflow-x-auto">
-          {workspaceTabs.map((tab) => {
-            const isActive = activeWorkspaceHref === tab.href;
-
-            return (
-              <div
-                key={tab.href}
-                ref={isActive ? activeWorkspaceTabRef : undefined}
-                className={`group relative flex h-full min-w-[132px] shrink-0 items-stretch border-r border-outline-variant first:border-l ${
-                  isActive
-                    ? "bg-background text-on-surface"
-                    : "bg-surface-container-low/35 text-secondary hover:bg-surface-container-high hover:text-on-surface"
-                }`}
-              >
-                {isActive ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-0 top-0 h-0.5 bg-primary"
-                  />
-                ) : null}
-                <button
-                  aria-current={isActive ? "page" : undefined}
-                  className={`min-w-0 flex-1 truncate px-3 text-center text-[12px] transition-colors ${
-                    isActive ? "font-bold" : "font-medium"
-                  }`}
-                  onClick={() => requestNavigation(() => router.push(tab.href))}
-                  type="button"
-                >
-                  {tab.title}
-                </button>
-                {tab.closable ? (
-                  <button
-                    aria-label={`ปิดแท็บ ${tab.title}`}
-                    className={`material-symbols-outlined flex w-8 shrink-0 items-center justify-center text-[16px] text-secondary transition-colors hover:bg-black/5 hover:text-on-surface focus-visible:opacity-100 dark:hover:bg-white/10 ${
-                      isActive
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
-                    }`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleTabClose(tab.href);
-                    }}
-                    title={`ปิดแท็บ ${tab.title}`}
-                    type="button"
-                  >
-                    close
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Main Content Area */}
-      <main className={`${isSettingsArea ? "pt-14" : "pt-14 lg:pt-[92px]"} min-h-screen bg-background transition-all duration-300 ease-in-out ml-0 ${isSidebarOpen ? "lg:ml-[208px]" : ""}`}>
+      <main className={`pt-14 min-h-screen bg-background transition-all duration-300 ease-in-out ml-0 ${isSidebarOpen ? "lg:ml-[208px]" : ""}`}>
         <div className={isSettingsArea ? "" : "p-md"}>
           {isSettingsArea ? <SettingsWorkspace>{children}</SettingsWorkspace> : children}
         </div>
@@ -530,6 +431,7 @@ export function AppShell({
       )}
     </div>
     </PermissionProvider>
+    </SessionMemoryProvider>
     </CompanyBrandingProvider>
   );
 }

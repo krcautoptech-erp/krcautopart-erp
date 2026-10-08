@@ -1,8 +1,12 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import "./stock-issue-theme.css";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges } from "@/components/unsaved-changes";
 import { useRouter } from "next/navigation";
 import {
   Ban, ChevronRight, Eye, FileText, Info, Loader2,
@@ -88,14 +92,15 @@ function IssueStatus({ status }: { status: StockIssueRecord["status"] }) {
 }
 
 export function StockIssuePageClient({ documentContext, initialIssues, initialQuery = "" }: Props) {
+  useListScroll();
   const canCreate = useHasPermission("inventory_issue.create");
-  const [query, setQuery] = useState(initialQuery);
-  const [startDate, setStartDate] = useState(initialQuery ? "" : monthStartIso);
-  const [endDate, setEndDate] = useState(initialQuery ? "" : todayIso);
-  const [department, setDepartment] = useState("all");
-  const [warehouse, setWarehouse] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useListState("query", initialQuery);
+  const [startDate, setStartDate] = useListState("startDate", initialQuery ? "" : monthStartIso);
+  const [endDate, setEndDate] = useListState("endDate", initialQuery ? "" : todayIso);
+  const [department, setDepartment] = useListState("department", "all");
+  const [warehouse, setWarehouse] = useListState("warehouse", "all");
+  const [status, setStatus] = useListState("status", "all");
+  const [page, setPage] = useListState("page", 1);
   const [createOpen, setCreateOpen] = useState(false);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -258,6 +263,34 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
   const [savedIssueNumber, setSavedIssueNumber] = useState<string | null>(null);
   const [savedDetail, setSavedDetail] = useState<Detail | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const draftValue = { documentDate, requesterName, departmentId, workPoint, warehouseId, reason, lines: lines.map(({ id, quantity }) => ({ id, quantity })) };
+  const [initialDraft, setInitialDraft] = useState(draftValue);
+  const [restoring, setRestoring] = useState(false);
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: "stock-issue:new", value: draftValue, initialValue: initialDraft, enabled: !loading && !savedIssueNumber,
+    onRestore: async (draft) => {
+      setRestoring(true);
+      try {
+        const result = await getStockIssueFormOptionsAction(draft.warehouseId, "");
+        if (!("data" in result) || !result.data) throw new Error(result.error ?? "โหลดสินค้าไม่สำเร็จ");
+        const loaded = result.data;
+        const restored = draft.lines.map((line) => {
+          const item = loaded.items.find((row) => row.id === line.id && row.warehouseId === draft.warehouseId);
+          if (!item) throw new Error("สินค้าที่บันทึกไว้บางรายการไม่พร้อมใช้งาน กรุณาละทิ้งข้อมูลเดิมและเลือกสินค้าใหม่");
+          return { ...item, quantity: line.quantity };
+        });
+        setOptions(loaded);
+        setLines(restored);
+        setDocumentDate(draft.documentDate);
+        setWarehouseId(draft.warehouseId);
+        setReason(draft.reason);
+        setRequesterName(draft.requesterName);
+        setDepartmentId(draft.departmentId);
+        setWorkPoint(draft.workPoint);
+      } finally { setRestoring(false); }
+    },
+  });
+  useUnsavedChanges("stock-issue-create", !savedIssueNumber && hasChanges);
   const allocationLine = lines.find((line) => line.id === allocationItemId);
   const actions = getStockIssueCreateActions(savedIssueNumber);
 
@@ -267,21 +300,23 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
       if (!("data" in result) || !result.data) return void toast.error(result.error ?? "ไม่สามารถโหลดข้อมูลได้");
       const loaded = result.data;
       setOptions(loaded);
-      setRequesterName(loaded.requesterName);
-      setDepartmentId(loaded.departments[0]?.id ?? 0);
-      setWarehouseId(loaded.warehouses[0]?.id ?? 0);
+      setRequesterName((current) => current || loaded.requesterName);
+      setDepartmentId((current) => current || loaded.departments[0]?.id || 0);
+      setWarehouseId((current) => current || loaded.warehouses[0]?.id || 0);
+      setInitialDraft((current) => ({ ...current, requesterName: loaded.requesterName, departmentId: loaded.departments[0]?.id ?? 0, warehouseId: loaded.warehouses[0]?.id ?? 0 }));
     });
   }, []);
 
   useEffect(() => {
     if (!warehouseId || loading) return;
+    let active = true;
     const timer = window.setTimeout(async () => {
       const result = await getStockIssueFormOptionsAction(warehouseId, "");
-      if ("data" in result && result.data) {
+      if (active && "data" in result && result.data) {
         setOptions((current) => current ? { ...current, items: result.data!.items } : result.data!);
       }
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [loading, warehouseId]);
 
   const candidates = useMemo(() => {
@@ -308,6 +343,7 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
   };
 
   const save = () => {
+    if (restoring) return toast.error("กำลังโหลดข้อมูลสินค้าที่กู้คืน กรุณารอสักครู่");
     if (reservation.date !== documentDate || !reservation.number) return toast.error(reservation.error || "กำลังจองเลขที่ใบเบิก กรุณารอสักครู่");
     if (lines.some((line) => line.trackingMethod === "lot" && !line.allocations?.length)) return toast.error("กรุณายืนยัน Lot ที่หยิบจริงให้ครบทุกรายการ");
     const draft = {
@@ -324,6 +360,7 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
         return;
       }
       toast.success(`บันทึกใบเบิก ${result.issueNumber} แล้ว`);
+      clearDraft();
       setSavedIssueNumber(result.issueNumber);
       const detailResult = await getStockIssueDetailAction(result.id);
       if ("data" in detailResult && detailResult.data) setSavedDetail(detailResult.data);
@@ -349,7 +386,8 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
         <button aria-label="ปิด" onClick={onClose} type="button"><X size={22} /></button>
       </header>
 
-      {loading ? <div className="grid min-h-72 place-items-center"><Loader2 className="animate-spin text-primary" /></div> : <fieldset className="min-h-0 overflow-y-auto border-0 p-3" disabled={!actions.canSave}>
+      {draftPrompt}
+      {loading ? <div className="grid min-h-72 place-items-center"><Loader2 className="animate-spin text-primary" /></div> : <fieldset className="min-h-0 overflow-y-auto border-0 p-3" disabled={!actions.canSave || restoring}>
         <section className="issue-create-section">
           <h3><ChevronRight size={15} />ข้อมูลเอกสาร</h3>
           <div className="issue-document-grid grid gap-x-4 gap-y-2 px-3 py-2">

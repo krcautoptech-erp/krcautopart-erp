@@ -39,6 +39,8 @@ import { toast } from "@/components/toast";
 import { focusKeyboardTarget, runEnterAction } from "@/components/keyboard-workflow";
 import { ItemPicker } from "@/components/item-picker";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 import { downloadCsvTemplate, readSpreadsheet } from "@/lib/spreadsheet-import";
 
 import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
@@ -422,6 +424,32 @@ export function PrCreateModal({
     [materials],
   );
 
+  const draftValue = {
+    objective, neededByDate,
+    items: items.map(({ itemKey, quantity, note, neededByDate }) => ({ itemKey, quantity, note, neededByDate })),
+  };
+  const [initialDraftValue] = useState(() => draftValue);
+  const draftKey = `purchase-pr:${editPrId ?? "new"}`;
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey,
+    value: draftValue,
+    initialValue: initialDraftValue,
+    revision: JSON.stringify(initialData ?? null),
+    enabled: !isReadOnly,
+    onRestore: (draft) => {
+      if (draft.items.some((item) => item.itemKey && !itemByKey.has(item.itemKey))) {
+        setFeedback({ tone: "error", message: "มีสินค้าในข้อมูลที่กู้คืนซึ่งไม่สามารถเลือกได้แล้ว กรุณาตรวจสอบรายการสินค้า" });
+        throw new Error("สินค้าในข้อมูลที่กู้คืนไม่สามารถเลือกได้แล้ว");
+      }
+      setObjective(draft.objective);
+      setNeededByDate(draft.neededByDate);
+      setItems(normalizePurchaseRequisitionRows(draft.items, draft.neededByDate));
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges && !isReadOnly);
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => requestNavigation(onClose);
+
   const alreadySelectedIds = useMemo(() => {
     return items
       .map((item) => item.itemKey)
@@ -668,6 +696,7 @@ export function PrCreateModal({
           message: successMsg,
         });
         toast.success(status === "draft" ? "บันทึกร่างสำเร็จ" : "ส่งให้ฝ่ายจัดซื้อตรวจสอบสำเร็จ", prNumber);
+        clearDraft();
         setSaved({ id: res.requisitionId, number: prNumber });
         setReservedPrNumber(prNumber);
         router.refresh();
@@ -691,7 +720,7 @@ export function PrCreateModal({
 
           <button
             className="grid h-7 w-7 place-items-center rounded-[6px] text-on-surface transition-colors hover:bg-surface-container"
-            onClick={onClose}
+            onClick={closeForm}
             type="button"
             disabled={isPending}
           >
@@ -699,6 +728,7 @@ export function PrCreateModal({
           </button>
         </div>
 
+        {draftPrompt}
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto">
           <fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
@@ -995,7 +1025,7 @@ export function PrCreateModal({
         </div>
 
         {/* Modal Footer Controls */}
-        <DocumentFormFooter saved={saved} pending={isPending} summary={<>{items.filter(item => item.itemKey).length} รายการ</>} onClose={onClose} onPrint={onPrint} onNext={onNext}>
+        <DocumentFormFooter saved={saved} pending={isPending} summary={<>{items.filter(item => item.itemKey).length} รายการ</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
           {!isReadOnly && <><button type="button" disabled={isPending} onClick={() => handleSave("draft")}><Save size={15} className="inline mr-2" />บันทึกร่าง</button><button className="primary" type="button" disabled={isPending} onClick={() => handleSave("pending_approval")}><SendHorizontal size={15} className="inline mr-2" />{isPending ? "กำลังบันทึก..." : "ส่งตรวจสอบ"}</button></>}
         </DocumentFormFooter>
       </div>

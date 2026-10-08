@@ -16,7 +16,10 @@ import { useRouter } from "next/navigation";
 import { saveCompanySettingsAction } from "@/app/actions/company-settings";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges } from "@/components/unsaved-changes";
 import {
+  normalizeCompanyHeaderFieldOrder,
   formatCompanyAddress,
   type CompanyDocumentContext,
   type CompanyDocumentSettings,
@@ -114,6 +117,23 @@ export function CompanySettingsForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canManage = initialData.canManage;
+  const draftValue = { profile, documentSettings };
+  const [initialDraftValue, setInitialDraftValue] = useState(() => draftValue);
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: `company-settings:${profile.id}`, value: draftValue, initialValue: initialDraftValue,
+    enabled: canManage, revision: JSON.stringify([initialData.profile, initialData.documentSettings]),
+    onRestore: (value) => {
+      if (!["branch", "head_office"].includes(value.profile.branchType) ||
+          !["auto", "custom"].includes(value.profile.darkLogoMode) ||
+          !["compact", "standard"].includes(value.documentSettings.headerStyle)) throw new Error("ตัวเลือกในฉบับร่างไม่สมบูรณ์");
+      setProfile({ ...value.profile, id: initialData.profile.id,
+        logoDarkPath: initialData.profile.logoDarkPath, logoDarkUrl: initialData.profile.logoDarkUrl,
+        logoLightPath: initialData.profile.logoLightPath, logoLightUrl: initialData.profile.logoLightUrl,
+        updatedAt: initialData.profile.updatedAt });
+      setDocumentSettings({ ...value.documentSettings, headerFieldOrder: normalizeCompanyHeaderFieldOrder(value.documentSettings.headerFieldOrder) });
+    },
+  });
+  useUnsavedChanges(`company-settings:${profile.id}`, hasChanges || (canManage && !success && !!(lightPreview || darkPreview)));
   const provinces = useMemo(() => getThaiProvinces(), []);
   const districts = useMemo(
     () => (profile.province ? getThaiDistricts(profile.province) : []),
@@ -205,6 +225,7 @@ export function CompanySettingsForm({
     variant: "dark" | "light",
   ) => {
     if (!file) return;
+    setSuccess(null);
     const previewUrl = URL.createObjectURL(file);
     if (variant === "light") {
       if (lightPreview) URL.revokeObjectURL(lightPreview);
@@ -230,6 +251,8 @@ export function CompanySettingsForm({
         return;
       }
 
+      setInitialDraftValue(draftValue);
+      clearDraft();
       setSuccess("บันทึกข้อมูลบริษัทเรียบร้อยแล้ว");
       router.refresh();
     });
@@ -270,6 +293,8 @@ export function CompanySettingsForm({
       onSubmit={handleSubmit}
       ref={formRef}
     >
+      {draftPrompt}
+      {hasChanges ? <p className="px-6 py-2 text-xs text-secondary">ฉบับร่างเก็บข้อมูลที่กรอกไว้ รูปโลโก้ที่อัปโหลดต้องเลือกใหม่เมื่อกลับมา</p> : null}
       <input name="companyId" type="hidden" value={profile.id} />
       <input
         name="darkLogoMode"

@@ -1,8 +1,12 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import "./stock-adjustment-theme.css";
 import "@/components/document-form.css";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges } from "@/components/unsaved-changes";
 import { Ban, Eye, Loader2, Plus, Search, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -32,11 +36,12 @@ function AdjustmentStatus({ value }: { value: StockAdjustmentRecord["status"] })
 }
 
 export function StockAdjustmentPageClient({ initialRows, initialQuery = "" }: { initialRows: StockAdjustmentRecord[]; initialQuery?: string }) {
+  useListScroll();
   const canCreate = useHasPermission("inventory_adjustment.create");
-  const [query, setQuery] = useState(initialQuery);
-  const [status, setStatus] = useState("all");
-  const [warehouse, setWarehouse] = useState("all");
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useListState("query", initialQuery);
+  const [status, setStatus] = useListState("status", "all");
+  const [warehouse, setWarehouse] = useListState("warehouse", "all");
+  const [page, setPage] = useListState("page", 1);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<StockAdjustmentDetail | null>(null);
   const [loadingId, setLoadingId] = useState<number | null>(null);
@@ -105,6 +110,32 @@ function CreateAdjustment({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lines, setLines] = useState<DraftLine[]>([]);
+  const draftValue = { documentDate, warehouseId, reason, notes, lines: lines.map(({ id, countedQty, positiveUnitCost }) => ({ id, countedQty, positiveUnitCost })) };
+  const [initialDraft, setInitialDraft] = useState(draftValue);
+  const [restoring, setRestoring] = useState(false);
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: "stock-adjustment:new", value: draftValue, initialValue: initialDraft, enabled: !loading,
+    onRestore: async (draft) => {
+      setRestoring(true);
+      try {
+        const result = await getStockAdjustmentOptionsAction(draft.warehouseId, "");
+        if (!("data" in result) || !result.data) throw new Error(result.error ?? "โหลดสินค้าไม่สำเร็จ");
+        const loaded = result.data;
+        const restored = draft.lines.map((line) => {
+          const item = loaded.items.find((row) => row.id === line.id && row.trackingMethod !== "serial");
+          if (!item) throw new Error("สินค้าที่บันทึกไว้บางรายการไม่พร้อมใช้งาน กรุณาละทิ้งข้อมูลเดิมและเลือกสินค้าใหม่");
+          return { ...item, countedQty: line.countedQty, positiveUnitCost: line.positiveUnitCost };
+        });
+        setOptions(loaded);
+        setLines(restored);
+        setDocumentDate(draft.documentDate);
+        setWarehouseId(draft.warehouseId);
+        setReason(draft.reason);
+        setNotes(draft.notes);
+      } finally { setRestoring(false); }
+    },
+  });
+  useUnsavedChanges("stock-adjustment-create", hasChanges);
   useEffect(() => {
     let active = true;
     void reserveBusinessNumberAction("AD", documentDate).then((result) => {
@@ -112,27 +143,29 @@ function CreateAdjustment({ onClose }: { onClose: () => void }) {
     });
     return () => { active = false; };
   }, [documentDate]);
-  useEffect(() => { void getStockAdjustmentOptionsAction().then((result) => { setLoading(false); if (!("data" in result) || !result.data) return toast.error(result.error ?? "ไม่สามารถโหลดข้อมูลได้"); setOptions(result.data); setWarehouseId(result.data.warehouses[0]?.id ?? 0); }); }, []);
-  useEffect(() => { if (!warehouseId) return; void getStockAdjustmentOptionsAction(warehouseId, "").then((result) => { if ("data" in result && result.data) setOptions((current) => ({ ...current, items: result.data!.items })); }); }, [warehouseId]);
+  useEffect(() => { void getStockAdjustmentOptionsAction().then((result) => { setLoading(false); if (!("data" in result) || !result.data) return toast.error(result.error ?? "ไม่สามารถโหลดข้อมูลได้"); setOptions(result.data); const warehouse = result.data.warehouses[0]?.id ?? 0; setWarehouseId((current) => current || warehouse); setInitialDraft((current) => ({ ...current, warehouseId: warehouse })); }); }, []);
+  useEffect(() => { if (!warehouseId) return; let active = true; void getStockAdjustmentOptionsAction(warehouseId, "").then((result) => { if (active && "data" in result && result.data) setOptions((current) => ({ ...current, items: result.data!.items })); }); return () => { active = false; }; }, [warehouseId]);
   const candidates = options.items.filter((item) => !lines.some((line) => line.id === item.id) && item.trackingMethod !== "serial");
   const add = (selected: StockAdjustmentOption[]) => setLines((current) => [...current, ...selected.map((item) => ({ ...item, countedQty: String(item.onHandQty), positiveUnitCost: "" }))]);
   const save = () => {
+    if (restoring) return toast.error("กำลังโหลดข้อมูลสินค้าที่กู้คืน กรุณารอสักครู่");
     if (reservation.date !== documentDate || !reservation.number) return toast.error(reservation.error || "กำลังจองเลขที่ใบปรับปรุง กรุณารอสักครู่");
     const draft = { adjustmentNumber: reservation.number, documentDate, warehouseId, reason, notes, items: lines.map((line) => ({ itemMasterId: line.id, systemQty: line.onHandQty, countedQty: Number(line.countedQty), positiveUnitCost: line.positiveUnitCost === "" ? null : Number(line.positiveUnitCost) })) };
     const error = validateStockAdjustmentDraft(draft);
     if (error) return toast.error(error);
-    startTransition(async () => { const result = await postStockAdjustmentAction(draft); if (!("success" in result)) { toast.error(result.error); return; } toast.success(`บันทึก ${result.adjustmentNumber} แล้ว`); router.refresh(); onClose(); });
+    startTransition(async () => { const result = await postStockAdjustmentAction(draft); if (!("success" in result)) { toast.error(result.error); return; } clearDraft(); toast.success(`บันทึก ${result.adjustmentNumber} แล้ว`); router.refresh(); onClose(); });
   };
   return <div className="adjustment-overlay" role="presentation"><section aria-modal="true" className="document-form adjustment-modal document-adjustment-form" role="dialog" aria-labelledby="adjustment-title"><header className="document-form-header flex items-center justify-between"><div className="flex items-center gap-4"><CompanyFormLogo className="document-brand" /><div><h2 id="adjustment-title">สร้างใบปรับปรุงสต็อก</h2><small className="text-secondary">ยังไม่บันทึก · เลขที่เอกสารสร้างอัตโนมัติ</small></div></div><button aria-label="ปิด" onClick={onClose}><X /></button></header>
-    <div className="document-form-body"><section><div className="document-fields"><label className="document-field"><span>เลขที่เอกสาร</span><input disabled value={reservation.date === documentDate ? reservation.number || reservation.error || "กำลังสร้างเลขเอกสาร..." : "กำลังสร้างเลขเอกสาร..."} /></label><label className="document-field"><span>วันที่เอกสาร *</span><input max={today()} type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} /></label><label className="document-field"><span>คลังสินค้า *</span><select value={warehouseId} onChange={(event) => { setWarehouseId(Number(event.target.value)); setLines([]); }}><option value={0}>เลือกคลัง</option>{options.warehouses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="document-field"><span>เหตุผล *</span><input maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="เช่น ตรวจนับประจำเดือน" /></label></div></section>
+    {draftPrompt}
+    <fieldset className="document-form-body border-0" disabled={restoring}><section><div className="document-fields"><label className="document-field"><span>เลขที่เอกสาร</span><input disabled value={reservation.date === documentDate ? reservation.number || reservation.error || "กำลังสร้างเลขเอกสาร..." : "กำลังสร้างเลขเอกสาร..."} /></label><label className="document-field"><span>วันที่เอกสาร *</span><input max={today()} type="date" value={documentDate} onChange={(event) => setDocumentDate(event.target.value)} /></label><label className="document-field"><span>คลังสินค้า *</span><select value={warehouseId} onChange={(event) => { setWarehouseId(Number(event.target.value)); setLines([]); }}><option value={0}>เลือกคลัง</option>{options.warehouses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="document-field"><span>เหตุผล *</span><input maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="เช่น ตรวจนับประจำเดือน" /></label></div></section>
       <section className="adjustment-lines"><button className="adjustment-add-items" disabled={loading || !warehouseId} onClick={() => setPickerOpen(true)} type="button"><Search size={17} />ค้นหาและเลือกรายการสินค้า</button>
         <div className="document-table-scroll"><table className="document-entry-table adjustment-entry-table"><thead><tr><th>#</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>ยอดในระบบ</th><th>ยอดตรวจนับ</th><th>ผลต่าง</th><th>หน่วย</th><th>ต้นทุนของจำนวนที่เพิ่ม<br /><small>กรอกเมื่อยอดตรวจนับมากกว่ายอดในระบบ</small></th><th>จัดการ</th></tr></thead><tbody>{lines.map((line, index) => { const difference = adjustmentDifference(line.onHandQty, Number(line.countedQty || 0)); return <tr key={line.id}><td>{index + 1}</td><td className="font-bold">{line.code}</td><td><span className="document-product adjustment-two-lines">{line.name}</span></td><td className="text-right">{qty(line.onHandQty)}</td><td><input aria-label={`ยอดตรวจนับ ${line.code}`} min="0" step="0.0001" type="number" value={line.countedQty} onChange={(event) => setLines((rows) => rows.map((row) => row.id === line.id ? { ...row, countedQty: event.target.value } : row))} /></td><td className={`text-right font-bold ${difference > 0 ? "text-emerald-700" : difference < 0 ? "text-red-600" : ""}`}>{difference > 0 ? "+" : ""}{qty(difference)}</td><td>{line.unitName}</td><td><input aria-label={`ต้นทุนต่อหน่วย ${line.code}`} disabled={difference <= 0} min="0" step="0.0001" type="number" value={line.positiveUnitCost} onChange={(event) => setLines((rows) => rows.map((row) => row.id === line.id ? { ...row, positiveUnitCost: event.target.value } : row))} /></td><td><button aria-label={`ลบ ${line.code}`} onClick={() => setLines((rows) => rows.filter((row) => row.id !== line.id))}><Trash2 size={16} /></button></td></tr>; })}{lines.length === 0 && <tr><td colSpan={9} className="adjustment-empty h-24 text-center text-secondary">ค้นหาและเลือกสินค้าที่ตรวจนับ</td></tr>}</tbody></table></div>
-      </section><section><label className="document-note"><span>หมายเหตุ</span><textarea maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></section></div>
+      </section><section><label className="document-note"><span>หมายเหตุ</span><textarea maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></section></fieldset>
     <footer className="document-form-footer"><span className="summary">{lines.length} รายการ</span><button disabled={pending} onClick={onClose}>ยกเลิก</button><button className="primary" disabled={pending || loading || reservation.date !== documentDate || !reservation.number} onClick={save}>{pending ? "กำลังบันทึก..." : "บันทึกใบปรับปรุง"}</button></footer></section>{pickerOpen && <ItemPicker context={`ใบปรับปรุงสต็อก · ${options.warehouses.find((row) => row.id === warehouseId)?.name ?? "คลังสินค้า"}`} emptyText="ไม่พบสินค้าที่เลือกได้" items={candidates.map((item) => ({ id: String(item.id), code: item.code, name: item.name, unit: item.unitName, value: item }))} columns={[{ key: "system", label: "ยอดในระบบ", className: "text-right", render: (item) => qty(item.value.onHandQty) }]} onClose={() => setPickerOpen(false)} onConfirm={add} />}</div>;
 }
 
 function AdjustmentDetail({ detail, onClose, onChange }: { detail: StockAdjustmentDetail; onClose: () => void; onChange: (value: StockAdjustmentDetail) => void }) {
   const router = useRouter(); const [confirming, setConfirming] = useState(false); const [reason, setReason] = useState(""); const [pending, startTransition] = useTransition();
   const cancel = () => startTransition(async () => { const result = await cancelStockAdjustmentAction(detail.header.id, reason); if (!("success" in result)) { toast.error(result.error); return; } toast.success(`ยกเลิกแล้ว · ${result.reversalNumber}`); const refreshed = await getStockAdjustmentDetailAction(detail.header.id); if ("data" in refreshed && refreshed.data) onChange(refreshed.data); setConfirming(false); router.refresh(); });
-  return <div className="adjustment-overlay"><section aria-modal="true" className="adjustment-detail" role="dialog"><header><div><small>ใบปรับปรุงสต็อก</small><h2>{detail.header.adjustmentNumber}</h2>{detail.sourceCountNumber && <small>สร้างจากการตรวจนับ {detail.sourceCountNumber}</small>}</div><div>{detail.header.status === "posted" && detail.canCancel && <button className="danger" onClick={() => setConfirming(true)}><Ban size={16} />ยกเลิกเอกสาร</button>}<button aria-label="ปิด" onClick={onClose}><X /></button></div></header><div className="adjustment-detail-body"><dl><div><dt>วันที่เอกสาร</dt><dd>{formatDisplayDate(detail.header.documentDate)}</dd></div><div><dt>คลังสินค้า</dt><dd>{detail.header.warehouseName}</dd></div><div><dt>ผู้บันทึก</dt><dd>{detail.header.createdByName}</dd></div><div><dt>สถานะ</dt><dd><AdjustmentStatus value={detail.header.status} /></dd></div><div className="wide"><dt>เหตุผล</dt><dd>{detail.header.reason}</dd></div>{detail.header.notes && <div className="wide"><dt>หมายเหตุ</dt><dd>{detail.header.notes}</dd></div>}{detail.header.reversalNumber && <div className="wide"><dt>กลับรายการ</dt><dd>{detail.header.reversalNumber} · {detail.header.cancellationReason}</dd></div>}</dl><div className="overflow-x-auto"><table className="erp-data-table min-w-[820px]"><thead><tr><th>#</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>Lot</th><th>ยอดในระบบ</th><th>ยอดตรวจนับ</th><th>ผลต่าง</th><th>หน่วย</th><th>ต้นทุน/หน่วย</th></tr></thead><tbody>{detail.items.map((item) => <tr key={item.id}><td>{item.lineNo}</td><td className="font-bold">{item.itemCode}</td><td className="adjustment-two-lines">{item.itemName}</td><td>{item.lotNumber || "—"}</td><td className="text-right">{qty(item.systemQty)}</td><td className="text-right">{qty(item.countedQty)}</td><td className={`text-right font-bold ${item.differenceQty > 0 ? "text-emerald-700" : "text-red-600"}`}>{item.differenceQty > 0 ? "+" : ""}{qty(item.differenceQty)}</td><td>{item.unitName}</td><td className="text-right">{money(item.positiveUnitCost)}</td></tr>)}</tbody></table></div></div></section>{confirming && <div className="adjustment-confirm"><section role="alertdialog" aria-modal="true"><h3>ยืนยันยกเลิก {detail.header.adjustmentNumber}</h3><p>ระบบจะสร้างรายการกลับบัญชีสต็อก ไม่ลบประวัติเดิม</p><textarea autoFocus maxLength={500} placeholder="ระบุเหตุผลอย่างน้อย 10 ตัวอักษร" value={reason} onChange={(event) => setReason(event.target.value)} /><footer><button disabled={pending} onClick={() => setConfirming(false)}>ไม่ยกเลิก</button><button className="danger" disabled={pending || reason.trim().length < 10} onClick={cancel}>{pending ? "กำลังกลับรายการ..." : "ยืนยันยกเลิก"}</button></footer></section></div>}</div>;
+  return <div className="adjustment-overlay"><section aria-modal="true" className="adjustment-detail" role="dialog"><header><div><small>ใบปรับปรุงสต็อก</small><h2>{detail.header.adjustmentNumber}</h2>{detail.sourceCountNumber && <small>สร้างจากการตรวจนับ {detail.sourceCountNumber}</small>}</div><div>{detail.header.status === "posted" && detail.canCancel && <button className="danger" onClick={() => setConfirming(true)}><Ban size={16} />ยกเลิกเอกสาร</button>}<button aria-label="ปิด" onClick={onClose}><X /></button></div></header><div className="adjustment-detail-body"><dl><div><dt>วันที่เอกสาร</dt><dd>{formatDisplayDate(detail.header.documentDate)}</dd></div><div><dt>คลังสินค้า</dt><dd>{detail.header.warehouseName}</dd></div><div><dt>ผู้บันทึก</dt><dd>{detail.header.createdByName}</dd></div><div><dt>สถานะ</dt><dd><AdjustmentStatus value={detail.header.status} /></dd></div><div className="wide"><dt>เหตุผล</dt><dd>{detail.header.reason}</dd></div>{detail.header.notes && <div className="wide"><dt>หมายเหตุ</dt><dd>{detail.header.notes}</dd></div>}{detail.header.reversalNumber && <div className="wide"><dt>กลับรายการ</dt><dd>{detail.header.reversalNumber} · {detail.header.cancellationReason}</dd></div>}</dl><div className="overflow-x-auto"><table className="erp-data-table min-w-[860px]"><thead><tr><th>#</th><th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>Lot</th><th>ยอดในระบบ</th><th>ยอดตรวจนับ</th><th>ผลต่าง</th><th>หน่วย</th><th>ต้นทุน/หน่วย</th></tr></thead><tbody>{detail.items.map((item) => <tr key={item.id}><td>{item.lineNo}</td><td className="font-bold">{item.itemCode}</td><td className="adjustment-two-lines" title={item.itemName}>{item.itemName}</td><td>{item.lotNumber || "—"}</td><td className="text-right">{qty(item.systemQty)}</td><td className="text-right">{qty(item.countedQty)}</td><td className={`text-right font-bold ${item.differenceQty > 0 ? "text-emerald-700" : "text-red-600"}`}>{item.differenceQty > 0 ? "+" : ""}{qty(item.differenceQty)}</td><td>{item.unitName}</td><td className="text-right">{money(item.positiveUnitCost)}</td></tr>)}</tbody></table></div></div></section>{confirming && <div className="adjustment-confirm"><section role="alertdialog" aria-modal="true"><h3>ยืนยันยกเลิก {detail.header.adjustmentNumber}</h3><p>ระบบจะสร้างรายการกลับบัญชีสต็อก ไม่ลบประวัติเดิม</p><textarea autoFocus maxLength={500} placeholder="ระบุเหตุผลอย่างน้อย 10 ตัวอักษร" value={reason} onChange={(event) => setReason(event.target.value)} /><footer><button disabled={pending} onClick={() => setConfirming(false)}>ไม่ยกเลิก</button><button className="danger" disabled={pending || reason.trim().length < 10} onClick={cancel}>{pending ? "กำลังกลับรายการ..." : "ยืนยันยกเลิก"}</button></footer></section></div>}</div>;
 }

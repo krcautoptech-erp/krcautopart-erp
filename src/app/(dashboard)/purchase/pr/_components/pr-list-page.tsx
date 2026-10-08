@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import {
   Ban,
   Eye,
@@ -103,6 +105,7 @@ export function PrListPage({
   initialRequester,
   initialStartDate,
 }: PrListPageProps) {
+  useListScroll();
   const router = useRouter();
   const canCreate = useHasPermission("pr.create");
   const canEdit = useHasPermission("pr.edit");
@@ -133,14 +136,14 @@ export function PrListPage({
     }
   };
 
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | PurchaseRequisitionStatus>(
+  const [query, setQuery] = useListState("query", "");
+  const [statusFilter, setStatusFilter] = useListState<"all" | PurchaseRequisitionStatus>("statusFilter", 
     "all",
   );
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [startDate, setStartDate] = useState(initialStartDate);
-  const [endDate, setEndDate] = useState(initialEndDate);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [departmentFilter, setDepartmentFilter] = useListState("departmentFilter", "all");
+  const [startDate, setStartDate] = useListState("startDate", initialStartDate);
+  const [endDate, setEndDate] = useListState("endDate", initialEndDate);
+  const [currentPage, setCurrentPage] = useListState("currentPage", 1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createVersion, setCreateVersion] = useState(0);
   const createNext = () => { setEditPrData(null); setCreateVersion(value => value + 1); setIsCreateModalOpen(true); };

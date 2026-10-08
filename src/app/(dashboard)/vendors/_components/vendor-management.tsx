@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Download, Plus, Search, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
@@ -39,10 +41,11 @@ export function VendorManagement({
   initialVendors,
   lookups,
 }: VendorManagementProps) {
+  useListScroll();
   const router = useRouter();
   const [vendors, setVendors] = useState(initialVendors);
-  const [query, setQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState("all");
+  const [query, setQuery] = useListState("query", "");
+  const [groupFilter, setGroupFilter] = useListState("groupFilter", "all");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<VendorRecord | null>(null);
   const [detailVendor, setDetailVendor] = useState<VendorRecord | null>(null);
@@ -87,30 +90,32 @@ export function VendorManagement({
     const result = await createVendorAction(input);
     if ("error" in result) {
       toast.error("ไม่สามารถเพิ่มผู้ขายได้", result.error);
-      return;
+      return false;
     }
 
     toast.success("เพิ่มผู้ขายเรียบร้อยแล้ว", input.vendor_name);
     setFormMode(null);
     setSelectedVendor(null);
     startTransition(() => router.refresh());
+    return true;
   };
 
   const handleUpdate = async (input: VendorInput) => {
     if (!selectedVendor) {
-      return;
+      return false;
     }
 
     const result = await updateVendorAction(selectedVendor.id, input);
     if ("error" in result) {
       toast.error("ไม่สามารถแก้ไขข้อมูลผู้ขายได้", result.error);
-      return;
+      return false;
     }
 
     toast.success("บันทึกข้อมูลผู้ขายเรียบร้อยแล้ว", input.vendor_name);
     setFormMode(null);
     setSelectedVendor(null);
     startTransition(() => router.refresh());
+    return true;
   };
 
   const handleDelete = (vendor: VendorRecord) => {

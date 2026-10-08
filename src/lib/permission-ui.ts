@@ -7,3 +7,14 @@ export function canPerform(
   const permissions = typeof required === "string" ? [required] : required;
   return permissions.some((permission) => codes.includes(permission));
 }
+
+export function canManageCatalogLifecycle(
+  codes: readonly string[],
+  isOwner: boolean,
+) {
+  return canPerform(codes, isOwner, ["items.deactivate", "items.edit"]);
+}
+
+export function canManageUsers(isOwner: boolean) {
+  return isOwner;
+}

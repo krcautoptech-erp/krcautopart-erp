@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/20260927104018_harden_supabase_advisor_findings.sql", import.meta.url),
   "utf8",
 ).toLowerCase();
+const userAdminRepairMigration = readFileSync(
+  new URL("../../supabase/migrations/20261005052814_restore_user_admin_rate_limit_execution.sql", import.meta.url),
+  "utf8",
+).toLowerCase();
 
 test("advisor hardening removes permissive writes while preserving authorized ERP access", () => {
   for (const policy of [
@@ -61,6 +65,17 @@ test("advisor hardening blocks direct execution of internal helpers only", () =>
   assert.doesNotMatch(migration, /revoke\s+all\s+on\s+function\s+public\.get_latest_purchase_prices\(/);
   assert.doesNotMatch(migration, /revoke\s+all\s+on\s+function\s+public\.save_current_user_approval_signature\(/);
   assert.match(migration, /to_regprocedure\('public\.rls_auto_enable\(\)'\)/);
+});
+
+test("user administration restores authenticated access to its rate-limit RPC", () => {
+  assert.match(
+    userAdminRepairMigration,
+    /grant\s+execute\s+on\s+function\s+public\.assert_user_admin_rate_limit\(text,\s*integer\)\s+to\s+authenticated/,
+  );
+  assert.match(
+    userAdminRepairMigration,
+    /revoke\s+all\s+on\s+function\s+public\.assert_user_admin_rate_limit\(text,\s*integer\)\s+from\s+public,\s*anon/,
+  );
 });
 
 test("vendor status changes use the permission-checked RPC", () => {

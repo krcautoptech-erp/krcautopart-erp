@@ -7,6 +7,7 @@ import {
   updateAssetStatusAction,
 } from "@/app/actions/assets";
 import type { AssetRecord, AssetStatus } from "@/lib/assets";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 interface AssetTransferModalProps {
   asset: AssetRecord | null;
@@ -21,6 +22,7 @@ export function AssetTransferModal({
   onClose,
   onSaved,
 }: AssetTransferModalProps) {
+  useBodyScrollLock(Boolean(asset));
   const [departmentId, setDepartmentId] = useState<string>(
     asset?.departmentId ? String(asset.departmentId) : "",
   );
@@ -85,8 +87,8 @@ export function AssetTransferModal({
     "w-full h-8 px-2.5 text-[12px] rounded-xs border border-outline-variant bg-surface-container-lowest text-on-surface focus:outline-none focus:border-primary font-medium";
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-      <div className="flex w-full max-w-lg flex-col rounded-sm border border-outline-variant bg-surface-container-lowest shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overscroll-contain" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="flex w-full max-w-lg flex-col rounded-sm border border-outline-variant bg-surface-container-lowest shadow-2xl overscroll-contain" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <header className="flex h-12 items-center justify-between border-b border-outline-variant px-4">
           <div className="flex items-center gap-2 text-on-surface">

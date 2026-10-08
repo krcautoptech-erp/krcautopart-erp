@@ -2,6 +2,7 @@
 
 import { MapPin, Phone, X } from "lucide-react";
 import type { VendorRecord } from "@/app/actions/vendors";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 type VendorDetailModalProps = {
   onClose: () => void;
@@ -9,9 +10,11 @@ type VendorDetailModalProps = {
 };
 
 export function VendorDetailModal({ onClose, vendor }: VendorDetailModalProps) {
+  useBodyScrollLock(true);
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <article className="max-h-[92vh] w-full max-w-[1080px] overflow-hidden rounded-[10px] border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-0 sm:p-4 backdrop-blur-sm overscroll-contain animate-in fade-in duration-150" onClick={onClose} role="dialog" aria-modal="true">
+      <article className="h-[100dvh] sm:h-auto sm:max-h-[92dvh] w-full max-w-[1080px] overflow-hidden rounded-none sm:rounded-[10px] border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30 overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-red-200 px-7 py-5 dark:border-red-500/25">
           <div>
             <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-primary">
@@ -33,7 +36,7 @@ export function VendorDetailModal({ onClose, vendor }: VendorDetailModalProps) {
           </button>
         </header>
 
-        <div className="max-h-[calc(92vh-93px)] overflow-y-auto p-7">
+        <div className="max-h-[calc(92dvh-93px)] max-sm:max-h-[calc(100dvh-93px)] overflow-y-auto overscroll-contain p-7">
           <div className="grid gap-5 lg:grid-cols-[0.38fr_0.62fr]">
             <aside className="space-y-4">
               <div className="rounded-[10px] border border-red-100 bg-surface-container-low p-5 dark:border-red-500/20">

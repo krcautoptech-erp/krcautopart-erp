@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import React, { useEffect, useMemo, useState, useTransition } from "react";
 import { PlusCircle } from "lucide-react";
 import { ExcelExportButton } from "@/components/excel-export-button";
@@ -285,11 +287,12 @@ export function VendorSettingsPanel({
   initialData: VendorSettingsData | null;
   initialError: string | null;
 }) {
+  useListScroll();
   const [activeCategory, setActiveCategory] =
-    useState<VendorSettingCategory>("vendor-groups");
+    useListState<VendorSettingCategory>("activeCategory", "vendor-groups");
   const [data, setData] = useState<VendorSettingsData>(initialData ?? EMPTY_DATA);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ทั้งหมด" | VendorSettingStatus>(
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
+  const [statusFilter, setStatusFilter] = useListState<"ทั้งหมด" | VendorSettingStatus>("statusFilter", 
     "ทั้งหมด",
   );
   const [isEditorOpen, setIsEditorOpen] = useState(false);

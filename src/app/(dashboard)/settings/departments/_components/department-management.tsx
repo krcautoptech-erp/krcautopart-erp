@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import {
   Pencil,
   Plus,
@@ -56,11 +58,12 @@ export function DepartmentManagement({
 }: {
   initialData: DepartmentSettingsData;
 }) {
+  useListScroll();
   const [departments, setDepartments] = useState(initialData.departments);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useListState("statusFilter", "all");
+  const [currentPage, setCurrentPage] = useListState("currentPage", 1);
   const [formMode, setFormMode] = useState<DepartmentFormMode | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<DepartmentInput>(emptyDraft);

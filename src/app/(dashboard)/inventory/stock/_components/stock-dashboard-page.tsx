@@ -1,5 +1,7 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Box, CalendarDays, ChevronDown, ChevronUp, Filter, History, Loader2, LockKeyhole, PackageCheck, RefreshCw, Warehouse } from "lucide-react";
 import {
@@ -292,15 +294,16 @@ function MobileStockDetail({ row, onClose }: { row: CentralStockRow; onClose: ()
 }
 
 export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY, initialTotal, itemTypes, warehouses }: Props) {
+  useListScroll();
   const [rows, setRows] = useState(initialRows);
   const [summary, setSummary] = useState(initialSummary);
   const [total, setTotal] = useState(initialTotal);
-  const [search, setSearch] = useState("");
-  const [typeId, setTypeId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [trackingMethod, setTrackingMethod] = useState("");
-  const [state, setState] = useState<StockStateCode | null>(null);
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useListState("search", "");
+  const [typeId, setTypeId] = useListState("typeId", "");
+  const [warehouseId, setWarehouseId] = useListState("warehouseId", "");
+  const [trackingMethod, setTrackingMethod] = useListState("trackingMethod", "");
+  const [state, setState] = useListState<StockStateCode | null>("state", null);
+  const [page, setPage] = useListState("page", 1);
   const [expandedKey, setExpandedKey] = useState("");
   const [activeTab, setActiveTab] = useState<StockDetailTab>("overview");
   const [mobileDetailRow, setMobileDetailRow] = useState<CentralStockRow | null>(null);

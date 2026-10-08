@@ -1,3 +1,44 @@
+# Design QA — Mobile stock-count workflow — 2026-10-08
+
+- Source visual truth: approved compact multi-Lot mobile mockup, adapted to the real KRC constraints (warehouse only, no barcode and no zone).
+- Verified routes: `/inventory/stock-counts` and `/inventory/stock-counts/2`.
+- Verified viewport: 390 × 844 CSS px, light theme, populated four-Lot approved round.
+- Implementation evidence: authenticated in-app Browser captures emitted in-tool.
+
+## Comparison and interaction evidence
+
+- The mobile list exposes the missing primary “สร้างรอบ” action as the existing KRC red floating button.
+- The create form is full-screen, single-column, uses existing ERP controls, keeps all three footer actions visible, and replaces the unnecessary wide product table with its selected-item/point-count summary on mobile.
+- The count screen groups all Lots under one product card instead of forcing one-item/one-Lot navigation. Quantity fields align in one compact column and Enter advances to the next enabled Lot.
+- Follow-up fidelity pass: every product header is now a real expand/collapse control; the first product opens initially and later products start collapsed. Header, card, and Lot-row surfaces are pure white rather than gray.
+- Product names wrap naturally without ellipsis or line clamp; the verified item fits on one line and the layout reserves the full center column for up to two normal-length lines.
+- All four tabs remain available on mobile: count list, variance summary, general data, and history.
+- Active counting is blind. System quantity, difference, and reason fields appear only after all count points are completed or the document reaches review/result state.
+- Printing is split into a blind walking sheet and a post-review result report. The table no longer stretches rows to fill the page.
+
+## Findings
+
+- P1 fixed: mobile could not create a count round.
+- P1 fixed: mobile processed one Lot at a time and hid sibling Lots behind a selector.
+- P1 fixed: system quantities were visible during active blind counting.
+- P2 fixed: general/history tabs were hidden on mobile.
+- P2 fixed: the print table expanded sparse rows disproportionately and had no separate result document.
+- P2 fixed: dynamically generated footer time caused a React hydration mismatch; the shared footer now marks that timestamp as intentionally client-variable.
+- P2 fixed: the first implementation omitted the mockup's product-row disclosure interaction and used a gray group header.
+- Post-fix browser logs: no warnings or errors.
+
+## Verification
+
+- Mobile document width: 384 px inside a 390 px viewport; no horizontal overflow.
+- Expand first group → collapse → expand second group: passed; ARIA expanded/collapsed state updated correctly.
+- Stock-count and print regression tests: passed.
+- Full automated test suite: 295/295 passed before the one-line shared-footer hydration guard; targeted regression re-run passed afterward.
+- TypeScript, ESLint, and Next.js 16.3.6 production build: passed.
+
+final result: passed
+
+---
+
 # Design QA — Compact Notification Bell — 2026-10-04
 
 - Source visual truth path: `C:/Users/Riew/.codex/generated_images/01a0f862-909b-70e1-a8ec-bccccfbbf050/exec-cafb2efe-f775-46b2-a4df-d39f6e66b245.png`.
@@ -102,6 +143,88 @@ final result: blocked
 - Desktop 1440 × 900: one visible table, desktop Excel action visible, mobile Export action hidden.
 - Browser console warnings/errors: none.
 - Automated tests: 238/238 passed. Next.js 16.3.5 production build and TypeScript passed.
+
+final result: passed
+
+---
+
+# Design QA — Shared responsive date-range picker — 2026-10-07
+
+- Source visual truth: the user-selected compact mobile mockup for the ERP date-range control.
+- Verified routes: `/workspace`, `/reports/purchase/purchase-analysis`, and `/reports/purchase/pending-receipts` in the authenticated Codex in-app Browser.
+- Verified viewport: 320 px mobile width, light theme, populated production-like data.
+- Implementation evidence: browser-rendered captures were emitted in-tool; the browser does not expose a persistent screenshot path.
+
+## Comparison and interaction evidence
+
+- Mobile uses a bottom sheet with one title, close action, horizontally scrollable presets, one calendar month, Thai Buddhist year, 44 px controls, selected-range summary, and sticky Cancel/Apply actions.
+- Preset and day selections remain drafts until Apply. Cancel restores the original range and leaves the URL unchanged.
+- The selected preset is centered without scrolling the page or clipping the sheet header.
+- Dashboard and historical reports disable future dates through `maxDate`; the pending-delivery report intentionally permits future due dates.
+- Desktop retains the two-month calendar and compact shared trigger.
+- Nested use inside the report-filter sheet remains usable without page-level horizontal overflow.
+- Browser console errors and warnings after the final build: none.
+
+## System-wide coverage
+
+- Shared date-range control now covers dashboard, notifications, PR, PO, goods receipts, stock issues, stock counts, audit logs, purchase analysis, pending receipts, stock movements, stock-issue report, and the PO selection step in goods receipt creation.
+- Single transaction dates remain native single-date controls: PR required date, PO document/delivery dates, GR receipt/supplier/manufacture/expiry dates, stock issue date, stock count date, stock adjustment date, and asset transfer date.
+- Stock Card history remains a deliberate exception because its empty range means “all history”; the shared range picker needs an explicit optional “all time / clear range” contract before replacing it.
+
+## Verification
+
+- Automated tests: 294/294 passed.
+- TypeScript: passed.
+- ESLint: passed with 0 errors; 4 pre-existing unused-symbol warnings outside the shared date-range change.
+- Next.js 16.3.6 production build: passed.
+- Git whitespace validation for touched files: passed.
+
+final result: passed
+
+---
+
+# Design QA — Compact mobile calendar and warehouse menu — 2026-10-07
+
+- Source visual truth paths: `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-bda44775-fdd8-4eb5-8211-b5af0049bd75.png`, `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-525c4a8c-3949-4058-8927-612355749d07.png`, and `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-fff9514b-d8b8-40e2-93e1-a2ea27967eb1.png`.
+- Implementation route: `http://localhost:3000/workspace?startDate=2026-09-08`.
+- Verified viewport: 320 px mobile width, light theme, date picker and warehouse menu open in separate states.
+- Implementation screenshots: browser-rendered captures emitted in-tool; the in-app Browser does not expose a persistent screenshot path.
+
+## Comparison history
+
+- P2 fixed: the date sheet was visually taller and used a gray preset strip. Reduced mobile header, preset, calendar, date-cell, summary, and footer density while retaining readable controls; every sheet surface and inactive preset now uses the white system surface.
+- P2 fixed: the native warehouse select exposed an operating-system menu that did not match KRC styling. Replaced it with an accessible app-owned listbox using the system surface, compact warehouse code metadata, selected state, checkmark, outside-click close, and Escape close.
+- Post-fix visual evidence: the complete calendar, summary, and both footer actions fit in one mobile viewport; the warehouse menu stays inside the content width and does not cover the KPI row unnecessarily.
+
+## Required fidelity surfaces
+
+- Typography: compact 11–18 px Sarabun hierarchy; Thai marks remain visible and no label is truncated inside the open surfaces.
+- Spacing/layout: reduced vertical rhythm matches the selected compact reference; mobile controls remain comfortably tappable.
+- Colors/tokens: white surface, KRC primary red, shared outline and secondary tokens.
+- Assets/icons: existing Material Symbols and Lucide close/navigation icons; no new raster assets required.
+- Copy/content: preset labels, Thai Buddhist month/year, selected range, warehouse names, and warehouse codes are complete.
+
+## Verification
+
+- Warehouse listbox open/close and selected-state rendering: passed.
+- Date bottom sheet open, range rendering, disabled future dates, and persistent actions: passed.
+- Browser console warnings/errors: none.
+- Targeted tests: 13/13 passed.
+- Targeted ESLint and TypeScript: passed.
+
+final result: passed
+
+---
+
+# Design QA — Goods receipt PO picker and tracking action — 2026-10-06
+
+- Source visuals: `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-1d7b28ef-b3d5-4243-8c6d-84b40f1e2366.png` and `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-df232837-f048-4096-8629-64a47f431cf3.png`.
+- Verified route: `http://localhost:3000/purchase/receipts`, authenticated light-theme state.
+- Desktop 1440 × 900: the PO list is contained between filters and the fixed footer, with `overflow-y: auto`; scrolling reached the final PO while the footer stayed visible.
+- Mobile 390 × 844: the receipt item card and fixed actions remain within the viewport.
+- The incomplete Lot/Serial action uses the existing KRC primary red, white text, 12 px horizontal padding, and a minimum 36 px height. The tested Lot label had equal client and scroll widths, so it does not overflow.
+- Completed tracking states retain the existing green confirmation treatment.
+- Targeted ESLint and TypeScript passed.
 
 final result: passed
 
@@ -978,5 +1101,26 @@ final result: passed
 - Mobile bottom sheet open: passed at 390 × 844; list stays behind the backdrop and the sheet scrolls independently.
 - Targeted ESLint and production build: passed.
 - Migration is present locally; it was not applied to a remote Supabase project during this UI change.
+
+final result: passed
+
+---
+
+# Notification bell design QA
+
+- Reference: `C:\Users\Riew\.codex\generated_images\01a0f862-909b-70e1-a8ec-bccccfbbf050\exec-43678dfd-d50a-40d6-9047-fb9c3a5ca9dd.png`
+- Implementation: `src/components/notification-bell.tsx`
+- Verified: 2026-10-05 in the local KRC ERP app
+
+## Checks
+
+- Desktop popover matches the selected continuous-list layout, hierarchy, compact status treatment, unread dots, dividers, and footer action.
+- Document icons vary by notification type; status icons and text use the semantic color mapping.
+- Thai titles and messages render without clipped diacritics.
+- Mobile viewport at 320 × 738 has no horizontal overflow (`296px` client and scroll width).
+- All/unread tabs work and the unread view returns only unread items.
+- Keyboard focus styles and text/icon status cues remain present.
+
+P3: Long document titles truncate to one line on narrow mobile screens to preserve the compact layout.
 
 final result: passed

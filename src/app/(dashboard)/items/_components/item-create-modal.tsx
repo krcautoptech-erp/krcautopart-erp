@@ -24,6 +24,8 @@ import type {
   ItemFormFieldVisibility,
 } from "@/lib/items";
 import { ToggleSwitch } from "@/components/toggle-switch";
+import { useFormDraft } from "@/components/form-draft";
+import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 
 const control =
   "h-9 w-full rounded-[4px] border border-[#d8dde3] bg-white px-2.5 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary/15 disabled:bg-white disabled:text-on-surface disabled:opacity-100";
@@ -168,19 +170,25 @@ function Section({
   );
 }
 
-export function ItemCreateModal({
-  data,
-  initialTypeCode,
-  item,
-  onClose,
-  onSaved,
-}: {
+type ItemCreateModalProps = {
   data: ItemCatalogData;
   initialTypeCode?: string;
   item?: CatalogItem;
   onClose: () => void;
   onSaved: () => void;
-}) {
+};
+
+export function ItemCreateModal(props: ItemCreateModalProps) {
+  return <ItemFormEditor key={props.item?.id ?? "new"} {...props} />;
+}
+
+function ItemFormEditor({
+  data,
+  initialTypeCode,
+  item,
+  onClose,
+  onSaved,
+}: ItemCreateModalProps) {
   const types = useMemo(
     () => data.types.filter((item) => item.status === "active"),
     [data.types],
@@ -209,6 +217,26 @@ export function ItemCreateModal({
     typeId: number;
   } | null>(null);
   const [saving, setSaving] = useState(false);
+  const { primaryImage: omittedImage, attachmentNames: omittedAttachments, ...draftValue } = form;
+  const [initialDraftValue] = useState(() => draftValue);
+  const [initialFiles] = useState(() => ({ primaryImage: form.primaryImage, attachmentNames: form.attachmentNames }));
+  const draftKey = `master-item:${item?.id ?? "new"}`;
+  const { draftPrompt, clearDraft, hasChanges } = useFormDraft({
+    key: draftKey, value: draftValue, initialValue: initialDraftValue,
+    revision: item ? JSON.stringify(initialDraftValue) : "",
+    onRestore: (value) => {
+      const validLookup = (id: number | null, options: { id: number }[]) => id === null || options.some((option) => option.id === id);
+      if (!validLookup(value.typeId, types) || !validLookup(value.unitId, data.units) ||
+          !validLookup(value.warehouseId, data.warehouses) || !validLookup(value.groupId, data.groups) ||
+          !validLookup(value.gradeId, data.grades) || !validLookup(value.vendorId, data.vendors)) {
+        throw new Error("ข้อมูลตัวเลือกในฉบับร่างเปลี่ยนแล้ว กรุณาตรวจสอบก่อนกู้คืน");
+      }
+      setForm({ ...value, primaryImage: initialFiles.primaryImage, attachmentNames: initialFiles.attachmentNames });
+    },
+  });
+  useUnsavedChanges(draftKey, hasChanges || omittedImage !== initialFiles.primaryImage || JSON.stringify(omittedAttachments) !== JSON.stringify(initialFiles.attachmentNames));
+  const { requestNavigation } = useUnsavedChangesContext();
+  const closeForm = () => { if (!saving) requestNavigation(onClose); };
   const type = useMemo(
     () => types.find((item) => item.id === form.typeId),
     [form.typeId, types],
@@ -391,6 +419,7 @@ export function ItemCreateModal({
     } else result = await saveGenericItemAction(submitForm);
     setSaving(false);
     if ("error" in result && result.error) return setError(result.error);
+    clearDraft();
     onSaved();
   }
 
@@ -692,12 +721,14 @@ export function ItemCreateModal({
           <button
             aria-label="ปิด"
             className="grid h-10 w-10 place-items-center"
-            onClick={onClose}
+            onClick={closeForm}
             type="button"
           >
             <X size={22} />
           </button>
         </header>
+        {draftPrompt}
+        <p className="px-4 pt-2 text-xs text-secondary">ฉบับร่างไม่เก็บรูปและเอกสารที่แนบ หากกู้คืนกรุณาเลือกไฟล์ใหม่อีกครั้ง</p>
         <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto bg-white p-2 sm:p-3">
           <div className="mb-2.5 flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="w-full sm:w-[320px]">
@@ -849,7 +880,7 @@ export function ItemCreateModal({
           </div>
           <button
             className="ml-auto h-9 min-w-24 rounded-[4px] border border-[#d8dde3] px-5 text-[12px] font-bold"
-            onClick={onClose}
+            onClick={closeForm}
             type="button"
           >
             ยกเลิก

@@ -1,12 +1,15 @@
 "use client";
 
+import { useListState, useListScroll } from "@/lib/use-list-state";
+
 import "./stock-count.css";
 import "./stock-count-visual.css";
 import { useMemo, useState } from "react";
 import { Eye, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { StockCountListRecord } from "@/app/actions/stock-counts";
+import type { StockCountCreateOptions, StockCountListRecord } from "@/app/actions/stock-counts";
+import { StockCountCreateModal } from "./stock-count-create-page";
 import { MobileDocumentList } from "@/components/mobile-document-list";
 import {
   ListDateRangeFilter,
@@ -44,17 +47,21 @@ function CountStatus({ row }: { row: StockCountListRecord }) {
 
 export function StockCountListPage({
   initialRows,
+  initialCreateOptions,
 }: {
   initialRows: StockCountListRecord[];
+  initialCreateOptions?: StockCountCreateOptions;
 }) {
+  useListScroll();
   const router = useRouter();
   const canCreate = useHasPermission("stock_count.create");
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [warehouse, setWarehouse] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [page, setPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useListState("query", "");
+  const [status, setStatus] = useListState("status", "all");
+  const [warehouse, setWarehouse] = useListState("warehouse", "all");
+  const [startDate, setStartDate] = useListState("startDate", "");
+  const [endDate, setEndDate] = useListState("endDate", "");
+  const [page, setPage] = useListState("page", 1);
   const warehouses = useMemo(
     () => [...new Set(initialRows.map((row) => row.warehouseName))],
     [initialRows],
@@ -139,6 +146,16 @@ export function StockCountListPage({
           <h1>ทะเบียนรอบตรวจนับ</h1>
           <p>จัดการรอบตรวจนับสต็อกทั้งหมด</p>
         </div>
+        {canCreate && (
+          <button
+            className="stock-count-primary md:hidden"
+            onClick={() => setCreateOpen(true)}
+            type="button"
+          >
+            <Plus size={17} />
+            สร้างรอบ
+          </button>
+        )}
       </header>
       <MobileListFilters
         activeCount={(startDate ? 1 : 0) + (endDate ? 1 : 0) + (warehouse === "all" ? 0 : 1) + (status === "all" ? 0 : 1)}
@@ -148,7 +165,6 @@ export function StockCountListPage({
         {dateRange}
         {selectFields}
       </MobileListFilters>
-      {canCreate && <Link className="stock-count-primary md:hidden" href="/inventory/stock-counts/new"><Plus size={17} />สร้างรอบตรวจนับ</Link>}
       <div className="stock-count-filter-panel hidden md:block">
         <ListFilterToolbar className="stock-count-filter-grid">
           {dateRange}
@@ -165,13 +181,14 @@ export function StockCountListPage({
             ค้นหา
           </ListFilterButton>
           {canCreate && (
-            <Link
+            <button
               className="stock-count-primary"
-              href="/inventory/stock-counts/new"
+              onClick={() => setCreateOpen(true)}
+              type="button"
             >
               <Plus size={17} />
               สร้างรอบตรวจนับ
-            </Link>
+            </button>
           )}
         </ListFilterToolbar>
       </div>
@@ -275,6 +292,12 @@ export function StockCountListPage({
         totalItems={filtered.length}
         totalPages={totalPages}
       />
+      {createOpen && (
+        <StockCountCreateModal
+          initialOptions={initialCreateOptions}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
     </section>
   );
 }

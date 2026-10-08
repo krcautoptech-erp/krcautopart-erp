@@ -1,9 +1,12 @@
 "use client";
 
+import { useListState, useRememberedListUrl } from "@/lib/use-list-state";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { DashboardData } from "@/app/actions/erp-dashboard";
+import { DateRangePicker } from "@/components/date-range-picker";
 import { StatusBadge, type StatusTone } from "@/components/status-badge";
 import styles from "./erp-dashboard.module.css";
 
@@ -259,10 +262,109 @@ function MovementChart({ data }: { data: DashboardData["monthly"] }) {
 }
 
 export function ErpDashboard({ data }: { data: DashboardData }) {
+  useRememberedListUrl();
   const router = useRouter();
-  const [isDatePending, startDateTransition] = useTransition();
-  const [selectedDate, setSelectedDate] = useState(data.asOf);
-  const [workTab, setWorkTab] = useState("all");
+  const [isPending, startTransition] = useTransition();
+
+  const [dateRange, setDateRange] = useState({
+    startDate: data.startDate,
+    endDate: data.asOf,
+  });
+  const [prevDataKey, setPrevDataKey] = useState(
+    `${data.startDate}_${data.asOf}`,
+  );
+  if (prevDataKey !== `${data.startDate}_${data.asOf}`) {
+    setPrevDataKey(`${data.startDate}_${data.asOf}`);
+    setDateRange({
+      startDate: data.startDate,
+      endDate: data.asOf,
+    });
+  }
+
+  const [selectedWarehouse, setSelectedWarehouse] = useState(
+    data.selectedWarehouseId || "all",
+  );
+  const [warehouseOpen, setWarehouseOpen] = useState(false);
+  const warehouseRef = useRef<HTMLDivElement>(null);
+  const [previousWarehouse, setPreviousWarehouse] = useState(
+    data.selectedWarehouseId || "all",
+  );
+  if (previousWarehouse !== (data.selectedWarehouseId || "all")) {
+    setPreviousWarehouse(data.selectedWarehouseId || "all");
+    setSelectedWarehouse(data.selectedWarehouseId || "all");
+  }
+
+  const [workTab, setWorkTab] = useListState("workTab", "all");
+
+  const updateFilters = (
+    nextRange: { startDate: string; endDate: string },
+    nextWarehouse: string,
+  ) => {
+    const params = new URLSearchParams(window.location.search);
+    if (nextRange.endDate && nextRange.endDate !== data.today) {
+      params.set("asOf", nextRange.endDate);
+    } else {
+      params.delete("asOf");
+    }
+    if (
+      nextRange.startDate &&
+      nextRange.startDate !== `${nextRange.endDate.slice(0, 7)}-01`
+    ) {
+      params.set("startDate", nextRange.startDate);
+    } else {
+      params.delete("startDate");
+    }
+    if (nextWarehouse && nextWarehouse !== "all") {
+      params.set("warehouse", nextWarehouse);
+    } else {
+      params.delete("warehouse");
+    }
+    const query = params.toString();
+    startTransition(() => {
+      router.replace(`/workspace${query ? `?${query}` : ""}`);
+    });
+  };
+
+  const handleDateRangeChange = (nextRange: {
+    startDate: string;
+    endDate: string;
+  }) => {
+    setDateRange(nextRange);
+    updateFilters(nextRange, selectedWarehouse);
+  };
+
+  const handleWarehouseChange = (nextWarehouse: string) => {
+    setSelectedWarehouse(nextWarehouse);
+    setWarehouseOpen(false);
+    updateFilters(dateRange, nextWarehouse);
+  };
+
+  useEffect(() => {
+    if (!warehouseOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!warehouseRef.current?.contains(event.target as Node)) setWarehouseOpen(false);
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWarehouseOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [warehouseOpen]);
+
+  const selectedWarehouseLabel = selectedWarehouse === "all"
+    ? "ทุกคลังสินค้า"
+    : data.warehouses?.find((warehouse) => String(warehouse.id) === selectedWarehouse)?.name ?? "ทุกคลังสินค้า";
+
+  const handleRefresh = () => {
+    startTransition(() => {
+      router.refresh();
+    });
+  };
+
   const visibleWork = useMemo(
     () =>
       workTab === "all"
@@ -270,16 +372,21 @@ export function ErpDashboard({ data }: { data: DashboardData }) {
         : data.work.filter((item) => item.tab === workTab),
     [data.work, workTab],
   );
+
+  const isThisMonth =
+    dateRange.startDate === `${data.today.slice(0, 7)}-01` &&
+    dateRange.endDate === data.today;
+
   const kpis = [
     {
-      label: "มูลค่า PO เดือนนี้",
+      label: isThisMonth ? "มูลค่า PO เดือนนี้" : "มูลค่า PO",
       value: money(data.kpis.poValue),
       icon: "description",
       tone: "red",
       permission: "purchase" as const,
     },
     {
-      label: "มูลค่ารับเข้าเดือนนี้",
+      label: isThisMonth ? "มูลค่ารับเข้าเดือนนี้" : "มูลค่ารับเข้า",
       value: money(data.kpis.receivedValue),
       icon: "local_shipping",
       tone: "red",
@@ -345,47 +452,87 @@ export function ErpDashboard({ data }: { data: DashboardData }) {
   return (
     <div className={styles.dashboard}>
       <header className={styles.pageHeader}>
-        <div>
-          <h1>ภาพรวมระบบ ERP</h1>
-          <p>สรุปภาพรวมการจัดซื้อ คลังสินค้า และการตรวจนับสต็อก</p>
+        <div className={styles.headerInfo}>
+          <div className={styles.titleRow}>
+            <h1>ภาพรวมระบบ ERP</h1>
+          </div>
         </div>
+
         <div className={styles.filters}>
-          <label>
-            บทบาท
-            <select aria-label="บทบาท" defaultValue="current">
-              <option value="current">{data.roleName}</option>
-            </select>
-          </label>
-          <label>
-            ช่วงข้อมูล
-            <select aria-label="ช่วงข้อมูล" defaultValue="month">
-              <option value="month">เดือนนี้</option>
-            </select>
-          </label>
-          <label>
-            คลังสินค้า
-            <select aria-label="คลังสินค้า" defaultValue="all">
-              <option value="all">ทุกคลัง</option>
-            </select>
-          </label>
-          <label>
-            ข้อมูล ณ วันที่
-            <input
-              aria-label="ข้อมูล ณ วันที่"
-              aria-busy={isDatePending}
-              max={data.today}
-              onInput={(event) => {
-                const nextDate = event.currentTarget.value;
-                setSelectedDate(nextDate);
-                if (nextDate)
-                  startDateTransition(() =>
-                    router.replace(`/workspace?asOf=${nextDate}`),
+          <div ref={warehouseRef} className={`${styles.filterItem} ${styles.warehouseItem}`}>
+            <label id="filter-warehouse-label">คลังสินค้า</label>
+            <button
+              aria-expanded={warehouseOpen}
+              aria-haspopup="listbox"
+              aria-labelledby="filter-warehouse-label"
+              className={styles.controlField}
+              disabled={isPending}
+              onClick={() => setWarehouseOpen((open) => !open)}
+              type="button"
+            >
+              <span
+                className={`material-symbols-outlined ${styles.fieldIcon}`}
+              >
+                warehouse
+              </span>
+              <span className={styles.controlValue}>{selectedWarehouseLabel}</span>
+              <span
+                className={`material-symbols-outlined ${styles.chevronIcon}`}
+              >
+                expand_more
+              </span>
+            </button>
+            {warehouseOpen ? (
+              <div aria-labelledby="filter-warehouse-label" className={styles.warehouseMenu} role="listbox">
+                {[{ id: "all", name: "ทุกคลังสินค้า", code: "" }, ...(data.warehouses ?? []).map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name, code: warehouse.code }))].map((warehouse) => {
+                  const selected = selectedWarehouse === warehouse.id;
+                  return (
+                    <button
+                      aria-selected={selected}
+                      className={`${styles.warehouseOption} ${selected ? styles.selectedWarehouseOption : ""}`}
+                      key={warehouse.id}
+                      onClick={() => handleWarehouseChange(warehouse.id)}
+                      role="option"
+                      type="button"
+                    >
+                      <span className="material-symbols-outlined">{warehouse.id === "all" ? "warehouse" : "inventory_2"}</span>
+                      <span><strong>{warehouse.name}</strong>{warehouse.code ? <small>{warehouse.code}</small> : null}</span>
+                      {selected ? <span className={`material-symbols-outlined ${styles.optionCheck}`}>check</span> : null}
+                    </button>
                   );
-              }}
-              type="date"
-              value={selectedDate}
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <div className={`${styles.filterItem} ${styles.dateRangeItem}`}>
+            <label>ช่วงข้อมูล</label>
+            <DateRangePicker
+              value={dateRange}
+              onChange={handleDateRangeChange}
+              today={data.today}
+              maxDate={data.today}
+              disabled={isPending}
             />
-          </label>
+          </div>
+
+          <div className={styles.actionItem}>
+            <button
+              type="button"
+              className={styles.refreshBtn}
+              onClick={handleRefresh}
+              disabled={isPending}
+              title="รีเฟรชข้อมูลล่าสุด"
+              aria-label="รีเฟรชข้อมูล"
+            >
+              <span
+                className={`material-symbols-outlined ${isPending ? styles.spinning : ""}`}
+              >
+                refresh
+              </span>
+              <span className={styles.refreshLabel}>รีเฟรช</span>
+            </button>
+          </div>
         </div>
       </header>
 

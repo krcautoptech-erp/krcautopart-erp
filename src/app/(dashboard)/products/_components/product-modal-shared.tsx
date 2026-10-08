@@ -4,6 +4,7 @@ import React from "react";
 import { Upload, X } from "lucide-react";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export type ProductDraft = {
   part_number: string;
@@ -29,15 +30,19 @@ export const inputClassName =
 
 export function ProductModalShell({
   children,
+  draftPrompt,
   onClose,
   title,
 }: {
   children: React.ReactNode;
+  draftPrompt?: React.ReactNode;
   onClose: () => void;
   title: string;
 }) {
+  useBodyScrollLock(true);
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-0 backdrop-blur-sm sm:p-md">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-0 backdrop-blur-sm sm:p-md overscroll-contain">
       <div className="relative flex h-[100dvh] w-full max-w-[960px] flex-col overflow-hidden border border-outline-variant bg-white shadow-2xl animate-in fade-in zoom-in duration-200 dark:bg-surface-container-lowest sm:h-auto sm:max-h-[92dvh] sm:rounded">
         <header className="relative z-10 flex min-h-12 items-start justify-between gap-sm border-b border-outline bg-white/95 px-sm py-2 backdrop-blur-sm dark:bg-surface-container-lowest/95 sm:items-center sm:px-md">
           <div className="flex min-w-0 items-center gap-sm">
@@ -67,6 +72,7 @@ export function ProductModalShell({
             </button>
           </div>
         </header>
+        {draftPrompt}
         {children}
       </div>
     </div>
@@ -111,6 +117,7 @@ export function ProductImagePanel({
         )}
       </div>
 
+      <p className="mt-2 text-xs text-secondary">ฉบับร่างเก็บเฉพาะข้อมูลที่กรอก หากกู้คืนกรุณาเลือกรูปที่แนบใหม่อีกครั้ง</p>
       {imageSrc ? (
         <div className="mt-md flex flex-col justify-between gap-sm sm:flex-row sm:items-center">
           <span className="border-l-2 border-primary pl-2 text-[11px] tracking-wide text-on-surface-variant">

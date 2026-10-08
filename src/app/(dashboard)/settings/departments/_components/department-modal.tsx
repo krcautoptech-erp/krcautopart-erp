@@ -6,6 +6,7 @@ import type { DepartmentManagerCandidate } from "@/app/actions/departments";
 import type { DepartmentInput } from "@/lib/departments";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export type DepartmentFormMode = "create" | "edit";
 
@@ -28,12 +29,14 @@ export function DepartmentModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  useBodyScrollLock(true);
   const isActive = draft.status === "active";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm overscroll-contain" onClick={onClose} role="dialog" aria-modal="true">
       <form
-        className="w-full max-w-[680px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl"
+        className="w-full max-w-[680px] overflow-hidden rounded-[6px] border border-outline-variant bg-surface-container-lowest shadow-2xl overscroll-contain"
+        onClick={(e) => e.stopPropagation()}
         onSubmit={onSubmit}
       >
         <header className="flex h-14 items-center justify-between border-b border-outline-variant px-5">

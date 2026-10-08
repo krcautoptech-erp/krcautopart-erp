@@ -35,8 +35,7 @@ export const PERMISSION_MODULE_CATEGORIES: { label: string; modules: string[] }[
   { label: "ข้อมูลกลาง", modules: ["items", "assets", "partners"] },
   { label: "จัดซื้อและคลังสินค้า", modules: ["pr", "po", "inventory", "inventory_issue", "inventory_adjustment", "inventory_cost", "stock_count"] },
   { label: "ตั้งค่าระบบ", modules: ["company", "partner_settings", "material_settings", "item_types", "document_terms", "warehouses", "departments"] },
-  { label: "ผู้ใช้งานและความปลอดภัย", modules: ["users", "roles", "approval_signature", "approval_policy"] },
-  { label: "Legacy / เดิม", modules: ["mdm"] },
+  { label: "ผู้ใช้งานและความปลอดภัย", modules: ["users", "roles", "approval_signature", "approval_policy", "audit_logs"] },
 ];
 
 function normalizeAction(action: string): PermissionMatrixAction | null {
@@ -65,6 +64,7 @@ export function groupPermissionsByModule<
   const groups = new Map<string, PermissionMatrixGroup<TPermission>>();
 
   for (const permission of permissions) {
+    if (permission.moduleCode === "mdm") continue;
     const group = groups.get(permission.moduleCode) ?? {
       moduleCode: permission.moduleCode,
       moduleName: permission.moduleName,
