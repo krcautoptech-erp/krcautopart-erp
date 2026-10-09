@@ -280,7 +280,7 @@ function VendorFormEditor({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-0 sm:p-4 backdrop-blur-sm overscroll-contain animate-in fade-in duration-150">
       <form
-        className="flex h-[100dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-none border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30 sm:h-auto sm:max-h-[92dvh] sm:rounded-[10px]"
+        className="mobile-form-frame flex h-[100dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-none border border-red-200 bg-surface-container-lowest shadow-2xl dark:border-red-500/30 sm:h-auto sm:max-h-[92dvh] sm:rounded-[10px]"
         onSubmit={handleSubmit}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-red-200 px-6 py-4 dark:border-red-500/25">

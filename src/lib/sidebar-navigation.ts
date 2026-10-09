@@ -39,6 +39,7 @@ export const SIDEBAR_NAV_GROUPS: readonly SidebarNavGroup[] = [
     icon: "warehouse",
     items: [
       { label: "สต็อกคงเหลือ", href: "/inventory/stock", icon: "inventory", permission: "inventory.view" },
+      { label: "สต็อกตั้งต้น", href: "/inventory/opening-stock", icon: "upload_file", permission: "opening_stock.view" },
       { label: "ใบเบิกใช้สินค้า", href: "/inventory/issues", icon: "outbox", permission: "inventory_issue.view" },
       { label: "ตรวจนับสต็อกจริง", href: "/inventory/stock-counts", icon: "fact_check", permission: "stock_count.view" },
       { label: "ปรับปรุงสต็อก", href: "/inventory/adjustments", icon: "tune", permission: "inventory_adjustment.view" },

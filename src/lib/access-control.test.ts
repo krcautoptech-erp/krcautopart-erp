@@ -17,6 +17,7 @@ test("covers every current secured page with its view permission", () => {
     ["/purchase/po", "po.view"],
     ["/purchase/receipts", "inventory.view"],
     ["/inventory/stock", "inventory.view"],
+    ["/inventory/opening-stock", "opening_stock.view"],
     ["/inventory/stock-counts", "stock_count.view"],
     ["/inventory/issues", "inventory_issue.view"],
     ["/inventory/adjustments", "inventory_adjustment.view"],

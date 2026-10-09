@@ -1,0 +1,41 @@
+-- Disposable integration fixture only; never run against a customer database.
+do $$ begin if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if; if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if; end $$;
+create schema auth;
+create schema erp_private;
+create table auth.users(id uuid primary key,raw_app_meta_data jsonb default '{}');
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema auth to authenticated;
+grant execute on function auth.uid() to authenticated;
+create table public.user_profiles(user_id uuid primary key,first_name text,last_name text);
+create table public.app_roles(id bigint primary key,is_owner boolean,status text);
+create table public.user_roles(user_id uuid,role_id bigint);
+create table public.app_permissions(id bigint generated always as identity primary key,permission_code text unique,permission_name text,module_code text,module_name text,action_code text,module_sort_order int,sort_order int,status text);
+create table public.role_permissions(role_id bigint,permission_id bigint,primary key(role_id,permission_id));
+create function public.authorize(requested_permission text) returns boolean language sql stable security definer set search_path='' as $$
+select exists(select 1 from auth.users u where u.id=auth.uid() and u.raw_app_meta_data->>'role'='owner') or exists(select 1 from public.user_roles ur join public.role_permissions rp on rp.role_id=ur.role_id join public.app_permissions p on p.id=rp.permission_id where ur.user_id=auth.uid() and p.permission_code=requested_permission and p.status='active') $$;
+create table erp_private.number_series(id bigint generated always as identity primary key,series_key text unique,prefix text,padding int,reset_policy text);
+create table erp_private.number_allocations(id bigint generated always as identity primary key,entity_id text);
+create function erp_private.allocate_business_number(p_series_key text,p_effective_date date,p_status text,p_entity_type text default null,p_entity_id text default null) returns table(allocation_id bigint,business_number text) language plpgsql as $$
+declare n bigint;
+begin insert into erp_private.number_allocations(entity_id) values(p_entity_id) returning id into n; return query select n,p_series_key || to_char(p_effective_date,'YYMM') || lpad(n::text,4,'0'); end $$;
+insert into erp_private.number_series(series_key,prefix,padding,reset_policy) values('RV','RV',4,'monthly');
+create table public.raw_material_warehouses(id bigint primary key,warehouse_name text,status text,sort_order int default 0);
+create table public.raw_material_units(id bigint primary key,unit_name text,symbol text,allows_decimal boolean);
+create table public.item_types(id bigint primary key,status text,is_stocked boolean,expiry_controlled boolean,form_template text);
+create table public.item_master(id bigint primary key,item_code text unique,item_name text,status text,tracking_method text,item_type_id bigint references public.item_types,unit_id bigint references public.raw_material_units,attributes jsonb default '{}');
+create table public.inventory_lots(id bigint generated always as identity primary key,lot_number text unique not null,vendor_lot_no text,item_master_id bigint,raw_material_id bigint,warehouse_id bigint,received_qty numeric(18,4) check(received_qty>0),on_hand_qty numeric(18,4) default 0,reserved_qty numeric(18,4) default 0,received_at timestamptz,expiry_date date,remarks text,created_by uuid,updated_at timestamptz,check(on_hand_qty>=reserved_qty));
+create table public.inventory_transactions(id bigint generated always as identity primary key,item_master_id bigint,raw_material_id bigint,warehouse_id bigint,lot_id bigint references public.inventory_lots,transaction_type text,reference_doc_type text,reference_doc_number text,quantity_change numeric(18,4) check(quantity_change<>0),created_by uuid,created_at timestamptz default now(),reversal_of_transaction_id bigint unique references public.inventory_transactions, constraint inventory_transactions_doc_type_check check(reference_doc_type in ('goods_receipt','stock_issue','stock_adjustment')));
+create table public.product_transactions(id bigint generated always as identity primary key,warehouse_id bigint);
+create table public.inventory_balances(raw_material_id bigint,warehouse_id bigint,on_hand_qty numeric(18,4) default 0 check(on_hand_qty>=0),updated_at timestamptz,primary key(raw_material_id,warehouse_id));
+create table public.item_inventory_balances(item_master_id bigint,warehouse_id bigint,on_hand_qty numeric(18,4) default 0 check(on_hand_qty>=0),allocated_qty numeric(18,4) default 0,updated_at timestamptz,primary key(item_master_id,warehouse_id));
+create table public.inventory_receipt_costs(inventory_transaction_id bigint primary key references public.inventory_transactions,goods_receipt_item_id bigint,inventory_lot_id bigint,item_master_id bigint,warehouse_id bigint,received_qty numeric(18,4),remaining_qty numeric(18,4),unit_cost numeric(18,4),created_at timestamptz,check(remaining_qty>=0 and remaining_qty<=received_qty));
+create table public.inventory_issue_cost_allocations(inventory_transaction_id bigint,receipt_cost_transaction_id bigint,quantity numeric(18,4),unit_cost numeric(18,4));
+create function public.capture_system_audit_log() returns trigger language plpgsql as $$ begin return new; end $$;
+insert into auth.users values('00000000-0000-0000-0000-000000000001','{"role":"owner"}'),('00000000-0000-0000-0000-000000000002','{}'),('00000000-0000-0000-0000-000000000003','{}');
+insert into public.user_profiles values('00000000-0000-0000-0000-000000000001','Owner','Test'),('00000000-0000-0000-0000-000000000002','Maker','Test'),('00000000-0000-0000-0000-000000000003','Reviewer','Test');
+insert into public.app_roles values(1,true,'active'),(2,false,'active'),(3,false,'active');
+insert into public.user_roles values('00000000-0000-0000-0000-000000000001',1),('00000000-0000-0000-0000-000000000002',2),('00000000-0000-0000-0000-000000000003',3);
+insert into public.raw_material_warehouses values(1,'Warehouse 1','active',0),(2,'Warehouse 2','active',1),(3,'Warehouse 3','active',2),(4,'Warehouse 4','active',3);
+insert into public.raw_material_units values(1,'Sheet','แผ่น',false);
+insert into public.item_types values(1,'active',true,false,'raw_material');
+insert into public.item_master(id,item_code,item_name,status,tracking_method,item_type_id,unit_id) values(1,'RM001','Steel','active','lot',1,1),(2,'RM002','Steel2','active','none',1,1),(3,'SR001','Serial','active','serial',1,1);

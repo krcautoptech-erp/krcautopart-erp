@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { useEffect, useId, useMemo, useState } from "react";
 import { ChevronLeft, Edit3, Trash2, X } from "lucide-react";
 import type { CatalogItem, ItemTypeRecord } from "@/app/actions/items";
@@ -81,11 +83,10 @@ export function ItemSideDrawer({
     if (!item) return;
 
     window.addEventListener("keydown", handleKeyDown);
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = originalOverflow;
+      unlockBodyScroll();
     };
   }, [item, onClose]);
 

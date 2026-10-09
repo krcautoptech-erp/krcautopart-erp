@@ -25,6 +25,7 @@ import { CompanyDocumentHeader } from "@/components/company-document-header";
 import { CompanyDocumentFooter } from "@/components/company-document-footer";
 import { DocumentPreviewShell } from "@/components/document-preview-shell";
 import { CompanyFormLogo } from "@/components/company-logo";
+import { DocumentMobileWorkspace, DocumentMobileItemToolbar } from "@/components/document-form";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { Pagination } from "@/components/pagination";
 import { MobileDocumentList } from "@/components/mobile-document-list";
@@ -387,8 +388,8 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
       </header>
 
       {draftPrompt}
-      {loading ? <div className="grid min-h-72 place-items-center"><Loader2 className="animate-spin text-primary" /></div> : <fieldset className="min-h-0 overflow-y-auto border-0 p-3" disabled={!actions.canSave || restoring}>
-        <section className="issue-create-section">
+      <DocumentMobileWorkspace initialTab="document">{loading ? <div className="grid min-h-72 place-items-center"><Loader2 className="animate-spin text-primary" /></div> : <fieldset className="min-h-0 overflow-y-auto border-0 p-3" disabled={!actions.canSave || restoring}>
+        <section className="document-metadata-section issue-create-section">
           <h3><ChevronRight size={15} />ข้อมูลเอกสาร</h3>
           <div className="issue-document-grid grid gap-x-4 gap-y-2 px-3 py-2">
             <label className="issue-field"><span>เลขที่ใบเบิก</span><input readOnly value={reservation.date === documentDate ? reservation.number || reservation.error : "กำลังจองเลข..."} /></label>
@@ -400,7 +401,8 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
           </div>
         </section>
 
-        <section className="issue-create-section mt-2">
+        <section className="document-items-section issue-create-section mt-2">
+          <DocumentMobileItemToolbar onAdd={() => setShowResults(true)} disabled={!warehouseId || !actions.canSave || restoring} />
           <h3><ChevronRight size={15} />รายการสินค้า</h3>
           {showResults && <ItemPicker context={`ใบเบิกสินค้า · ${options?.warehouses.find((row) => row.id === warehouseId)?.name ?? "คลังจ่าย"}`} emptyText="ไม่พบสินค้าคงเหลือในคลังนี้" items={candidates.map((item) => ({ id: `${item.id}:${item.warehouseId}`, code: item.code, name: item.name, unit: item.unitName, searchText: item.name, value: item }))} columns={[{ key: "balance", label: "คงเหลือ", className: "text-right", render: (item) => formatIssueQuantity(item.value.onHandQty) }]} onClose={() => setShowResults(false)} onConfirm={addLines} />}
 
@@ -420,7 +422,7 @@ function CreateIssueModal({ documentContext, onClose }: { documentContext: Compa
           <div className="px-2 py-2"><button className="issue-add-item" disabled={!warehouseId} onClick={() => setShowResults(true)} type="button"><Plus size={16} />เพิ่มรายการสินค้า</button></div>
         </section>
         <label className="block px-2 pb-2 pt-3 text-[14px]"><span className="mb-2 block">เหตุผลการเบิก (ไม่บังคับ)</span><textarea className="issue-requester-field" rows={2} maxLength={500} style={{ height: 76, lineHeight: "28px", whiteSpace: "pre-wrap", overflowY: "auto" }} onChange={(event) => setReason(event.target.value)} placeholder="ระบุเพิ่มเติม (ถ้ามี)" value={reason} /></label>
-      </fieldset>}
+      </fieldset>}</DocumentMobileWorkspace>
 
       <footer className="issue-create-footer flex shrink-0 flex-col gap-2 border-t px-2 py-2 sm:flex-row sm:items-center">
         <div className="issue-fifo-note"><Info size={18} />FIFO: ระบบแนะนำ Lot เก่าสุด</div>

@@ -1,51 +1,36 @@
-import assert from "node:assert/strict";
 import test from "node:test";
+import assert from "node:assert/strict";
 import { lockBodyScroll, unlockBodyScroll } from "./use-body-scroll-lock.ts";
 
-test("lockBodyScroll and unlockBodyScroll correctly toggle overflow and handle nested locks", () => {
-  // Mock document and window for node environment
-  const mockBody = {
-    style: {
-      overflow: "",
-      overscrollBehavior: "",
-      paddingRight: "",
-    },
-  };
-  const mockHtml = {
-    style: {
-      overscrollBehavior: "",
-    },
-    clientWidth: 1000,
-  };
-
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: { body: mockBody, documentElement: mockHtml },
-  });
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    value: { innerWidth: 1015 },
-  });
-
-  // 1. Initial lock
-  lockBodyScroll();
-  assert.equal(mockBody.style.overflow, "hidden");
-  assert.equal(mockBody.style.overscrollBehavior, "none");
-  assert.equal(mockHtml.style.overscrollBehavior, "none");
-  assert.equal(mockBody.style.paddingRight, "15px");
-
-  // 2. Nested lock (second modal opens)
-  lockBodyScroll();
-  assert.equal(mockBody.style.overflow, "hidden");
-
-  // 3. First unlock (child modal closes, parent modal still open)
-  unlockBodyScroll();
-  assert.equal(mockBody.style.overflow, "hidden", "Body should remain locked for outer modal");
-
-  // 4. Second unlock (outer modal closes)
-  unlockBodyScroll();
-  assert.equal(mockBody.style.overflow, "");
-  assert.equal(mockBody.style.overscrollBehavior, "");
-  assert.equal(mockHtml.style.overscrollBehavior, "");
-  assert.equal(mockBody.style.paddingRight, "");
+test("nested locks freeze page and restore exact styles and scroll only after last close", () => {
+  const originalDescriptors = ["document", "window", "getComputedStyle"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+  const style = { overflow: "auto", overscrollBehavior: "contain", paddingRight: "4px", position: "relative", top: "2px", left: "", width: "90%" };
+  const initial = { ...style };
+  const html = { overflow: "", overscrollBehavior: "auto" };
+  const restored: unknown[] = [];
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { body: { style }, documentElement: { style: html, clientWidth: 980 } } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { innerWidth: 1000, scrollX: 12, scrollY: 640, scrollTo: (options: unknown) => restored.push(options) } });
+  Object.defineProperty(globalThis, "getComputedStyle", { configurable: true, value: () => style });
+  try {
+    lockBodyScroll(); lockBodyScroll();
+    assert.equal(style.position, "fixed");
+    assert.equal(style.top, "-640px");
+    assert.equal(style.left, "-12px");
+    assert.equal(style.paddingRight, "24px");
+    assert.equal(html.overflow, "hidden");
+    unlockBodyScroll();
+    assert.equal(style.position, "fixed");
+    assert.equal(restored.length, 0);
+    unlockBodyScroll();
+    assert.deepEqual(style, initial);
+    assert.deepEqual(html, { overflow: "", overscrollBehavior: "auto" });
+    assert.deepEqual(restored, [{ left: 12, top: 640, behavior: "instant" }]);
+    unlockBodyScroll();
+    assert.equal(restored.length, 1);
+  } finally {
+    for (const [key, descriptor] of originalDescriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
 });

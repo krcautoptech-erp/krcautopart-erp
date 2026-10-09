@@ -73,7 +73,8 @@ test("central mobile filters fit phone and tablet viewports safely", async () =>
   assert.match(source, /h-\[calc\(100dvh-8px\)\]/);
   assert.match(source, /sm:max-h-\[88dvh\]/);
   assert.match(source, /env\(safe-area-inset-bottom\)/);
-  assert.match(source, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(source, /lockBodyScroll\(\)/);
+  assert.match(source, /unlockBodyScroll\(\)/);
   assert.match(source, /mobile-filter-sheet/);
 });
 

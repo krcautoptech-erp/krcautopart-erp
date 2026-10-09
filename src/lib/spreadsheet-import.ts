@@ -61,14 +61,15 @@ export async function readSpreadsheet(file: File): Promise<SpreadsheetData> {
 
   if (extension === "csv") matrix = parseCsv((await file.text()).replace(/^\uFEFF/, ""));
   else if (extension === "xlsx") {
-    const ExcelJS = await import("exceljs");
+    const excelModule = await import("exceljs");
+    const ExcelJS = excelModule.default ?? excelModule;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(await file.arrayBuffer());
     const sheet = workbook.worksheets[0];
     matrix = [];
     sheet?.eachRow({ includeEmpty: false }, (row) => {
       const values = row.values as CellValue[];
-      matrix.push(values.slice(1).map((value) => String(value ?? "").trim()));
+      matrix.push(values.slice(1).map((value) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? "").trim()));
     });
   } else if (extension === "xls" || extension === "xml") {
     matrix = parseSpreadsheetXml(await file.text());

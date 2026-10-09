@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -200,10 +202,8 @@ function MobileStockDetail({ row, onClose }: { row: CentralStockRow; onClose: ()
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previousOverflow; };
+  useEffect(() => {    lockBodyScroll();
+    return () => { unlockBodyScroll(); };
   }, []);
 
   useEffect(() => {

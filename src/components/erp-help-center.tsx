@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { AlertTriangle, BookOpen, CheckCircle2, CircleDot, HelpCircle, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -33,8 +35,7 @@ export function ErpHelpCenter({ guideIds, isOwner = false, pathname, permissionC
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
     const frame = window.requestAnimationFrame(() => {
       const visibleSearch = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("[data-help-search]") ?? [])
         .find((element) => element.getClientRects().length > 0);
@@ -71,7 +72,7 @@ export function ErpHelpCenter({ guideIds, isOwner = false, pathname, permissionC
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleDialogKeydown);
-      document.body.style.overflow = previousOverflow;
+      unlockBodyScroll();
       previouslyFocused?.focus();
     };
   }, [onClose]);

@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import {
   AlertCircle,
   CalendarDays,
@@ -43,7 +45,7 @@ import { useFormDraft } from "@/components/form-draft";
 import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 import { downloadCsvTemplate, readSpreadsheet } from "@/lib/spreadsheet-import";
 
-import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
+import { DocumentFormPurpose, DocumentMobileItemToolbar, DocumentMobileWorkspace, DocumentEntryTable, DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
 
 type PrCreateModalProps = {
   onPrint: (id: number) => Promise<void>;
@@ -407,15 +409,10 @@ export function PrCreateModal({
   });
 
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    lockBodyScroll();
 
     return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
+      unlockBodyScroll();
     };
   }, []);
 
@@ -720,6 +717,7 @@ export function PrCreateModal({
 
           <button
             className="grid h-7 w-7 place-items-center rounded-[6px] text-on-surface transition-colors hover:bg-surface-container"
+            aria-label="ปิด"
             onClick={closeForm}
             type="button"
             disabled={isPending}
@@ -730,7 +728,7 @@ export function PrCreateModal({
 
         {draftPrompt}
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto">
+        <DocumentMobileWorkspace><div className="flex-1 overflow-y-auto">
           <fieldset disabled={isPending || Boolean(saved)} className="document-form-locked document-form-body">
             {isReadOnly && !saved && (
               <div className="px-4 pt-3">
@@ -757,7 +755,7 @@ export function PrCreateModal({
             )}
 
             {/* Document Info Section */}
-            <section className="border-b border-red-100 px-3 py-2.5 dark:border-red-500/20 sm:px-4">
+            <section className="document-metadata-section border-b border-red-100 px-3 py-2.5 dark:border-red-500/20 sm:px-4">
               <div className="document-fields">
                 <ReadOnlyField
                   description="ระบบสร้างให้อัตโนมัติเมื่อกดบันทึก"
@@ -801,8 +799,11 @@ export function PrCreateModal({
             </section>
 
             {/* Line Items Section */}
-            <section className="px-3 py-2.5 sm:px-4">
-              <div className="document-toolbar">
+            <section className="document-items-section px-3 py-2.5 sm:px-4">
+              <DocumentMobileItemToolbar onAdd={() => openSearchModal(null)} disabled={isPending || isReadOnly} search={<input aria-label="ค้นหาในรายการสินค้า" placeholder="ค้นหารหัสหรือชื่อสินค้า" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />}>
+                {!isReadOnly && <><button type="button" disabled={isPending} onClick={handleAddItem}><Plus size={16} />เพิ่มแถวเปล่า</button><button type="button" disabled={isPending} onClick={() => importInputRef.current?.click()}><FileSpreadsheet size={16} />นำเข้าจาก Excel</button><button type="button" onClick={() => downloadCsvTemplate("pr-item-import-template.csv", [["รหัสสินค้า", "จำนวน", "วันที่ต้องการ", "หมายเหตุ"], ["RM001", "10", neededByDate, ""]])}><Download size={16} />แม่แบบ</button></>}
+              </DocumentMobileItemToolbar>
+              <div className="document-toolbar document-desktop-toolbar">
                 <SectionHeading number="02" title="รายการสินค้า" />
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
@@ -873,9 +874,9 @@ export function PrCreateModal({
               </div>
 
               {/* Items Table */}
-              <div className="mt-2.5 overflow-hidden rounded-[7px] border border-red-100 dark:border-red-500/20">
+              <div className="document-entry-container mt-2.5 overflow-hidden rounded-[7px] border border-red-100 dark:border-red-500/20">
                 <div className="overflow-x-auto">
-                  <table className="document-entry-table document-pr-table w-full border-collapse text-left table-fixed">
+                  <DocumentEntryTable className="document-pr-table w-full border-collapse text-left table-fixed">
                     <thead className="bg-gray-50 text-[10px] font-bold text-on-surface dark:bg-white/5">
                       <tr className="h-[32px]">
                         <th className="w-[6%] border-b border-r border-red-100 px-3 dark:border-red-500/20">
@@ -918,11 +919,14 @@ export function PrCreateModal({
                               {index + 1}
                             </td>
                             <td className="border-r border-red-100 px-2 dark:border-red-500/15">
+                              <div className="document-line-identity">
                               <MaterialSelectorRow
                                 selectedMaterial={selectedMat}
                                 onOpenSearch={() => openSearchModal(item.id)}
                                 disabled={isPending || isReadOnly}
                               />
+                              {selectedMat && <span className="document-mobile-badge"><ItemTypeBadge code={selectedMat.typeCode} name={selectedMat.typeName} /></span>}
+                              </div>
                             </td>
                             <td className="border-r border-red-100 px-2 text-center dark:border-red-500/15">
                               {selectedMat ? (
@@ -948,6 +952,7 @@ export function PrCreateModal({
                             <td className="border-r border-red-100 px-2 dark:border-red-500/15">
                               <input
                                 data-keyboard-target={`pr-quantity-${item.id}`}
+                                aria-label={`จำนวน ${selectedMat?.code ?? index + 1}`}
                                 type="number"
                                 step={selectedMat?.allowsDecimal ? "any" : "1"}
                                 min="0.001"
@@ -961,11 +966,12 @@ export function PrCreateModal({
                               />
                             </td>
                             <td className="border-r border-red-100 px-3 text-center font-semibold text-secondary dark:border-red-500/15">
-                              {selectedMat ? selectedMat.unitName : "-"}
+                              <span className="document-unit-value">{selectedMat ? selectedMat.unitName : "-"}</span>
                             </td>
                             <td className="border-r border-red-100 px-2 dark:border-red-500/15">
                               <input
                                 className="h-[28px] w-full rounded-[5px] border border-red-100 bg-white px-2 text-[12px] font-medium outline-none placeholder:text-secondary focus:border-primary disabled:opacity-50 dark:border-red-500/20 dark:bg-[#171313] text-on-surface"
+                                aria-label={`หมายเหตุ ${selectedMat?.code ?? index + 1}`}
                                 onChange={(event) =>
                                   updateItem(item.id, "note", event.target.value)
                                 }
@@ -989,11 +995,11 @@ export function PrCreateModal({
                         );
                       })}
                     </tbody>
-                  </table>
+                  </DocumentEntryTable>
                 </div>
 
                 {/* Table Summary Footer */}
-                <div className="flex items-center justify-end gap-2.5 border-t border-red-100 px-4 py-2.5 text-[12px] font-semibold text-on-surface dark:border-red-500/20 bg-gray-50 dark:bg-white/5">
+                <div className="document-entry-summary flex items-center justify-end gap-2.5 border-t border-red-100 px-4 py-2.5 text-[12px] font-semibold text-on-surface dark:border-red-500/20 bg-gray-50 dark:bg-white/5">
                   <span>
                     รวม <strong className="text-[14px] text-primary">{items.length}</strong>{" "}
                     รายการ
@@ -1010,7 +1016,7 @@ export function PrCreateModal({
               </div>
 
               {/* Remarks Box */}
-              <div className="mt-2.5">
+              <DocumentFormPurpose>
                 <TextAreaField
                   label="วัตถุประสงค์ในการขอซื้อ"
                   maxLength={300}
@@ -1019,13 +1025,13 @@ export function PrCreateModal({
                   value={objective}
                   disabled={isPending || isReadOnly}
                 />
-              </div>
+              </DocumentFormPurpose>
             </section>
           </fieldset>
-        </div>
+        </div></DocumentMobileWorkspace>
 
         {/* Modal Footer Controls */}
-        <DocumentFormFooter saved={saved} pending={isPending} summary={<>{items.filter(item => item.itemKey).length} รายการ</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
+        <DocumentFormFooter saved={saved} pending={isPending} summary={<><strong className="document-count">{items.filter(item => item.itemKey).length}</strong> รายการ</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
           {!isReadOnly && <><button type="button" disabled={isPending} onClick={() => handleSave("draft")}><Save size={15} className="inline mr-2" />บันทึกร่าง</button><button className="primary" type="button" disabled={isPending} onClick={() => handleSave("pending_approval")}><SendHorizontal size={15} className="inline mr-2" />{isPending ? "กำลังบันทึก..." : "ส่งตรวจสอบ"}</button></>}
         </DocumentFormFooter>
       </div>

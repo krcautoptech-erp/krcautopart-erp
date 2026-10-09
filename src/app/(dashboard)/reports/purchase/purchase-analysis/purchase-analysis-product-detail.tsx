@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { Fragment, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronDown, ChevronRight, ExternalLink, Package, X } from "lucide-react";
@@ -27,8 +29,7 @@ export function PurchaseAnalysisProductDrawer({ row, startDate, endDate, onClose
   const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
     const keydown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", keydown);
     closeRef.current?.focus();
@@ -39,7 +40,7 @@ export function PurchaseAnalysisProductDrawer({ row, startDate, endDate, onClose
       if (!result.data) setError(result.error ?? "ไม่สามารถโหลดรายละเอียดสินค้าได้");
       else { setDetail(result.data); setExpanded(result.data.purchase_orders[0]?.id ?? null); }
     });
-    return () => { active = false; document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", keydown); };
+    return () => { active = false; unlockBodyScroll(); window.removeEventListener("keydown", keydown); };
   }, [endDate, onClose, row.group_id, startDate]);
 
   const summary = detail?.summary;

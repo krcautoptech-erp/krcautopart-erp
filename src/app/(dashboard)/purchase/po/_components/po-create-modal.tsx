@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import {
   Check,
   ChevronDown,
@@ -50,7 +52,7 @@ type PurchaseRequisitionGroup = {
   requisitionId: number;
 };
 
-import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
+import { DocumentMobileItemToolbar, DocumentMobileWorkspace, DocumentEntryTable, DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
 
 type PoCreateModalProps = {
   onPrint: (id: number) => Promise<void>;
@@ -217,12 +219,9 @@ export function PoCreateModal({
   );
 
   useEffect(() => {
-    const { overflow, overscrollBehavior } = document.body.style;
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "contain";
+    lockBodyScroll();
     return () => {
-      document.body.style.overflow = overflow;
-      document.body.style.overscrollBehavior = overscrollBehavior;
+      unlockBodyScroll();
     };
   }, []);
 
@@ -473,9 +472,9 @@ export function PoCreateModal({
         </header>
 
         {draftPrompt}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <DocumentMobileWorkspace><div className="min-h-0 flex-1 overflow-y-auto">
           <fieldset disabled={isPending || loadingDraft || Boolean(saved)} className="document-form-locked document-form-body">
-          <section className="border-b border-outline-variant px-3.5 py-2">
+          <section className="document-metadata-section border-b border-outline-variant px-3.5 py-2">
 
             <div className="document-fields document-fields-po">
               <Field
@@ -569,8 +568,9 @@ export function PoCreateModal({
             </div>
           </section>
 
-          <section className="min-h-0 px-3.5 py-2">
-            <div className="document-toolbar">
+          <section className="document-items-section min-h-0 px-3.5 py-2">
+            <DocumentMobileItemToolbar onAdd={() => loadSourceItems()} disabled={readOnly || isPending} search={<input aria-label="ค้นหา PR หรือรายการ" placeholder="ค้นหา PR หรือรายการ" value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} onKeyDown={(event) => runEnterAction(event, () => loadSourceItems())} />} />
+            <div className="document-toolbar document-desktop-toolbar">
               <div className="document-po-section-heading">
                 <SectionTitle number="02" title="รายการสั่งซื้อจาก PR" />
                 <p className="mt-0.5 text-[10px] text-secondary">
@@ -607,7 +607,7 @@ export function PoCreateModal({
             <p className="document-po-delivery-hint">วันที่ส่งมอบหลักจะใช้กับรายการใหม่ และสามารถแก้รายบรรทัดได้</p>
 
             <div className="document-table-scroll mt-2 rounded-[2px] border border-outline-variant">
-              <table className="document-entry-table document-po-table w-full table-fixed border-collapse">
+              <DocumentEntryTable className="document-po-table w-full table-fixed border-collapse">
                 <thead className="bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
                   <tr className="h-[28px]">
                     <th className="w-[4%] px-1">ลำดับ</th>
@@ -669,7 +669,7 @@ export function PoCreateModal({
                             disabled={readOnly}
                           />
                         </td>
-                        <td className="px-1 text-center">{line.unitName}</td>
+                        <td className="px-1 text-center"><span className="document-unit-value">{line.unitName}</span></td>
                         <td className="px-1">
                           <input
                             aria-label={`กำหนดส่ง ${line.itemCode}`}
@@ -759,7 +759,7 @@ export function PoCreateModal({
                   })}
 
                 </tbody>
-              </table>
+              </DocumentEntryTable>
               <div className="document-po-table-summary flex h-[26px] items-center justify-end border-t border-outline-variant px-3 text-[10px] font-semibold">
                 รวม {lines.length} รายการ
                 <span className="mx-3 text-secondary">|</span>
@@ -777,7 +777,7 @@ export function PoCreateModal({
             )}
           </section>
 
-          <section className="document-po-bottom grid gap-6 border-t border-outline-variant lg:grid-cols-[1.6fr_1fr]">
+          <section className="document-items-section document-po-bottom grid gap-6 border-t border-outline-variant lg:grid-cols-[1.6fr_1fr]">
             <div className="p-2.5">
               <label className="document-po-note">
                 <span>หมายเหตุถึงผู้ขาย</span>
@@ -811,7 +811,7 @@ export function PoCreateModal({
             </div>
           </section>
           </fieldset>
-        </div>
+        </div></DocumentMobileWorkspace>
 
         {error ? (
           <p className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2 text-[11px] font-semibold text-red-700">

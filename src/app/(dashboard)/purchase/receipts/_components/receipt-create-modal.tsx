@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertCircle,
@@ -71,7 +73,7 @@ type ReceiptDraft = {
   lines: ReceiptDraftLine[];
 };
 
-import { DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
+import { DocumentMobileWorkspace, DocumentEntryTable, DocumentFormFooter, DocumentProductName, type SavedDocument } from "@/components/document-form";
 
 type Props = {
   onPrint: (id: number) => Promise<void>;
@@ -473,16 +475,9 @@ export function ReceiptCreateModal({
   const closeForm = () => { if (!loading) requestNavigation(onClose); };
 
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth =
-      window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0)
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    lockBodyScroll();
     return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
+      unlockBodyScroll();
     };
   }, []);
 
@@ -733,7 +728,7 @@ export function ReceiptCreateModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-0 backdrop-blur-[2px] sm:p-3">
-      <div className="document-form flex h-[100dvh] w-full max-w-[1520px] flex-col overflow-hidden border border-neutral-300 bg-surface-container-lowest shadow-2xl dark:border-neutral-700 sm:h-auto sm:max-h-[92dvh] sm:rounded-[3px]">
+      <div role="dialog" aria-modal="true" aria-label="สร้างใบรับสินค้า" className={`document-form ${step === 2 ? "document-gr-compact" : ""} flex h-[100dvh] w-full max-w-[1520px] flex-col overflow-hidden border border-neutral-300 bg-surface-container-lowest shadow-2xl dark:border-neutral-700 sm:h-auto sm:max-h-[92dvh] sm:rounded-[3px]`}>
         <header className="document-form-header flex h-[70px] shrink-0 items-center justify-between border-b border-outline-variant px-6">
           <div className="flex items-center gap-4">
             <CompanyFormLogo className="document-brand" />
@@ -767,7 +762,7 @@ export function ReceiptCreateModal({
 
         {step === 1 ? (
           <>
-            <div className="grid shrink-0 gap-4 px-5 py-4 lg:grid-cols-[1.15fr_1fr_0.8fr_auto]">
+            <div className="receipt-po-filters grid shrink-0 gap-4 px-5 py-4 lg:grid-cols-[1.15fr_1fr_0.8fr_auto]">
               <label className="relative self-end">
                 <Search
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary"
@@ -817,8 +812,28 @@ export function ReceiptCreateModal({
                 <RotateCcw size={15} /> ล้างตัวกรอง
               </button>
             </div>
-            <div className="grid min-h-0 flex-1 gap-3 px-5 pb-4 lg:grid-cols-[minmax(0,1fr)_270px]">
+            <div className="receipt-po-workspace grid min-h-0 flex-1 gap-3 px-5 pb-4 lg:grid-cols-[minmax(0,1fr)_270px]">
               <div className="receipt-po-list document-table-scroll min-h-0 border border-outline-variant">
+                <div className="receipt-po-cards">
+                  {filteredPOs.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-pressed={selectedPoId === String(item.id)}
+                      onClick={() => setSelectedPoId(String(item.id))}
+                      className="receipt-po-card"
+                    >
+                      <span className="receipt-po-choice" aria-hidden="true" />
+                      <span className="min-w-0">
+                        <strong className="block">{item.po_number}</strong>
+                        <span className="block break-words">{item.vendor_name}</span>
+                        <span className="block text-secondary">{formatDate(item.document_date)} · {item.item_count} รายการ · ค้างรับ {item.outstanding_label}</span>
+                        <span className="block text-secondary">ส่งมอบ {formatDate(item.delivery_date)}</span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredPOs.length === 0 && <p className="py-6 text-center text-secondary">ไม่พบใบสั่งซื้อที่ตรงกับตัวกรอง</p>}
+                </div>
                 <table className="document-entry-table document-gr-picker-table w-full table-fixed border-collapse">
                   <thead>
                     <tr className="h-10 border-b border-outline-variant bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
@@ -870,7 +885,7 @@ export function ReceiptCreateModal({
                   </tbody>
                 </table>
               </div>
-              <aside className="border border-outline-variant p-4 text-[12px]">
+              <aside className="receipt-po-selected border border-outline-variant p-4 text-[12px]">
                 <h3 className="border-b border-outline-variant pb-3 font-bold">
                   ข้อมูลใบสั่งซื้อที่เลือก
                 </h3>
@@ -896,7 +911,7 @@ export function ReceiptCreateModal({
                 )}
               </aside>
             </div>
-            <footer className="flex h-[66px] shrink-0 items-center justify-between border-t border-outline-variant px-5">
+            <footer className="receipt-po-footer flex h-[66px] shrink-0 items-center justify-between border-t border-outline-variant px-5">
               <span className="text-[12px] font-semibold">
                 เลือกแล้ว{" "}
                 <b className="text-primary">{selectedPO ? 1 : 0}</b> ใบสั่งซื้อ
@@ -924,8 +939,8 @@ export function ReceiptCreateModal({
           </>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto"><fieldset disabled={isPending || loading || Boolean(saved)} className="document-form-locked document-form-body">
-              <section className="border-b border-outline-variant px-5 py-3">
+            <DocumentMobileWorkspace><div className="min-h-0 flex-1 overflow-y-auto"><fieldset disabled={isPending || loading || Boolean(saved)} className="document-form-locked document-form-body">
+              <section className="document-metadata-section border-b border-outline-variant px-5 py-3">
                 <div className="document-fields">
                   <label className="document-field"><span>เลขที่ GR</span><input className={fieldClass} disabled value={saved?.number || grNumber || (numberError ? "ไม่สามารถสร้างเลขเอกสาร" : "กำลังสร้างเลขเอกสาร...")} /></label>
                   <label className="document-field"><span>เลขที่ PO</span><input className={fieldClass} disabled value={po?.po_number ?? ""} /></label>
@@ -938,8 +953,8 @@ export function ReceiptCreateModal({
                 </div>
               </section>
 
-              <section className="px-3 py-3 sm:px-5">
-                <div className="mb-2 flex items-center justify-between">
+              <section className="document-items-section px-3 py-3 sm:px-5">
+                <div className="document-desktop-toolbar mb-2 flex items-center justify-between">
                   <h3 className="text-[13px] font-bold">
                     <span className="mr-2 text-primary">02</span> ตรวจรายการรับสินค้า
                   </h3>
@@ -954,7 +969,7 @@ export function ReceiptCreateModal({
                   </div>
                 ) : (
                   <div className="document-table-scroll rounded-[2px] border border-neutral-300 dark:border-neutral-700">
-                    <table className={`document-entry-table document-gr-table w-full table-fixed border-collapse ${canViewCost ? "with-cost" : ""}`}>
+                    <DocumentEntryTable className={`document-gr-table w-full table-fixed border-collapse ${canViewCost ? "with-cost" : ""}`}>
                       <thead className="bg-[#f2f2f2] font-bold text-black dark:bg-white/[0.07] dark:text-white">
                         <tr className="h-[32px] border-b border-outline-variant">
                           <th className="w-[4%] px-1 text-center">ลำดับ</th>
@@ -1004,6 +1019,7 @@ export function ReceiptCreateModal({
                                 className="whitespace-normal break-words px-2 py-2 font-medium leading-4"
                               >
                                 <DocumentProductName name={line.itemName} />
+                                <span className="receipt-mobile-reference">สั่ง {line.quantityOrdered.toLocaleString("th-TH")} · ค้างรับ {line.quantityRemaining.toLocaleString("th-TH")} {line.unitName}</span>
                               </td>
                               <td className="px-2">
                                 {line.isStocked ? (
@@ -1064,11 +1080,12 @@ export function ReceiptCreateModal({
                                   })}
                                   step="any"
                                   type="number"
+                                  inputMode="decimal"
                                   value={line.quantity}
                                 />
                               </td>
                               <td className="px-1 text-center font-medium">
-                                {line.unitName}
+                                <span className="document-unit-value">{line.unitName}</span>
                               </td>
                               {canViewCost && <td className="px-2 text-right font-medium tabular-nums">{line.unitCost === null ? "-" : formatMoney(line.unitCost)}</td>}
                               {canViewCost && <td className="px-2 text-right font-semibold tabular-nums">{line.unitCost === null || !line.isStocked ? "-" : formatMoney(quantity * line.unitCost)}</td>}
@@ -1113,7 +1130,7 @@ export function ReceiptCreateModal({
                                     <Package size={13} />
                                     {hasLotData
                                       ? `Lot: ${line.vendorLotNo || "ระบุแล้ว"}`
-                                      : "ระบุ Lot / วันหมดอายุ"}
+                                      : <><span className="receipt-lot-desktop-label">ระบุ Lot / วันหมดอายุ</span><span className="receipt-lot-mobile-label">ระบุ Lot / Serial</span></>}
                                   </button>
                                 ) : !line.isStocked ? (
                                   <span className="inline-flex items-center rounded-[2px] border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400">
@@ -1129,7 +1146,7 @@ export function ReceiptCreateModal({
                           );
                         })}
                       </tbody>
-                    </table>
+                    </DocumentEntryTable>
                   </div>
                 )}
 
@@ -1143,7 +1160,7 @@ export function ReceiptCreateModal({
                   />
                 </label>
               </section>
-            </fieldset></div>
+            </fieldset></div></DocumentMobileWorkspace>
 
             <DocumentFormFooter saved={saved} pending={isPending || loading} summary={<>{totals.itemsCount} รายการ{canViewCost && <> · {formatMoney(totals.inventoryValue)} บาท</>}</>} onClose={closeForm} onPrint={onPrint} onNext={onNext}>
               <button type="button" disabled={isPending} onClick={() => { setStep(1); setError(""); }}>ย้อนกลับ</button>

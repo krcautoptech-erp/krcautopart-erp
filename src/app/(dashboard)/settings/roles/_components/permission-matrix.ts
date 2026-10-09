@@ -33,7 +33,7 @@ export type PermissionMatrixGroup<
 
 export const PERMISSION_MODULE_CATEGORIES: { label: string; modules: string[] }[] = [
   { label: "ข้อมูลกลาง", modules: ["items", "assets", "partners"] },
-  { label: "จัดซื้อและคลังสินค้า", modules: ["pr", "po", "inventory", "inventory_issue", "inventory_adjustment", "inventory_cost", "stock_count"] },
+  { label: "จัดซื้อและคลังสินค้า", modules: ["pr", "po", "inventory", "opening_stock", "inventory_issue", "inventory_adjustment", "inventory_cost", "stock_count"] },
   { label: "ตั้งค่าระบบ", modules: ["company", "partner_settings", "material_settings", "item_types", "document_terms", "warehouses", "departments"] },
   { label: "ผู้ใช้งานและความปลอดภัย", modules: ["users", "roles", "approval_signature", "approval_policy", "audit_logs"] },
 ];

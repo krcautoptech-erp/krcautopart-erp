@@ -1,5 +1,7 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from "lucide-react";
 import {
@@ -211,12 +213,12 @@ export function DateRangePicker({
 
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    if (window.matchMedia("(max-width: 680px)").matches) {
-      document.body.style.overflow = "hidden";
+    const locksBackground = window.matchMedia("(max-width: 680px)").matches;
+    if (locksBackground) {
+      lockBodyScroll();
     }
     return () => {
-      document.body.style.overflow = previousOverflow;
+      if (locksBackground) unlockBodyScroll();
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };

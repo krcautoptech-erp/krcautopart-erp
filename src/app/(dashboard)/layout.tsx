@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { BackToTopButton } from "@/components/back-to-top-button";
+import { TableScrollRail } from "@/components/table-scroll-rail";
+import { ModalScrollGuard } from "@/components/modal-scroll-guard";
 import {
   normalizeNotification,
   type AppNotification,
@@ -108,6 +110,8 @@ export default async function DashboardLayout({
     >
       {children}
       <BackToTopButton />
+      <TableScrollRail />
+      <ModalScrollGuard />
     </AppShell>
     </UnsavedChangesProvider>
   );

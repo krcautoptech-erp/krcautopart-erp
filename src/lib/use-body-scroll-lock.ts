@@ -7,12 +7,16 @@ let originalBodyOverflow = "";
 let originalBodyOverscroll = "";
 let originalHtmlOverscroll = "";
 let originalPaddingRight = "";
+let originalHtmlOverflow = "";
+let originalPosition = "";
+let originalTop = "";
+let originalLeft = "";
+let originalWidth = "";
+let scrollX = 0;
+let scrollY = 0;
 
 /**
- * Modern 2026 standard Body Scroll Lock utility:
- * - Stack / Nested-modal safe via reference counter.
- * - Prevents layout shift from disappearing scrollbars on desktop.
- * - Prevents iOS Safari & Chrome mobile rubber-banding by locking overscroll-behavior.
+ * Shared, reference-counted lock; fixed body preserves the page on touch browsers.
  */
 export function lockBodyScroll(): void {
   if (typeof document === "undefined") return;
@@ -25,16 +29,28 @@ export function lockBodyScroll(): void {
     originalBodyOverscroll = body.style.overscrollBehavior;
     originalHtmlOverscroll = documentElement.style.overscrollBehavior;
     originalPaddingRight = body.style.paddingRight;
+    originalHtmlOverflow = documentElement.style.overflow;
+    originalPosition = body.style.position;
+    originalTop = body.style.top;
+    originalLeft = body.style.left;
+    originalWidth = body.style.width;
+    scrollX = window.scrollX;
+    scrollY = window.scrollY;
 
     // Compensate scrollbar width to prevent desktop layout jump
     const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
 
     body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `${-scrollY}px`;
+    body.style.left = `${-scrollX}px`;
+    body.style.width = "100%";
     body.style.overscrollBehavior = "none";
     documentElement.style.overscrollBehavior = "none";
 
     if (scrollbarWidth > 0) {
-      body.style.paddingRight = `${scrollbarWidth}px`;
+      body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight || "0") + scrollbarWidth}px`;
     }
   }
 
@@ -42,7 +58,7 @@ export function lockBodyScroll(): void {
 }
 
 export function unlockBodyScroll(): void {
-  if (typeof document === "undefined") return;
+  if (typeof document === "undefined" || activeLocksCount === 0) return;
 
   activeLocksCount = Math.max(0, activeLocksCount - 1);
 
@@ -54,6 +70,12 @@ export function unlockBodyScroll(): void {
     body.style.overscrollBehavior = originalBodyOverscroll;
     documentElement.style.overscrollBehavior = originalHtmlOverscroll;
     body.style.paddingRight = originalPaddingRight;
+    documentElement.style.overflow = originalHtmlOverflow;
+    body.style.position = originalPosition;
+    body.style.top = originalTop;
+    body.style.left = originalLeft;
+    body.style.width = originalWidth;
+    window.scrollTo({ left: scrollX, top: scrollY, behavior: "instant" });
   }
 }
 

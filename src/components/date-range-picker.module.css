@@ -1,8 +1,15 @@
 .wrapper {
+  --card: var(--surface-container-lowest-color, #ffffff);
+  --line: var(--outline-variant-color, #e2e8f0);
   position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
+}
+
+.popover {
+  --card: var(--surface-container-lowest-color, #ffffff);
+  --line: var(--outline-variant-color, #e2e8f0);
 }
 
 .triggerBtn {
@@ -519,7 +526,7 @@
   padding: 0 12px;
   border: 1px solid var(--line, #e2e8f0);
   border-radius: 5px;
-  background: var(--card, #ffffff);
+  background: var(--color-surface-container-lowest, #ffffff);
   color: var(--color-secondary, #64748b);
   font-size: 12px;
   font-weight: 600;

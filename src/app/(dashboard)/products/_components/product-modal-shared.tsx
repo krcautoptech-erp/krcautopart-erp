@@ -43,7 +43,7 @@ export function ProductModalShell({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-0 backdrop-blur-sm sm:p-md overscroll-contain">
-      <div className="relative flex h-[100dvh] w-full max-w-[960px] flex-col overflow-hidden border border-outline-variant bg-white shadow-2xl animate-in fade-in zoom-in duration-200 dark:bg-surface-container-lowest sm:h-auto sm:max-h-[92dvh] sm:rounded">
+      <div className="mobile-form-frame relative flex h-[100dvh] w-full max-w-[960px] flex-col overflow-hidden border border-outline-variant bg-white shadow-2xl animate-in fade-in zoom-in duration-200 dark:bg-surface-container-lowest sm:h-auto sm:max-h-[92dvh] sm:rounded">
         <header className="relative z-10 flex min-h-12 items-start justify-between gap-sm border-b border-outline bg-white/95 px-sm py-2 backdrop-blur-sm dark:bg-surface-container-lowest/95 sm:items-center sm:px-md">
           <div className="flex min-w-0 items-center gap-sm">
             <CompanyFormLogo className="shrink-0" />

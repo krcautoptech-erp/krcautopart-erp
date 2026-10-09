@@ -133,7 +133,8 @@ test("help topics are permission scoped while owner can see every topic", () => 
 
 test("help dialog traps and restores focus, locks background scroll, and handles empty mobile search", () => {
   assert.match(helpCenterComponent, /previouslyFocused/);
-  assert.match(helpCenterComponent, /document\.body\.style\.overflow = "hidden"/);
+  assert.match(helpCenterComponent, /lockBodyScroll\(\)/);
+  assert.match(helpCenterComponent, /unlockBodyScroll\(\)/);
   assert.match(helpCenterComponent, /event\.key === "Tab"/);
   assert.match(helpCenterComponent, /previouslyFocused\?\.focus\(\)/);
   assert.match(helpCenterComponent, /ไม่พบคู่มือที่ค้นหา/);

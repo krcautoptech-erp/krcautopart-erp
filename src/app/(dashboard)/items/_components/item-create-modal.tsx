@@ -1,9 +1,12 @@
 "use client";
 
+import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
+
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ChangeEvent,
   type ReactNode,
@@ -119,13 +122,15 @@ function Field({
   children,
   label,
   required,
+  fieldKey,
 }: {
   children: ReactNode;
   label: string;
   required?: boolean;
+  fieldKey?: string;
 }) {
   return (
-    <label className="min-w-0 text-[12px] font-medium leading-tight">
+    <label data-item-field={fieldKey} className="min-w-0 text-[12px] font-medium leading-tight">
       {label}
       {required ? <span className="text-primary"> *</span> : null}
       <span className="mt-1.5 block">{children}</span>
@@ -206,12 +211,13 @@ function ItemFormEditor({
   );
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     main: true,
-    details: true,
-    production: true,
+    details: false,
+    production: false,
     stock: false,
     files: false,
   });
   const [error, setError] = useState("");
+  const editorRef = useRef<HTMLDivElement>(null);
   const [previewCode, setPreviewCode] = useState<{
     code: string;
     typeId: number;
@@ -251,7 +257,7 @@ function ItemFormEditor({
         .filter(([, value]) => value === "required")
         .map(([key]) => key as ItemFormFieldKey)
     : [];
-  const completedRequired = requiredKeys.filter((key) => {
+  const completedRequiredKeys = requiredKeys.filter((key) => {
     const map: Partial<Record<ItemFormFieldKey, unknown>> = {
       brand: form.brand,
       model: form.model,
@@ -281,18 +287,14 @@ function ItemFormEditor({
       map[key] !== undefined &&
       map[key] !== 0
     );
-  }).length;
+  });
+  const completedRequired = completedRequiredKeys.length;
 
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    lockBodyScroll();
 
     return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
+      unlockBodyScroll();
     };
   }, []);
 
@@ -367,12 +369,28 @@ function ItemFormEditor({
   }
 
   async function submit() {
-    if (!type || !form.name.trim() || !form.unitId)
-      return setError("กรุณากรอกชื่อสินค้าและหน่วยนับให้ครบ");
+    function showRequiredError(message: string, keys: string[]) {
+      setError(message);
+      setOpenSections((current) => {
+        const next: Record<string, boolean> = { ...current, main: true };
+        for (const section of fieldSections) {
+          if (section.keys.some((key) => keys.includes(key))) next[section.id] = true;
+        }
+        return next;
+      });
+      requestAnimationFrame(() => {
+        const field = editorRef.current?.querySelector<HTMLElement>(`[data-item-field="${keys[0]}"]`);
+        field?.scrollIntoView({ block: "center", behavior: "auto" });
+        field?.querySelector<HTMLElement>('input:not(:disabled),select:not(:disabled),textarea:not(:disabled),button:not(:disabled)')?.focus({ preventScroll: true });
+      });
+    }
+    if (!type) return setError("กรุณาเลือกประเภทสินค้า");
+    if (!form.name.trim() || !form.unitId)
+      return showRequiredError("กรุณากรอกชื่อสินค้าและหน่วยนับให้ครบ", [!form.name.trim() ? "name" : "unitId"]);
     if (type.codeMode === "manual" && !form.code.trim())
-      return setError("กรุณากรอกรหัสสินค้า");
+      return showRequiredError("กรุณากรอกรหัสสินค้า", ["code"]);
     if (completedRequired < requiredKeys.length)
-      return setError("กรุณากรอกช่องบังคับที่มีเครื่องหมาย * ให้ครบ");
+      return showRequiredError("กรุณากรอกช่องบังคับที่มีเครื่องหมาย * ให้ครบ", requiredKeys.filter((key) => !completedRequiredKeys.includes(key)));
     setSaving(true);
     setError("");
     const submitForm =
@@ -424,6 +442,11 @@ function ItemFormEditor({
   }
 
   function renderField(key: ItemFormFieldKey) {
+    if (!shown(key)) return null;
+    return <div key={key} data-item-field={key} className="min-w-0">{renderFieldControl(key)}</div>;
+  }
+
+  function renderFieldControl(key: ItemFormFieldKey) {
     if (!shown(key)) return null;
     const req = required(key);
     const text = (
@@ -708,7 +731,8 @@ function ItemFormEditor({
       aria-modal="true"
     >
       <div
-        className="flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-[7px] sm:border sm:border-[#d8dde3]"
+        ref={editorRef}
+        className="mobile-form-frame flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-[7px] sm:border sm:border-[#d8dde3]"
         style={{ maxWidth: 1120 }}
       >
         <header className="flex h-[52px] shrink-0 items-center border-b border-[#d8dde3] px-4">
@@ -748,16 +772,16 @@ function ItemFormEditor({
             </div>
             {type ? (
               <div className="flex flex-wrap gap-2 sm:ml-auto">
-                <span className="rounded-full border border-primary/30 bg-red-50 px-3 py-1.5 text-[11px] font-semibold text-primary">
+                <span className="rounded-[3px] border border-primary bg-primary px-2.5 py-1 text-[11px] font-semibold text-white">
                   {type.codeMode === "auto" ? "สร้างรหัสอัตโนมัติ" : "กำหนดรหัสเอง"}
                 </span>
                 {type.sellable ? (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
+                  <span className="rounded-[3px] border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white">
                     ขายได้
                   </span>
                 ) : null}
                 {type.productionItem ? (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
+                  <span className="rounded-[3px] border border-teal-600 bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white">
                     ใช้ในการผลิต
                   </span>
                 ) : null}
@@ -773,8 +797,9 @@ function ItemFormEditor({
               }
               title="ข้อมูลหลัก"
             >
-              <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="item-form-fields item-form-main-fields grid gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 <Field
+                  fieldKey="code"
                   label="รหัสสินค้า"
                   required={type?.codeMode === "manual"}
                 >
@@ -798,21 +823,21 @@ function ItemFormEditor({
                     onChange={(e) => set("code", e.target.value)}
                   />
                 </Field>
-                <Field label="ชื่อสินค้า (ภาษาไทย)" required>
+                <Field fieldKey="name" label="ชื่อสินค้า (ภาษาไทย)" required>
                   <input
                     className={control}
                     value={form.name}
                     onChange={(e) => set("name", e.target.value)}
                   />
                 </Field>
-                <Field label="ชื่อสินค้า (ภาษาอังกฤษ)">
+                <Field fieldKey="nameEn" label="ชื่อสินค้า (ภาษาอังกฤษ)">
                   <input
                     className={control}
                     value={form.nameEn}
                     onChange={(e) => set("nameEn", e.target.value)}
                   />
                 </Field>
-                <Field label="หน่วยนับ" required>
+                <Field fieldKey="unitId" label="หน่วยนับ" required>
                   <select
                     className={control}
                     value={form.unitId ?? ""}
@@ -825,7 +850,7 @@ function ItemFormEditor({
                     ))}
                   </select>
                 </Field>
-                <div className="text-[12px] font-medium leading-tight">
+                <div data-item-field="status" className="text-[12px] font-medium leading-tight">
                   สถานะ *
                   <div className="mt-1.5 flex h-9 items-center gap-2">
                     <ToggleSwitch
@@ -858,7 +883,7 @@ function ItemFormEditor({
                   }
                   title={section.title}
                 >
-                  <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="item-form-fields grid gap-x-4 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
                     {visible.map(renderField)}
                   </div>
                 </Section>
