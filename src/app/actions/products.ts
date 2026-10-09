@@ -225,6 +225,17 @@ export async function updateProductAction(
 export async function deleteProductAction(id: string): Promise<ActionResult<null>> {
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "กรุณาเข้าสู่ระบบใหม่" };
+
+    const [deactivatePermission, editPermission] = await Promise.all([
+      supabase.rpc("authorize", { requested_permission: "items.deactivate" }),
+      supabase.rpc("authorize", { requested_permission: "items.edit" }),
+    ]);
+    if (!deactivatePermission.data && !editPermission.data) {
+      return { error: "คุณไม่มีสิทธิ์ลบหรือจัดการสินค้า" };
+    }
+
     const isNumericId = /^\d+$/.test(id.trim());
     let itemMasterId: number | null = null;
 
@@ -241,41 +252,24 @@ export async function deleteProductAction(id: string): Promise<ActionResult<null
       }
     }
 
-    if (itemMasterId) {
-      const [poUsage, prUsage, grUsage, lotUsage, txUsage, prodTxUsage] = await Promise.all([
-        supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-        supabase.from("purchase_requisition_items").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-        supabase.from("goods_receipt_items").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-        supabase.from("inventory_lots").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-        supabase.from("inventory_transactions").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-        supabase.from("product_transactions").select("id", { count: "exact", head: true }).eq("item_master_id", itemMasterId),
-      ]);
+    if (!itemMasterId) return { error: "ไม่พบข้อมูลสินค้าในระบบ" };
 
-      if (
-        (poUsage.count ?? 0) > 0 ||
-        (prUsage.count ?? 0) > 0 ||
-        (grUsage.count ?? 0) > 0 ||
-        (lotUsage.count ?? 0) > 0 ||
-        (txUsage.count ?? 0) > 0 ||
-        (prodTxUsage.count ?? 0) > 0
-      ) {
-        return {
-          error: "ไม่สามารถลบสินค้านี้ได้เนื่องจากมีประวัติเอกสารหรือการเคลื่อนไหวสต็อกแล้ว ตามหลัก ERP แนะนำให้ปรับสถานะเป็น 'ระงับการใช้งาน' แทนเพื่อรักษาความถูกต้องของข้อมูล",
-        };
-      }
-    }
-
-    let query = supabase.from("item_master").delete();
-    if (isNumericId) {
-      query = query.eq("id", Number(id));
-    } else {
-      query = query.eq("attributes->>legacySourceId", id);
-    }
-
-    const { error } = await query;
-
+    const { error } = await supabase.rpc("delete_unused_item_master_record", {
+      p_item_id: itemMasterId,
+    });
     if (error) {
       console.error("Error deleting product from item_master:", error);
+      if (error.message.includes("item_in_use")) {
+        return {
+          error: "ไม่สามารถลบสินค้านี้ได้เนื่องจากมีประวัติเอกสารหรือการเคลื่อนไหวสต็อกแล้ว กรุณาระงับการใช้งานแทน",
+        };
+      }
+      if (error.message.includes("item_not_found")) {
+        return { error: "ไม่พบข้อมูลสินค้าในระบบ" };
+      }
+      if (error.message.includes("permission") || error.message.includes("row-level security")) {
+        return { error: "คุณไม่มีสิทธิ์ลบหรือจัดการสินค้า" };
+      }
       return { error: error.message };
     }
 

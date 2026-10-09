@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canOpenSignatureSetupStep,
   getAuthenticatorSetupHref,
   getTotpFriendlyName,
   getUnverifiedTotpFactorIds,
   getTotpQrCodeSrc,
   getMfaErrorMessage,
   getSignatureSetupStep,
+  getStepAfterAuthenticatorSetup,
   isTotpCodeComplete,
   normalizeTotpCode,
   selectVerifiedTotpFactor,
@@ -65,6 +67,15 @@ test("selects the next signature setup step", () => {
     getSignatureSetupStep({ hasSignature: true, hasVerifiedAuthenticator: true }),
     3,
   );
+});
+
+test("lets users set up their own authenticator before saving a signature", () => {
+  assert.equal(canOpenSignatureSetupStep(1, false), true);
+  assert.equal(canOpenSignatureSetupStep(2, false), true);
+  assert.equal(canOpenSignatureSetupStep(3, false), false);
+  assert.equal(canOpenSignatureSetupStep(3, true), true);
+  assert.equal(getStepAfterAuthenticatorSetup(false), 1);
+  assert.equal(getStepAfterAuthenticatorSetup(true), 3);
 });
 
 test("returns safe Thai MFA errors without exposing upstream details", () => {

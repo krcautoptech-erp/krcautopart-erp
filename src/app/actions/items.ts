@@ -74,6 +74,8 @@ function friendly(message: string) {
   if (message.includes("item_types_code_key")) return "รหัสประเภทสินค้านี้ถูกใช้งานแล้ว";
   if (message.includes("item_types_name_key")) return "ชื่อประเภทสินค้านี้ถูกใช้งานแล้ว";
   if (message.includes("item_master_code_key")) return "รหัสสินค้านี้ถูกใช้งานแล้ว";
+  if (message.includes("item_in_use")) return "ไม่สามารถลบรายการนี้ได้เนื่องจากมีประวัติเอกสารหรือการเคลื่อนไหวสินค้าแล้ว กรุณาระงับการใช้งานแทน";
+  if (message.includes("item_not_found")) return "ไม่พบข้อมูลสินค้าในระบบ";
   if (message.includes("permission") || message.includes("row-level security")) return "คุณไม่มีสิทธิ์จัดการข้อมูลสินค้า";
   return message;
 }
@@ -605,29 +607,9 @@ export async function deleteGenericItemAction(id: number | string) {
     return { error: "ไม่พบรหัสสินค้าที่ต้องการลบในระบบ" };
   }
 
-  const [poUsage, prUsage, grUsage, lotUsage, txUsage, prodTxUsage] = await Promise.all([
-    auth.supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-    auth.supabase.from("purchase_requisition_items").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-    auth.supabase.from("goods_receipt_items").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-    auth.supabase.from("inventory_lots").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-    auth.supabase.from("inventory_transactions").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-    auth.supabase.from("product_transactions").select("id", { count: "exact", head: true }).eq("item_master_id", numericId),
-  ]);
-
-  if (
-    (poUsage.count ?? 0) > 0 ||
-    (prUsage.count ?? 0) > 0 ||
-    (grUsage.count ?? 0) > 0 ||
-    (lotUsage.count ?? 0) > 0 ||
-    (txUsage.count ?? 0) > 0 ||
-    (prodTxUsage.count ?? 0) > 0
-  ) {
-    return {
-      error: "ไม่สามารถลบรายการนี้ได้เนื่องจากมีประวัติเอกสารจัดซื้อ หรือการเคลื่อนไหวทางคลังสินค้าแล้ว ตามหลัก ERP แนะนำให้ปรับสถานะเป็น 'ระงับการใช้งาน' แทนเพื่อรักษาความถูกต้องของข้อมูลย้อนหลัง",
-    };
-  }
-
-  const { error } = await auth.supabase.from("item_master").delete().eq("id", numericId);
+  const { error } = await auth.supabase.rpc("delete_unused_item_master_record", {
+    p_item_id: numericId,
+  });
   if (error) return { error: friendly(error.message) };
 
   clearItemsServerCache();

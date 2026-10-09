@@ -37,3 +37,22 @@ test("the signature RPC rejects replacements without a recent TOTP claim", () =>
   assert.match(sql, /last_used_mfa_at[\s\S]*latest_mfa_at/);
   assert.match(sql, /fresh_mfa_required/);
 });
+
+test("approver roles receive personal signature and authenticator setup access", () => {
+  const migrationDir = path.join(process.cwd(), "supabase", "migrations");
+  const filename = readdirSync(migrationDir).find((name) =>
+    name.endsWith("_grant_approval_signature_setup_to_approvers.sql"),
+  );
+
+  assert.ok(filename, "approver signature setup migration is missing");
+  const sql = readFileSync(path.join(migrationDir, filename), "utf8");
+
+  assert.match(sql, /permission_code in \('po\.approve', 'pr\.approve'\)/);
+  assert.match(sql, /permission_code = 'approval_signature\.manage'/);
+  assert.match(sql, /create or replace function public\.replace_role_permissions/);
+  assert.match(sql, /v_effective_permission_ids/);
+  assert.match(sql, /array_append/);
+  assert.match(sql, /permission_code in \('po\.approve', 'pr\.approve'\)/);
+  assert.match(sql, /revoke all on function public\.replace_role_permissions\(bigint, bigint\[\]\)/);
+  assert.match(sql, /grant execute on function public\.replace_role_permissions\(bigint, bigint\[\]\)/);
+});

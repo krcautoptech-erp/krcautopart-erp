@@ -2,6 +2,17 @@ export type SignatureSetupStep = 1 | 2 | 3;
 
 export const getTotpFriendlyName = (nonce: string) => `KRC ERP ${nonce}`;
 
+export function canOpenSignatureSetupStep(
+  step: SignatureSetupStep,
+  hasSignature: boolean,
+) {
+  return step !== 3 || hasSignature;
+}
+
+export function getStepAfterAuthenticatorSetup(hasSignature: boolean): SignatureSetupStep {
+  return hasSignature ? 3 : 1;
+}
+
 export function getAuthenticatorSetupHref(uri: string | null) {
   return uri?.startsWith("otpauth://totp/") ? uri : null;
 }

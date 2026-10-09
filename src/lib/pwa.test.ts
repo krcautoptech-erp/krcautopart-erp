@@ -57,8 +57,8 @@ test("manifest exposes install and maskable icons with exact files", async () =>
   assert.equal(icon192Data[3], 0, "icon-192.png should have transparent background");
 
   const { data: appleTouchData } = await sharp("public/pwa/apple-touch-icon.png").raw().toBuffer({ resolveWithObject: true });
-  assert.equal(appleTouchData[0], 255, "apple-touch-icon.png red channel");
-  assert.equal(appleTouchData[1], 255, "apple-touch-icon.png green channel");
-  assert.equal(appleTouchData[2], 255, "apple-touch-icon.png blue channel");
-  assert.equal(appleTouchData[3], 255, "apple-touch-icon.png alpha channel (opaque white)");
+  assert.equal(appleTouchData[0], 190, "apple-touch-icon.png red channel");
+  assert.equal(appleTouchData[1], 15, "apple-touch-icon.png green channel");
+  assert.equal(appleTouchData[2], 26, "apple-touch-icon.png blue channel");
+  assert.equal(appleTouchData[3], 255, "apple-touch-icon.png alpha channel (opaque red)");
 });

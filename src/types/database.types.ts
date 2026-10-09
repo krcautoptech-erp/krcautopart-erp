@@ -1929,6 +1929,10 @@ export type Database = {
         Returns: undefined
       }
       authorize: { Args: { requested_permission: string }; Returns: boolean }
+      delete_unused_item_master_record: {
+        Args: { p_item_id: number }
+        Returns: undefined
+      }
       create_app_role: {
         Args: {
           p_description?: string

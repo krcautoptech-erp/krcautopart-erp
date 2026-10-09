@@ -4,7 +4,7 @@ import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, Copy, ScanQrCode, ShieldCheck, Smartphone } from "lucide-react";
+import { BadgeCheck, Copy, Download, ScanQrCode, ShieldCheck, Smartphone } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -32,12 +32,14 @@ import {
   SIGNATURE_WIDTH,
 } from "@/lib/approval-signatures";
 import {
+  canOpenSignatureSetupStep,
   getAuthenticatorSetupHref,
   getTotpFriendlyName,
   getUnverifiedTotpFactorIds,
   getTotpQrCodeSrc,
   getMfaErrorMessage,
   getSignatureSetupStep,
+  getStepAfterAuthenticatorSetup,
   isTotpCodeComplete,
   normalizeTotpCode,
   type SignatureSetupStep,
@@ -162,7 +164,7 @@ export function SignatureApprovalSettings({
   );
   const [isPending, startTransition] = useTransition();
   const [isMfaPending, startMfaTransition] = useTransition();
-  const [activeTab, setActiveTab] = useListState<"signature" | "policy">("activeTab", "signature");
+  const [activeTab, setActiveTab] = useListState<"signature" | "authenticator" | "policy">("activeTab", "signature");
   const hasSavedSignature = initialData.version > 0 || signatureSaved;
 
   useEffect(() => {
@@ -317,7 +319,7 @@ export function SignatureApprovalSettings({
     setTotpCode("");
   }
 
-  function handleStartAuthenticator() {
+  function handleStartAuthenticator(additionalFactor = false) {
     startMfaTransition(async () => {
       const supabase = createClient();
       const factors = await supabase.auth.mfa.listFactors();
@@ -325,9 +327,9 @@ export function SignatureApprovalSettings({
         toast.error(getMfaErrorMessage(factors.error));
         return;
       }
-      if (factors.data.totp.some((factor) => factor.status === "verified")) {
+      if (!additionalFactor && factors.data.totp.some((factor) => factor.status === "verified")) {
         setAuthenticatorVerified(true);
-        setStep(3);
+        setStep(getStepAfterAuthenticatorSetup(hasSavedSignature));
         toast.info("Authenticator เชื่อมต่ออยู่แล้ว");
         return;
       }
@@ -382,7 +384,7 @@ export function SignatureApprovalSettings({
       }
       clearEnrollmentState();
       setAuthenticatorVerified(true);
-      setStep(3);
+      setStep(getStepAfterAuthenticatorSetup(hasSavedSignature));
       toast.success("เชื่อมต่อ Authenticator เรียบร้อยแล้ว", { title: "ยืนยันตัวตนสำเร็จ" });
       router.refresh();
     });
@@ -440,11 +442,115 @@ export function SignatureApprovalSettings({
 
       <nav aria-label="ส่วนการตั้งค่าลายเซ็นและการอนุมัติ" className="mt-4 flex overflow-x-auto border-b border-outline-variant sm:mt-5">
         <button className={`min-h-11 shrink-0 border-b-[3px] px-4 text-[13px] font-bold sm:px-6 sm:text-[14px] ${activeTab === "signature" ? "border-primary text-primary" : "border-transparent text-on-surface-variant"}`} onClick={() => setActiveTab("signature")} type="button">ลายเซ็นของฉัน</button>
+        <button className={`min-h-11 shrink-0 border-b-[3px] px-4 text-[13px] font-bold sm:px-6 sm:text-[14px] ${activeTab === "authenticator" ? "border-primary text-primary" : "border-transparent text-on-surface-variant"}`} onClick={() => setActiveTab("authenticator")} type="button">Authenticator / QR Code</button>
         <button className={`min-h-11 shrink-0 border-b-[3px] px-4 text-[13px] font-bold sm:px-6 sm:text-[14px] ${activeTab === "policy" ? "border-primary text-primary" : "border-transparent text-on-surface-variant"}`} onClick={() => setActiveTab("policy")} type="button">นโยบายการอนุมัติ</button>
         <button className="min-h-11 shrink-0 cursor-not-allowed border-b-[3px] border-transparent px-4 text-[13px] font-bold text-on-surface-variant opacity-50 sm:px-6 sm:text-[14px]" disabled type="button">ประวัติการเปลี่ยนแปลง</button>
       </nav>
 
-      {activeTab === "policy" ? <ApprovalPolicySettings canManage={canManagePolicies} initialPolicies={initialPolicies} /> : <>
+      {activeTab === "policy" ? (
+        <ApprovalPolicySettings canManage={canManagePolicies} initialPolicies={initialPolicies} />
+      ) : activeTab === "authenticator" ? (
+        <section className="mt-5 rounded-[6px] border border-[#d8e1ed] bg-surface-container-lowest p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-red-50 text-primary">
+              <ShieldCheck aria-hidden="true" size={22} strokeWidth={1.8} />
+            </span>
+            <div>
+              <h2 className="text-[20px] font-bold">Authenticator ของฉัน</h2>
+              <p className="mt-0.5 text-[13px] text-on-surface-variant">
+                QR Code นี้ใช้เชื่อมต่อแอป Authenticator กับบัญชีของคุณเท่านั้น
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-start gap-2 rounded-[5px] border-2 border-red-600 bg-red-50 p-3 text-[13px] font-bold leading-5 text-red-800" role="alert">
+            <span aria-hidden="true" className="material-symbols-outlined mt-0.5 shrink-0 text-[20px]">warning</span>
+            <p>คำเตือน: ห้ามเผยแพร่ ส่งต่อ หรือให้ผู้อื่นสแกน QR Code นี้เด็ดขาด ผู้ที่ได้ QR ไปสามารถสร้างรหัส Authenticator ในนามบัญชีของคุณและใช้ยืนยันตัวตนแทนคุณได้</p>
+          </div>
+
+          {qrCode ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-[230px_minmax(0,1fr)] sm:items-start">
+              <div className="grid justify-items-center rounded-[6px] border border-[#d8e1ed] bg-white p-3">
+                <Image alt="QR Code ลับสำหรับ Authenticator ของบัญชีนี้" className="size-[210px] max-w-full" height={210} src={qrCode} unoptimized width={210} />
+                <p className="mt-2 text-center text-[11px] font-bold text-red-700">QR ลับ — สแกนด้วยอุปกรณ์ของคุณเท่านั้น</p>
+                <a className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-[4px] border border-outline-variant px-3 text-[12px] font-bold text-on-surface-variant hover:border-primary hover:text-primary" download="krc-erp-authenticator-qr.svg" href={qrCode}>
+                  <Download aria-hidden="true" size={16} />
+                  บันทึกรูป QR (SVG)
+                </a>
+              </div>
+              <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+                <h3 className="text-[15px] font-bold">{authenticatorVerified ? "เชื่อมต่อ Authenticator ใหม่" : "สแกน QR ด้วยแอป Authenticator"}</h3>
+                <p className="mt-1 text-[12px] leading-5 text-on-surface-variant">
+                  {authenticatorVerified
+                    ? "สแกนด้วยแอปหรืออุปกรณ์ใหม่ แล้วกรอกรหัส 6 หลักเพื่อยืนยัน ตัว Authenticator เดิมยังใช้งานได้จนกว่าจะยืนยันตัวใหม่สำเร็จ"
+                    : "หลังสแกนแล้ว กรอกรหัส 6 หลักล่าสุดจากแอปเพื่อยืนยันการเชื่อมต่อ"}
+                </p>
+                {totpUri ? (
+                  <a className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-4 text-[13px] font-bold text-white hover:bg-primary/90 sm:hidden" href={totpUri}>
+                    <Smartphone aria-hidden="true" size={18} />
+                    เปิดในแอป Authenticator
+                  </a>
+                ) : null}
+                <label className="mt-4 block text-[12px] font-bold" htmlFor="authenticator-tab-totp-code">รหัส Authenticator 6 หลัก</label>
+                <input
+                  autoComplete="one-time-code"
+                  className="mt-1 min-h-12 w-full max-w-[280px] rounded-[5px] border border-[#cbd5e1] bg-white px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  id="authenticator-tab-totp-code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(event) => setTotpCode(normalizeTotpCode(event.target.value))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && isTotpCodeComplete(totpCode) && !isMfaPending) {
+                      handleVerifyAuthenticator();
+                    }
+                  }}
+                  pattern="[0-9]*"
+                  placeholder="000000"
+                  value={totpCode}
+                />
+                {secret ? (
+                  <div className="mt-3 text-[12px]">
+                    <button className="font-bold text-primary hover:underline" onClick={() => setShowSecret((value) => !value)} type="button">{showSecret ? "ซ่อนรหัสตั้งค่า" : "กรอกรหัสตั้งค่าเอง"}</button>
+                    {showSecret ? (
+                      <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#d8e1ed] bg-white p-2">
+                        <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-slate-800" translate="no">{secret}</code>
+                        <button aria-label="คัดลอกรหัสตั้งค่า Authenticator" className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-[#cbd5e1] text-on-surface-variant hover:border-primary hover:text-primary" onClick={handleCopySecret} type="button">
+                          {secretCopied ? <BadgeCheck aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button className="inline-flex min-h-10 items-center justify-center rounded-[4px] bg-primary px-4 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60" disabled={!isTotpCodeComplete(totpCode) || isMfaPending} onClick={handleVerifyAuthenticator} type="button">
+                    {isMfaPending ? "กำลังยืนยัน..." : "ยืนยัน Authenticator"}
+                  </button>
+                  <button className="min-h-10 rounded-[4px] border border-outline-variant px-4 text-[13px] font-bold text-on-surface-variant hover:text-primary disabled:opacity-60" disabled={isMfaPending} onClick={handleCancelAuthenticator} type="button">
+                    ยกเลิกการตั้งค่า
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : authenticatorVerified ? (
+            <div className="mt-4 rounded-[5px] border border-emerald-200 bg-emerald-50 p-4 text-[13px] leading-5 text-emerald-900">
+              <p className="font-bold">Authenticator เชื่อมต่อแล้ว</p>
+              <p className="mt-1">QR เดิมไม่สามารถเรียกกลับมาได้ หากต้องการตั้งค่าแอปหรืออุปกรณ์ใหม่ ให้สร้าง QR ใหม่ด้านล่างและยืนยันก่อนเปลี่ยนไปใช้แอปใหม่</p>
+              <button className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-[4px] bg-primary px-4 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60" disabled={isMfaPending} onClick={() => handleStartAuthenticator(true)} type="button">
+                <ScanQrCode aria-hidden="true" size={18} />
+                {isMfaPending ? "กำลังสร้าง QR Code..." : "สร้าง QR สำหรับอุปกรณ์ใหม่"}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[5px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+              <p className="text-[13px] leading-5 text-on-surface-variant">เริ่มตั้งค่าเพื่อสร้าง QR ส่วนตัวของคุณ แล้วสแกนด้วย Google Authenticator, Microsoft Authenticator หรือแอป TOTP ที่คุณเลือก</p>
+              <button className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60 sm:w-auto" disabled={isMfaPending} onClick={() => handleStartAuthenticator()} type="button">
+                <ScanQrCode aria-hidden="true" size={19} strokeWidth={2} />
+                {isMfaPending ? "กำลังสร้าง QR Code..." : "แสดง QR Code ของฉัน"}
+              </button>
+            </div>
+          )}
+        </section>
+      ) : <>
 
       <ol className="mt-5 grid grid-cols-3 sm:mt-6" aria-label="ขั้นตอนการตั้งค่าลายเซ็น">
         {[
@@ -453,7 +559,7 @@ export function SignatureApprovalSettings({
           ["3", "พร้อมอนุมัติ"],
         ].map(([number, label], index) => {
           const itemStep = (index + 1) as SignatureSetupStep;
-          const canOpen = itemStep === 1 || hasSavedSignature;
+          const canOpen = canOpenSignatureSetupStep(itemStep, hasSavedSignature);
           const active = itemStep === step;
           const complete = itemStep < step || (itemStep === 3 && authenticatorVerified);
           return (
@@ -485,6 +591,22 @@ export function SignatureApprovalSettings({
           <p className="mt-0.5 text-[13px] text-on-surface-variant">
             กรุณาเพิ่มลายเซ็นของคุณเพื่อนำไปใช้ในการอนุมัติเอกสาร
           </p>
+
+          {!authenticatorVerified ? (
+            <div className="mt-4 flex flex-col gap-3 rounded-[5px] border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] leading-5 text-on-surface-variant">
+                ตั้งค่า Authenticator ของบัญชีคุณได้เลย ไม่จำเป็นต้องบันทึกลายเซ็นก่อน ระบบจะแสดง QR Code เฉพาะระหว่างเชื่อมต่อ
+              </p>
+              <button
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-[4px] border border-primary px-4 text-[12px] font-bold text-primary hover:bg-primary/5"
+                onClick={() => setStep(2)}
+                type="button"
+              >
+                <ScanQrCode aria-hidden="true" size={17} />
+                ตั้งค่า Authenticator
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-[5px] border border-[#cdd6e1]">
             <button className={`flex min-h-10 items-center justify-center gap-2 text-[13px] font-bold transition-colors sm:text-[14px] ${mode === "draw" ? "bg-primary text-white" : "bg-white text-on-surface hover:bg-slate-50"}`} onClick={() => setMode("draw")} type="button">
@@ -551,16 +673,20 @@ export function SignatureApprovalSettings({
                   <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-bold text-primary ring-1 ring-[#d8e1ed]">2</span><span>กดเริ่มเชื่อมต่อ แล้วสแกน QR Code ที่ระบบสร้างให้</span></li>
                   <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-bold text-primary ring-1 ring-[#d8e1ed]">3</span><span>กรอกรหัส 6 หลักจากแอปเพื่อยืนยันการเชื่อมต่อ</span></li>
                 </ol>
-                <button className="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60 sm:w-auto" disabled={isMfaPending} onClick={handleStartAuthenticator} type="button">
+                <button className="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60 sm:w-auto" disabled={isMfaPending} onClick={() => handleStartAuthenticator()} type="button">
                   <ScanQrCode aria-hidden="true" size={19} strokeWidth={2} />
                   {isMfaPending ? "กำลังเตรียม QR Code..." : "เริ่มเชื่อมต่อ Authenticator"}
                 </button>
               </div>
             ) : (
               <div className="mt-5 grid gap-4 sm:grid-cols-[220px_1fr] sm:items-start">
-                <div className="hidden rounded-[6px] border border-[#d8e1ed] bg-white p-3 sm:block">
-                  <Image alt="QR Code สำหรับเชื่อมต่อ Authenticator" className="size-[190px]" height={190} src={qrCode} unoptimized width={190} />
-                  <p className="mt-2 text-center text-[11px] text-on-surface-variant">สแกนด้วยโทรศัพท์ของคุณ</p>
+                <div className="grid place-items-center rounded-[6px] border border-[#d8e1ed] bg-white p-3 sm:place-items-start">
+                  <Image alt="QR Code สำหรับเชื่อมต่อ Authenticator" className="size-[190px] max-w-full" height={190} src={qrCode} unoptimized width={190} />
+                  <p className="mt-2 text-center text-[11px] text-on-surface-variant">สแกนด้วยโทรศัพท์ของคุณระหว่างตั้งค่า</p>
+                  <a className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-[4px] border border-outline-variant px-3 text-[12px] font-bold text-on-surface-variant hover:border-primary hover:text-primary" download="krc-erp-authenticator-qr.svg" href={qrCode}>
+                    <Download aria-hidden="true" size={16} />
+                    บันทึกรูป QR (SVG)
+                  </a>
                 </div>
                 <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
                   <h3 className="text-[15px] font-bold">เชื่อมต่อแอป Authenticator</h3>
@@ -571,12 +697,6 @@ export function SignatureApprovalSettings({
                       เปิดในแอป Authenticator
                     </a>
                   ) : null}
-                  <details className="mt-3 rounded-[4px] border border-[#d8e1ed] bg-white sm:hidden">
-                    <summary className="cursor-pointer px-3 py-2 text-[12px] font-bold">สแกนด้วยอุปกรณ์อื่น</summary>
-                    <div className="grid place-items-center border-t border-[#d8e1ed] p-3">
-                      <Image alt="QR Code สำหรับเชื่อมต่อ Authenticator" className="size-[180px]" height={180} src={qrCode} unoptimized width={180} />
-                    </div>
-                  </details>
                   <label className="mt-4 block text-[12px] font-bold" htmlFor="totp-code">รหัส 6 หลักจากแอป</label>
                   <input
                     autoComplete="one-time-code"

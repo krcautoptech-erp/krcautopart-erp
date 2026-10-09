@@ -317,7 +317,7 @@ export function NotificationBell({
                     <p className="text-[12px] font-bold text-on-surface">
                       เปิดแจ้งเตือนบนคอมพิวเตอร์
                     </p>
-                    <p className="text-[10px] text-secondary truncate">
+                  <p className="break-words text-[10px] leading-4 text-secondary">
                       รับป๊อปอัปมุมขวาล่างทันที แม้พับจอหรือเปิดโปรแกรมอื่น
                     </p>
                   </div>
@@ -337,15 +337,15 @@ export function NotificationBell({
             </div>
           ) : null}
           {pushNotice && pushPermission === "granted" ? (
-            <div className="mx-3.5 mb-2.5 flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <span className="material-symbols-outlined text-[16px]">check_circle</span>
-              <span className="truncate">{pushNotice}</span>
+            <div className="mx-3.5 mb-2.5 flex items-start gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1.5 text-[11px] font-medium leading-4 text-emerald-600 dark:text-emerald-400">
+              <span className="material-symbols-outlined mt-0.5 shrink-0 text-[16px]">check_circle</span>
+              <span className="min-w-0 flex-1 break-words">{pushNotice}</span>
             </div>
           ) : null}
           {pushPermission === "denied" ? (
-            <div className="mx-3.5 mb-2 flex items-center gap-1.5 rounded-lg bg-surface-container-low px-2.5 py-1 text-[10px] text-secondary">
-              <span className="material-symbols-outlined text-[15px] text-amber-500">info</span>
-              <span className="truncate">เบราว์เซอร์ปิดกั้นแจ้งเตือน (คลิกรูปกุญแจข้าง URL เพื่อเปิด)</span>
+            <div className="mx-3.5 mb-2 flex items-start gap-1.5 rounded-lg bg-surface-container-low px-2.5 py-1 text-[10px] leading-4 text-secondary">
+              <span className="material-symbols-outlined mt-0.5 shrink-0 text-[15px] text-amber-500">info</span>
+              <span className="min-w-0 flex-1 break-words">เบราว์เซอร์ปิดกั้นแจ้งเตือน (คลิกรูปกุญแจข้าง URL เพื่อเปิด)</span>
             </div>
           ) : null}
 
@@ -398,7 +398,7 @@ export function NotificationBell({
                     </span>
 
                     <div className="col-start-2 min-w-0 self-center">
-                      <strong className={`block max-h-10 overflow-hidden pl-0.5 text-[12.5px] leading-[18px] text-on-surface ${item.readAt ? "font-semibold" : "font-extrabold"}`}>
+                      <strong className={`block break-words pl-0.5 text-[12.5px] leading-[18px] text-on-surface ${item.readAt ? "font-semibold" : "font-extrabold"}`}>
                         {item.title}
                       </strong>
                       <p className="mt-0.5 line-clamp-2 text-[11.5px] font-medium leading-[18px] text-secondary">
