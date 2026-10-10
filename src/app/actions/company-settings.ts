@@ -5,6 +5,7 @@ import {
   COMPANY_ASSET_BUCKET,
   createCompanyBranding,
   DEFAULT_DOCUMENT_SETTINGS,
+  getCompanyAssetUrl,
   normalizeLegacyUtf8Text,
   normalizeCompanyHeaderFieldOrder,
   type CompanyBranch,
@@ -106,6 +107,7 @@ function mapDocumentSettings(
       row.header_field_order,
     ),
     headerStyle: row.header_style === "standard" ? "standard" : "compact",
+    documentLogoUrl: Object.hasOwn(row, "logo_path") ? getCompanyAssetUrl(row.logo_path ? String(row.logo_path) : null) ?? DEFAULT_DOCUMENT_SETTINGS.documentLogoUrl : undefined,
     logoWidthMm: Number(row.logo_width_mm ?? 34),
     showAddress: row.show_address !== false,
     showEmail: row.show_email !== false,
@@ -219,7 +221,7 @@ async function uploadLogo(
   supabase: AuthenticatedClient,
   companyId: string,
   file: File,
-  variant: "dark" | "light",
+  variant: "dark" | "light" | "document",
 ) {
   const extension = LOGO_EXTENSIONS[file.type];
   const path = `${companyId}/${variant}-${Date.now()}.${extension}`;
@@ -238,10 +240,12 @@ async function uploadLogo(
 export async function saveCompanySettingsAction(formData: FormData) {
   const lightLogo = formData.get("logoLight");
   const darkLogo = formData.get("logoDark");
+  const documentLogo = formData.get("logoDocument");
   const lightLogoError = validateLogo(lightLogo, "โลโก้หลัก");
   const darkLogoError = validateLogo(darkLogo, "โลโก้โหมดมืด");
-  if (lightLogoError || darkLogoError) {
-    return { error: lightLogoError ?? darkLogoError };
+  const documentLogoError = validateLogo(documentLogo, "โลโก้หัวเอกสาร");
+  if (lightLogoError || darkLogoError || documentLogoError) {
+    return { error: lightLogoError ?? darkLogoError ?? documentLogoError };
   }
 
   const legalNameTh = textValue(formData, "legalNameTh");
@@ -303,6 +307,16 @@ export async function saveCompanySettingsAction(formData: FormData) {
 
     let lightLogoPath: string | null = null;
     let darkLogoPath: string | null = null;
+    let documentLogoPath: string | null = null;
+
+    if ([lightLogo, darkLogo, documentLogo].some(file => file instanceof File && file.size > 0)) {
+      const readiness = await auth.supabase.from("company_document_settings").select("logo_path").eq("company_id", companyId).maybeSingle();
+      if (readiness.error) return { error: "ยังไม่พร้อมแยกโลโก้ กรุณาติดตั้ง migration แยกโลโก้หัวเอกสารก่อน" };
+    }
+    if (documentLogo instanceof File && documentLogo.size > 0) {
+      documentLogoPath = await uploadLogo(auth.supabase, companyId, documentLogo, "document");
+      uploadedPaths.push(documentLogoPath);
+    }
 
     if (lightLogo instanceof File && lightLogo.size > 0) {
       lightLogoPath = await uploadLogo(
@@ -331,6 +345,7 @@ export async function saveCompanySettingsAction(formData: FormData) {
     const { error } = await auth.supabase.rpc("save_company_settings", {
       p_company_id: companyId,
       p_document_settings: {
+        documentLogoPath,
         footerTextEn: textValue(formData, "footerTextEn"),
         footerTextTh: textValue(formData, "footerTextTh"),
         headerStyle:

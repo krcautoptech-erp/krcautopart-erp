@@ -187,39 +187,7 @@ export function ItemCatalog({
     });
   }, [initialData, initialPage, initialPageSize, initialSearch, initialTypeCode]);
 
-  // Floating synced horizontal scrollbar
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const floatingScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingRef = useRef(false);
-  const [floatingScrollState, setFloatingScrollState] = useState<{
-    visible: boolean;
-    left: number;
-    width: number;
-    scrollWidth: number;
-  }>({
-    visible: false,
-    left: 0,
-    width: 0,
-    scrollWidth: 0,
-  });
-
-  const handleFloatingScroll = useCallback(() => {
-    if (isSyncingRef.current || !tableContainerRef.current || !floatingScrollRef.current) return;
-    isSyncingRef.current = true;
-    tableContainerRef.current.scrollLeft = floatingScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => {
-      isSyncingRef.current = false;
-    });
-  }, []);
-
-  const handleTableScroll = useCallback(() => {
-    if (isSyncingRef.current || !tableContainerRef.current || !floatingScrollRef.current) return;
-    isSyncingRef.current = true;
-    floatingScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
-    requestAnimationFrame(() => {
-      isSyncingRef.current = false;
-    });
-  }, []);
 
   const activeTypes = useMemo(
     () => initialData.types.filter((item) => item.status === "active"),
@@ -448,48 +416,6 @@ export function ItemCatalog({
       .filter((c): c is (typeof ALL_COLUMNS)[number] => Boolean(c));
   }, [visibleColumns]);
 
-  // Floating horizontal scrollbar synchronization
-  useEffect(() => {
-    const tableEl = tableContainerRef.current;
-    if (!tableEl) return;
-
-    function updateFloatingState() {
-      if (!tableEl) return;
-      const rect = tableEl.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth + 2;
-
-      const isVisible =
-        hasHorizontalOverflow &&
-        rect.bottom > windowHeight &&
-        rect.top < windowHeight - 60;
-
-      setFloatingScrollState({
-        visible: isVisible,
-        left: rect.left,
-        width: rect.width,
-        scrollWidth: tableEl.scrollWidth,
-      });
-
-      if (floatingScrollRef.current && isVisible) {
-        floatingScrollRef.current.scrollLeft = tableEl.scrollLeft;
-      }
-    }
-
-    updateFloatingState();
-
-    window.addEventListener("scroll", updateFloatingState, { passive: true });
-    window.addEventListener("resize", updateFloatingState, { passive: true });
-
-    const resizeObserver = new ResizeObserver(() => updateFloatingState());
-    resizeObserver.observe(tableEl);
-
-    return () => {
-      window.removeEventListener("scroll", updateFloatingState);
-      window.removeEventListener("resize", updateFloatingState);
-      resizeObserver.disconnect();
-    };
-  }, [items, visibleColumns]);
 
   function changeType(code: string) {
     setType(code);
@@ -693,7 +619,6 @@ export function ItemCatalog({
       {/* Dynamic Table Grid */}
       <div
         ref={tableContainerRef}
-        onScroll={handleTableScroll}
         className="relative hidden overflow-x-auto border border-[#d8dde4] overscroll-x-contain dark:border-[#494343] md:block"
       >
         <table className="item-catalog-table min-w-full w-max border-collapse text-left text-[13px]">
@@ -954,28 +879,6 @@ export function ItemCatalog({
           </div>
         )}
       </div>
-
-      {/* Floating Synced Horizontal Scrollbar (pinned to bottom of viewport when table extends below screen) */}
-      {floatingScrollState.visible ? (
-        <div
-          aria-hidden="true"
-          className="fixed bottom-0 z-40 hidden overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 backdrop-blur-md shadow-[0_-4px_12px_rgba(0,0,0,0.15)] transition-opacity duration-150 md:block"
-          onScroll={handleFloatingScroll}
-          ref={floatingScrollRef}
-          style={{
-            left: `${floatingScrollState.left}px`,
-            width: `${floatingScrollState.width}px`,
-            height: "14px",
-          }}
-        >
-          <div
-            style={{
-              width: `${floatingScrollState.scrollWidth}px`,
-              height: "1px",
-            }}
-          />
-        </div>
-      ) : null}
 
       {/* Pagination Footer */}
       <div className="border border-t-0 border-outline-variant bg-surface-container-lowest">

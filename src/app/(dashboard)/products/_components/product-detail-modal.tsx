@@ -1,11 +1,13 @@
 "use client";
 
+import { toast } from "@/components/toast";
+
 import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Image as ImageIcon, X } from "lucide-react";
 import { useApp } from "@/components/app-context";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { PdfExportButton } from "@/components/pdf-export-button";
-import { printHtmlDocument } from "@/lib/document-print";
+import { exportHtmlPdf, printHtmlDocument } from "@/lib/document-print";
 import type { ProductRecord } from "./product-catalog";
 
 interface ProductDetailModalProps {
@@ -433,8 +435,8 @@ async function exportSpecificationPdf({
   html: string;
   isDarkMode: boolean;
 }) {
-  await printHtmlDocument(html, {
-    title: filename,
+  await exportHtmlPdf(html, {
+    filename,
     paperSize: "A5",
     orientation: "landscape",
   });
@@ -495,7 +497,7 @@ export function ProductDetailModal({
         paperSize: "A5",
         orientation: "landscape",
       },
-    );
+    ).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้"));
   };
 
   const handleExportPdf = async () => {
@@ -508,7 +510,7 @@ export function ProductDetailModal({
       filename: `${safePartNumber || "product-specification"}.pdf`,
       html: buildSpecificationHtml(detailProduct, currentDarkMode),
       isDarkMode: currentDarkMode,
-    });
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้"));
   };
 
   const statusActive = detailProduct.status === STATUS_ACTIVE;

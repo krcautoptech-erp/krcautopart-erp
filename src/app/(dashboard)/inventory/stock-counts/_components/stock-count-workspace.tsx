@@ -251,7 +251,7 @@ export function StockCountWorkspace({
       paperSize: "A4",
       orientation: "portrait",
       bodyClass: "printing-stock-count",
-    });
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้"));
   };
   return (
     <section className="stock-count-document">

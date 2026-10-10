@@ -123,6 +123,12 @@ export function DocumentPreviewShell({
     }
   }, [exportBusy, isBusy, onExportPdf]);
 
+  const handlePrint = async () => {
+    if (isBusy) return;
+    try { await onPrint(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "ไม่สามารถเปิดหน้าต่างพิมพ์ได้"); }
+  };
+
   const fitToPage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -265,7 +271,7 @@ export function DocumentPreviewShell({
         <div aria-label="KRC ERP" className={styles.brand}><b>KRC</b><span>ERP</span></div>
         <div className={styles.railPrimary}>
           <ShellButton icon={<ArrowLeft size={25} />} label="ปิด" onClick={onClose} />
-          <ShellButton disabled={isBusy} icon={<Printer size={27} />} label="พิมพ์" onClick={onPrint} primary />
+          <ShellButton disabled={isBusy} icon={<Printer size={27} />} label="พิมพ์" onClick={handlePrint} primary />
           <ShellButton
             disabled={isBusy || exportBusy}
             icon={canSharePdf ? <Share2 size={27} /> : <PdfExportIcon size={27} />}
@@ -341,7 +347,7 @@ export function DocumentPreviewShell({
       </main>
 
       <nav aria-label="คำสั่งตัวอย่างเอกสาร" className={styles.mobileDock}>
-        <ShellButton disabled={isBusy} icon={<Printer size={25} />} label="พิมพ์" onClick={onPrint} primary />
+        <ShellButton disabled={isBusy} icon={<Printer size={25} />} label="พิมพ์" onClick={handlePrint} primary />
         <ShellButton
           disabled={isBusy || exportBusy}
           icon={canSharePdf ? <Share2 size={25} /> : <PdfExportIcon size={25} />}

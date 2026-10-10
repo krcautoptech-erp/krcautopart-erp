@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +22,11 @@ export async function POST(request: Request) {
 
     if (!html || typeof html !== "string") {
       return Response.json({ error: "ไม่พบข้อมูล HTML สำหรับสร้าง PDF" }, { status: 400 });
+    }
+
+    if (html.length > 15_000_000 || typeof filename !== "string" ||
+      !["A4", "A5", "letter"].includes(paperSize) || !["portrait", "landscape"].includes(orientation)) {
+      return Response.json({ error: "รูปแบบเอกสารหรือขนาดกระดาษไม่ถูกต้อง" }, { status: 400 });
     }
 
     const pdfBuffer = await renderHtmlToPdfBuffer(html, {

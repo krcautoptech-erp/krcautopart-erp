@@ -34,6 +34,10 @@ export function matchesMemoryShape(value: unknown, initial: unknown): boolean {
   return typeof value === typeof initial && (typeof value !== "number" || Number.isFinite(value));
 }
 
+export function restoreListValue<T>(value: unknown, initial: T, allowed?: readonly T[]): T {
+  return matchesMemoryShape(value, initial) && (!allowed || allowed.includes(value as T)) ? value as T : initial;
+}
+
 export function parseFormDraft<T>(raw: string | null, initial: T, revision: string) {
   if (!raw || raw.length > 2_000_000) return null;
   try {

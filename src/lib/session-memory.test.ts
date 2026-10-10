@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { matchesMemoryShape, parseFormDraft, parseListMemory, readSessionMemory, sessionMemoryKey, writeSessionMemory } from "./session-memory.ts";
+import { matchesMemoryShape, parseFormDraft, parseListMemory, readSessionMemory, sessionMemoryKey, writeSessionMemory, restoreListValue } from "./session-memory.ts";
+
+test("restores only supported report views and page sizes from stale memory", () => {
+  assert.equal(restoreListValue("journal", "document", ["document", "product", "department"]), "document");
+  assert.equal(restoreListValue("department", "document", ["document", "product", "department"]), "department");
+  assert.equal(restoreListValue(200, 20, [20, 50, 100]), 20);
+  assert.equal(restoreListValue("bolt", ""), "bolt");
+});
 
 test("isolates list state and drafts by user, page, and document", () => {
   const keys = [sessionMemoryKey("alice", "list", "/purchase/pr"), sessionMemoryKey("bob", "list", "/purchase/pr"), sessionMemoryKey("alice", "list", "/purchase/po"), sessionMemoryKey("alice", "draft", "pr:new"), sessionMemoryKey("alice", "draft", "pr:42")];

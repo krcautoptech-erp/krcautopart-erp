@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { tableRailGeometry } from "./table-scroll-rail.ts";
+import { tableRailGeometry, selectTableRail } from "./table-scroll-rail.ts";
 
 const rect = { left: 240, right: 1040, top: 200, bottom: 1200, width: 800 };
 test("rail is pinned within visible viewport and tracks overflow ratio", () => {
   assert.deepEqual(tableRailGeometry(rect, 1080, 780, 800, 1600), { left: 240, width: 800, top: 744, max: 800, thumb: 400 });
+});
+
+test("keeps the active table when another overflowing table appears", () => {
+  const first = { target: "first" };
+  const second = { target: "second" };
+  assert.equal(selectTableRail([first, second], "first"), first);
+  assert.equal(selectTableRail([second], "first"), second);
+  assert.equal(selectTableRail([], "first"), null);
+});
+
+test("active rail remains available when its table scrolls vertically out of view", () => {
+  assert.equal(tableRailGeometry({ ...rect, top: -800, bottom: -100 }, 1080, 780, 800, 1600, true)?.max, 800);
+  assert.equal(tableRailGeometry({ ...rect, width: 0 }, 1080, 780, 800, 1600, true), null);
 });
 test("vertical scrolling never moves rail from viewport bottom to table bottom", () => {
   for (const bottom of [1200, 800, 780, 600, 500, 110]) {

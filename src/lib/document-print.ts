@@ -5,6 +5,7 @@
  */
 
 import { REPORT_CATALOG } from "./report-catalog.ts";
+import { requestDocumentPdf } from "./document-pdf.ts";
 import {
   createBrowserPdfDeliveryAdapter,
   deliverPdfBlob,
@@ -262,9 +263,7 @@ export function buildDocumentPrintCss(
 }
 
 /**
- * Isolated Print Runner
- * Prints an HTML string through a clean, detached iframe without mutating document.body classes.
- * Ensures font loading, zero leaking to the dashboard, and proper teardown.
+ * Opens the native print dialog using the same HTML template and physical page rules.
  */
 export async function printHtmlDocument(
   bodyHtml: string,
@@ -341,6 +340,7 @@ export async function printHtmlDocument(
         }
 
         const images = Array.from(frameDocument.querySelectorAll("img"));
+        images.forEach((image) => { image.loading = "eager"; });
         if (images.length > 0) {
           await Promise.all(
             images.map(
@@ -621,14 +621,12 @@ export function extractAllDocumentStyles(): string {
 
 /**
  * Exports an HTML element as a vector PDF.
- * Sets the document title to [filename].pdf ensuring the browser's PDF engine
- * pre-fills the exact filename without any canvas/bitmap screenshot degradation.
- * Reference: docs/Printlogic.md (Lines 9-17, 102-110)
+ * Keeps text and table rules vector; only existing bitmap images stay bitmap.
  */
-export async function exportElementPdf(
+export async function createElementPdf(
   element: HTMLElement,
   options: ExportPdfOptions,
-): Promise<PdfDeliveryResult | undefined> {
+): Promise<Blob> {
   const sanitizedFilename = options.filename.endsWith(".pdf")
     ? options.filename
     : `${options.filename}.pdf`;
@@ -640,35 +638,7 @@ export async function exportElementPdf(
     elementClone.style.zoom = "1";
     elementClone.style.transform = "none";
 
-    const originalImages = Array.from(element.querySelectorAll("img"));
-    const clonedImages = Array.from(elementClone.querySelectorAll("img"));
-
-    originalImages.forEach((origImg, index) => {
-      const clonedImg = clonedImages[index];
-      if (!clonedImg) return;
-
-      clonedImg.removeAttribute("srcset");
-      clonedImg.removeAttribute("sizes");
-
-      try {
-        if (origImg.complete && origImg.naturalWidth > 0) {
-          const canvas = document.createElement("canvas");
-          canvas.width = origImg.naturalWidth;
-          canvas.height = origImg.naturalHeight;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(origImg, 0, 0);
-            clonedImg.src = canvas.toDataURL("image/png");
-          }
-        } else if (origImg.currentSrc) {
-          clonedImg.src = origImg.currentSrc;
-        }
-      } catch {
-        if (origImg.currentSrc) {
-          clonedImg.src = origImg.currentSrc;
-        }
-      }
-    });
+    await inlinePdfImages(elementClone);
 
     const fullHtml = buildFullHtmlDocument(elementClone.outerHTML, {
       ...options,
@@ -731,27 +701,51 @@ export async function exportElementPdf(
       ],
     });
 
-    const response = await fetch("/api/documents/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        html: fullHtml,
-        filename: sanitizedFilename,
-        paperSize: options.paperSize || "A4",
-        orientation: options.orientation || "portrait",
-      }),
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(payload?.error || "ไม่สามารถสร้างไฟล์ PDF ได้");
-    }
-
-    const blob = await response.blob();
-    return deliverPdfBlob(blob, sanitizedFilename, createBrowserPdfDeliveryAdapter());
+    return requestDocumentPdf(fullHtml, options);
   }
+  throw new Error("ไม่พบเอกสารสำหรับสร้าง PDF");
+}
 
-  return undefined;
+/** Downloads a vector PDF from the same document template shown in preview. */
+export async function exportElementPdf(
+  element: HTMLElement,
+  options: ExportPdfOptions,
+): Promise<PdfDeliveryResult | undefined> {
+  if (typeof document === "undefined") return;
+  const blob = await createElementPdf(element, options);
+  return deliverPdfBlob(blob, pdfFilename(options.filename), createBrowserPdfDeliveryAdapter());
+}
+
+async function inlinePdfImages(root: ParentNode): Promise<void> {
+  await Promise.all(Array.from(root.querySelectorAll("img"), async (image) => {
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+    image.loading = "eager";
+    const src = image.getAttribute("src");
+    // Public SVGs are embedded unchanged by the server, retaining vector artwork.
+    if (!src || src.startsWith("data:") || /^\/.*\.svg(?:\?|$)/.test(src)) return;
+    const response = await fetch(src, { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new Error("โหลดรูปประกอบเอกสารไม่สำเร็จ กรุณาลองใหม่");
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/") || blob.size > 5_000_000) throw new Error("รูปประกอบเอกสารไม่ถูกต้องหรือใหญ่เกิน 5 MB");
+    image.src = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("อ่านรูปประกอบเอกสารไม่สำเร็จ"));
+      reader.readAsDataURL(blob);
+    });
+  }));
+}
+
+export async function createHtmlPdf(bodyHtml: string, options: ExportPdfOptions): Promise<Blob> {
+  const fullHtml = buildFullHtmlDocument(bodyHtml, { ...options, title: pdfFilename(options.filename) });
+  const parsed = new DOMParser().parseFromString(fullHtml, "text/html");
+  await inlinePdfImages(parsed);
+  return requestDocumentPdf(`<!doctype html>${parsed.documentElement.outerHTML}`, options);
+}
+
+function pdfFilename(filename: string): string {
+  return filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
 }
 
 /**
@@ -761,37 +755,9 @@ export async function exportHtmlPdf(
   bodyHtml: string,
   options: ExportPdfOptions,
 ): Promise<PdfDeliveryResult | undefined> {
-  const sanitizedFilename = options.filename.endsWith(".pdf")
-    ? options.filename
-    : `${options.filename}.pdf`;
-
-  if (typeof window !== "undefined") {
-    const fullHtml = buildFullHtmlDocument(bodyHtml, {
-      ...options,
-      title: sanitizedFilename,
-    });
-
-    const response = await fetch("/api/documents/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        html: fullHtml,
-        filename: sanitizedFilename,
-        paperSize: options.paperSize || "A4",
-        orientation: options.orientation || "portrait",
-      }),
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
-      throw new Error(payload?.error || "ไม่สามารถสร้างไฟล์ PDF ได้");
-    }
-
-    const blob = await response.blob();
-    return deliverPdfBlob(blob, sanitizedFilename, createBrowserPdfDeliveryAdapter());
-  }
-
-  return undefined;
+  if (typeof window === "undefined") return;
+  const blob = await createHtmlPdf(bodyHtml, options);
+  return deliverPdfBlob(blob, pdfFilename(options.filename), createBrowserPdfDeliveryAdapter());
 }
 
 function escapeHtml(text: string): string {

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { CompanyLogo } from "@/components/company-logo";
 import {
+  getDocumentBranding,
   normalizeCompanyHeaderFieldOrder,
   type CompanyDocumentContext,
   type CompanyHeaderField,
@@ -77,7 +78,7 @@ export function CompanyDocumentHeader({
       <div className={styles.brand}>
         <CompanyLogo
           alt={branding.legalNameTh}
-          branding={branding}
+          branding={getDocumentBranding(context)}
           className={styles.logo}
           mode="light"
           priority={priority}

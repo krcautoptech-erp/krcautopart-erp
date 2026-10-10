@@ -86,7 +86,7 @@ export function PurchaseAnalysisReport({ documentContext, initialData, printedBy
       title: `purchase-analysis-${view}-${applied.startDate}-${applied.endDate}`,
       paperSize: "A4",
       orientation: "portrait",
-    }).finally(() => setPrintRows(null));
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้")).finally(() => setPrintRows(null));
   }, [applied.endDate, applied.startDate, printRows, view]);
 
   const exportUrl = purchaseAnalysisExportUrl({ view, ...applied });

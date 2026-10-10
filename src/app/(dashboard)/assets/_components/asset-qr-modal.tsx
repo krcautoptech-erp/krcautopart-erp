@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "@/components/toast";
+
 import React, { useRef } from "react";
 import { Printer, X, Tag, QrCode } from "lucide-react";
 import type { AssetRecord } from "@/lib/assets";
@@ -19,7 +21,7 @@ export function AssetQrModal({ asset, onClose }: AssetQrModalProps) {
   if (!asset) return null;
 
   const handlePrint = () => {
-    void printAssetTag(asset, qrUrl);
+    void printAssetTag(asset, qrUrl).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้"));
   };
 
   // Build a clean asset QR content payload

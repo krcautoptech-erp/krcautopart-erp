@@ -299,6 +299,9 @@ table th {
 .table-scroll-rail input::-moz-range-thumb{width:var(--rail-thumb);height:6px;border:0;border-radius:8px;background:#af101a}
 .table-scroll-rail input:focus-visible{outline:2px solid #af101a;outline-offset:2px}
 @media print{.table-scroll-rail{display:none}}
+@media (pointer:coarse){
+  .table-scroll-rail,.table-scroll-rail input[type=range]{height:44px}
+}
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

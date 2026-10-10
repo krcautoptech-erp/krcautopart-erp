@@ -1,4 +1,5 @@
 "use client";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
 
@@ -172,21 +173,19 @@ export function ItemSideDrawer({
       role="dialog"
     >
       <aside
-        className="flex h-full w-full flex-col bg-white text-black shadow-2xl sm:w-[430px]"
+        className="flex h-full w-full flex-col bg-surface-container-lowest text-on-surface shadow-2xl sm:w-[430px]"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="grid h-[58px] shrink-0 grid-cols-[40px_1fr_40px] items-center border-b border-[#eeeeee] px-3 sm:h-[62px] sm:px-5">
           <button
             aria-label="ย้อนกลับ"
-            className="grid h-9 w-9 place-items-center rounded-full text-black hover:bg-[#fafafa] sm:hidden"
+            className="grid h-9 w-9 place-items-center rounded-full text-on-surface hover:bg-surface-container sm:hidden"
             onClick={onClose}
             type="button"
           >
             <ChevronLeft size={22} />
           </button>
-          <div className="hidden text-[15px] font-bold text-[#c10b16] sm:block">
-            KRC <span className="font-medium text-black">ERP</span>
-          </div>
+          <CompanyFormLogo className="hidden sm:block" />
           <h2
             className="truncate text-center text-[15px] font-bold sm:text-[16px]"
             id={titleId}
@@ -195,7 +194,7 @@ export function ItemSideDrawer({
           </h2>
           <button
             aria-label="ปิดรายละเอียดสินค้า"
-            className="hidden h-9 w-9 place-items-center justify-self-end rounded-full text-black hover:bg-[#fafafa] sm:grid"
+            className="hidden h-9 w-9 place-items-center justify-self-end rounded-full text-on-surface hover:bg-surface-container sm:grid"
             onClick={onClose}
             type="button"
           >
@@ -206,7 +205,7 @@ export function ItemSideDrawer({
         <div className="flex-1 overflow-y-auto px-5 pb-5 pt-6 sm:px-7 sm:pt-8">
           <section className={hasImage ? "flex items-center gap-4" : "flex items-center"}>
             {hasImage ? (
-              <div className="grid h-[92px] w-[122px] shrink-0 place-items-center overflow-hidden rounded-[4px] bg-white">
+              <div className="grid h-[92px] w-[122px] shrink-0 place-items-center overflow-hidden rounded-[4px] bg-surface-container-lowest">
                 { }
                 <img
                   alt={item.name}
@@ -219,7 +218,7 @@ export function ItemSideDrawer({
               <p className="truncate text-[18px] font-extrabold text-[#c10b16] sm:text-[20px]">
                 {item.code}
               </p>
-              <p className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-black">
+              <p className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-on-surface">
                 {item.name}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -237,7 +236,7 @@ export function ItemSideDrawer({
               return (
                 <button
                   className={`relative h-10 px-1 ${
-                    activeTab === tab.id ? "text-[#c10b16]" : "text-black"
+                    activeTab === tab.id ? "text-[#c10b16]" : "text-on-surface"
                   } ${count === 0 ? "opacity-40" : ""}`}
                   disabled={count === 0}
                   key={tab.id}
@@ -259,10 +258,10 @@ export function ItemSideDrawer({
                 className="grid grid-cols-[118px_1fr] gap-4 border-b border-[#eeeeee] py-3 sm:grid-cols-[132px_1fr]"
                 key={row.key}
               >
-                <dt className="text-black">{row.label}</dt>
+                <dt className="text-on-surface">{row.label}</dt>
                 <dd
                   className={`min-w-0 whitespace-pre-wrap break-words font-medium ${
-                    row.key === "status" ? "text-[#c10b16]" : "text-black"
+                    row.key === "status" ? "text-[#c10b16]" : "text-on-surface"
                   }`}
                 >
                   {row.value}
@@ -273,7 +272,7 @@ export function ItemSideDrawer({
         </div>
 
         {onEdit ? (
-          <footer className="shrink-0 border-t border-[#eeeeee] bg-white px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:hidden">
+          <footer className="shrink-0 border-t border-outline-variant bg-surface-container-lowest px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:hidden">
             <button
               className="flex h-12 w-full items-center justify-center gap-2 rounded-[4px] bg-[#c10b16] text-[16px] font-bold text-white"
               onClick={() => { onClose(); onEdit(item); }}
@@ -285,7 +284,7 @@ export function ItemSideDrawer({
           </footer>
         ) : null}
 
-        <footer className="hidden shrink-0 grid-cols-[auto_1fr_1fr] gap-2 border-t border-[#eeeeee] bg-white px-7 py-4 sm:grid">
+        <footer className="hidden shrink-0 grid-cols-[auto_1fr_1fr] gap-2 border-t border-outline-variant bg-surface-container-lowest px-7 py-4 sm:grid">
           {onDelete ? (
             <button
               className="flex h-10 items-center justify-center gap-1.5 rounded-[4px] border border-rose-200 bg-rose-50 px-3 text-[13px] font-bold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-400"
@@ -301,7 +300,7 @@ export function ItemSideDrawer({
           ) : null}
           {onEdit ? (
             <button
-              className="flex h-10 items-center justify-center gap-2 rounded-[4px] border border-[#e02b35] bg-white text-[13px] font-bold text-[#c10b16] hover:bg-[#fff6f6]"
+              className="flex h-10 items-center justify-center gap-2 rounded-[4px] border border-[#e02b35] bg-surface-container-lowest text-[13px] font-bold text-[#c10b16] hover:bg-surface-container"
               onClick={() => {
                 onClose();
                 onEdit(item);

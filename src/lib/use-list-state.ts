@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSessionMemoryUser } from "@/components/session-memory-context";
-import { matchesMemoryShape, parseListMemory, readSessionMemory, sessionMemoryKey, writeSessionMemory } from "./session-memory";
+import { restoreListValue, parseListMemory, readSessionMemory, sessionMemoryKey, writeSessionMemory } from "./session-memory";
 
 type ListStore = { snapshot: string | null; search: string | null; listeners: Set<() => void> };
 const stores = new Map<string, ListStore>();
@@ -29,7 +29,7 @@ function updateListStore(store: ListStore, key: string, values: Record<string, u
   store.listeners.forEach((notify) => notify());
 }
 
-export function useListState<T>(field: string, initialValue: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
+export function useListState<T>(field: string, initialValue: T | (() => T), allowed?: readonly T[]): [T, Dispatch<SetStateAction<T>>] {
   const userId = useSessionMemoryUser();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,9 +41,9 @@ export function useListState<T>(field: string, initialValue: T | (() => T)): [T,
   }, [key]);
   const subscribe = useCallback((notify: () => void) => { store.listeners.add(notify); return () => { store.listeners.delete(notify); }; }, [store]);
   const getSnapshot = useCallback(() => {
-    if (!userId) return null;
+    if (!userId || window.location.pathname !== pathname) return null;
     return getListSnapshot(store, key);
-  }, [key, store, userId]);
+  }, [key, pathname, store, userId]);
   // Reading searchParams also makes browser Back/Forward update the snapshot.
   void searchParams;
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, serverSnapshot);
@@ -51,13 +51,14 @@ export function useListState<T>(field: string, initialValue: T | (() => T)): [T,
     if (snapshot && window.location.pathname === pathname && !window.location.search) updateListStore(store, key, parseListMemory(snapshot));
   }, [key, pathname, snapshot, store]);
   const saved = useMemo(() => parseListMemory(snapshot)[field], [field, snapshot]);
-  const value = matchesMemoryShape(saved, initial) ? saved as T : initial;
+  const value = restoreListValue(saved, initial, allowed);
   const setValue = useCallback<Dispatch<SetStateAction<T>>>((next) => {
+    if (window.location.pathname !== pathname) return;
     const values = parseListMemory(getSnapshot());
-    const previous = matchesMemoryShape(values[field], initial) ? values[field] as T : initial;
+    const previous = restoreListValue(values[field], initial, allowed);
     values[field] = typeof next === "function" ? (next as (value: T) => T)(previous) : next;
     updateListStore(store, key, values);
-  }, [field, getSnapshot, initial, key, store]);
+  }, [allowed, field, getSnapshot, initial, key, pathname, store]);
   return [value, setValue];
 }
 

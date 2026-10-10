@@ -478,7 +478,7 @@ export function SignatureApprovalSettings({
                   บันทึกรูป QR (SVG)
                 </a>
               </div>
-              <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+              <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-surface-container-low p-4">
                 <h3 className="text-[15px] font-bold">{authenticatorVerified ? "เชื่อมต่อ Authenticator ใหม่" : "สแกน QR ด้วยแอป Authenticator"}</h3>
                 <p className="mt-1 text-[12px] leading-5 text-on-surface-variant">
                   {authenticatorVerified
@@ -494,7 +494,7 @@ export function SignatureApprovalSettings({
                 <label className="mt-4 block text-[12px] font-bold" htmlFor="authenticator-tab-totp-code">รหัส Authenticator 6 หลัก</label>
                 <input
                   autoComplete="one-time-code"
-                  className="mt-1 min-h-12 w-full max-w-[280px] rounded-[5px] border border-[#cbd5e1] bg-white px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  className="mt-1 min-h-12 w-full max-w-[280px] rounded-[5px] border border-[#cbd5e1] bg-surface-container-lowest px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
                   id="authenticator-tab-totp-code"
                   inputMode="numeric"
                   maxLength={6}
@@ -512,7 +512,7 @@ export function SignatureApprovalSettings({
                   <div className="mt-3 text-[12px]">
                     <button className="font-bold text-primary hover:underline" onClick={() => setShowSecret((value) => !value)} type="button">{showSecret ? "ซ่อนรหัสตั้งค่า" : "กรอกรหัสตั้งค่าเอง"}</button>
                     {showSecret ? (
-                      <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#d8e1ed] bg-white p-2">
+                      <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#d8e1ed] bg-surface-container-lowest p-2">
                         <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-slate-800" translate="no">{secret}</code>
                         <button aria-label="คัดลอกรหัสตั้งค่า Authenticator" className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-[#cbd5e1] text-on-surface-variant hover:border-primary hover:text-primary" onClick={handleCopySecret} type="button">
                           {secretCopied ? <BadgeCheck aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}
@@ -541,7 +541,7 @@ export function SignatureApprovalSettings({
               </button>
             </div>
           ) : (
-            <div className="mt-4 rounded-[5px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+            <div className="mt-4 rounded-[5px] border border-[#d8e1ed] bg-surface-container-low p-4">
               <p className="text-[13px] leading-5 text-on-surface-variant">เริ่มตั้งค่าเพื่อสร้าง QR ส่วนตัวของคุณ แล้วสแกนด้วย Google Authenticator, Microsoft Authenticator หรือแอป TOTP ที่คุณเลือก</p>
               <button className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60 sm:w-auto" disabled={isMfaPending} onClick={() => handleStartAuthenticator()} type="button">
                 <ScanQrCode aria-hidden="true" size={19} strokeWidth={2} />
@@ -572,7 +572,7 @@ export function SignatureApprovalSettings({
                 onClick={() => canOpen && setStep(itemStep)}
                 type="button"
               >
-                <span className={`grid size-8 place-items-center rounded-full border text-[14px] ${active ? "border-primary bg-primary font-bold text-white" : complete ? "border-emerald-600 bg-emerald-600 font-bold text-white" : "border-[#c4ccd7] bg-[#f8fafc] text-[#334155]"}`}>
+                <span className={`grid size-8 place-items-center rounded-full border text-[14px] ${active ? "border-primary bg-primary font-bold text-white" : complete ? "border-emerald-600 bg-emerald-600 font-bold text-white" : "border-[#c4ccd7] bg-surface-container-low text-on-surface"}`}>
                   {complete && !active ? <span className="material-symbols-outlined text-[18px]">check</span> : number}
                 </span>
                 <span className={`mt-1 max-w-[110px] bg-surface-container-lowest px-1 text-[12px] leading-4 sm:max-w-none sm:text-[14px] ${active ? "font-bold text-primary" : "text-on-surface-variant"}`}>
@@ -609,11 +609,11 @@ export function SignatureApprovalSettings({
           ) : null}
 
           <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-[5px] border border-[#cdd6e1]">
-            <button className={`flex min-h-10 items-center justify-center gap-2 text-[13px] font-bold transition-colors sm:text-[14px] ${mode === "draw" ? "bg-primary text-white" : "bg-white text-on-surface hover:bg-slate-50"}`} onClick={() => setMode("draw")} type="button">
+            <button className={`flex min-h-10 items-center justify-center gap-2 text-[13px] font-bold transition-colors sm:text-[14px] ${mode === "draw" ? "bg-primary text-white" : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"}`} onClick={() => setMode("draw")} type="button">
               <span className="material-symbols-outlined text-[19px]">draw</span>
               เซ็นบนหน้าจอ
             </button>
-            <button className={`flex min-h-10 items-center justify-center gap-2 border-l border-[#cdd6e1] text-[13px] font-bold transition-colors sm:text-[14px] ${mode === "upload" ? "bg-primary text-white" : "bg-white text-on-surface hover:bg-slate-50"}`} onClick={() => { setMode("upload"); fileRef.current?.click(); }} type="button">
+            <button className={`flex min-h-10 items-center justify-center gap-2 border-l border-[#cdd6e1] text-[13px] font-bold transition-colors sm:text-[14px] ${mode === "upload" ? "bg-primary text-white" : "bg-surface-container-lowest text-on-surface hover:bg-surface-container"}`} onClick={() => { setMode("upload"); fileRef.current?.click(); }} type="button">
               <span className="material-symbols-outlined text-[19px]">upload</span>
               อัปโหลดไฟล์
             </button>
@@ -666,12 +666,12 @@ export function SignatureApprovalSettings({
             </div>
 
             {!qrCode ? (
-              <div className="mt-5 rounded-[5px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+              <div className="mt-5 rounded-[5px] border border-[#d8e1ed] bg-surface-container-low p-4">
                 <h3 className="text-[14px] font-bold">เตรียมแอป Authenticator บนโทรศัพท์</h3>
                 <ol className="mt-3 space-y-3 text-[13px] leading-5 text-on-surface-variant">
-                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-bold text-primary ring-1 ring-[#d8e1ed]">1</span><span>ติดตั้ง Google Authenticator, Microsoft Authenticator หรือแอป TOTP มาตรฐาน</span></li>
-                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-bold text-primary ring-1 ring-[#d8e1ed]">2</span><span>กดเริ่มเชื่อมต่อ แล้วสแกน QR Code ที่ระบบสร้างให้</span></li>
-                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-white font-bold text-primary ring-1 ring-[#d8e1ed]">3</span><span>กรอกรหัส 6 หลักจากแอปเพื่อยืนยันการเชื่อมต่อ</span></li>
+                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-container-lowest font-bold text-primary ring-1 ring-[#d8e1ed]">1</span><span>ติดตั้ง Google Authenticator, Microsoft Authenticator หรือแอป TOTP มาตรฐาน</span></li>
+                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-container-lowest font-bold text-primary ring-1 ring-[#d8e1ed]">2</span><span>กดเริ่มเชื่อมต่อ แล้วสแกน QR Code ที่ระบบสร้างให้</span></li>
+                  <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-container-lowest font-bold text-primary ring-1 ring-[#d8e1ed]">3</span><span>กรอกรหัส 6 หลักจากแอปเพื่อยืนยันการเชื่อมต่อ</span></li>
                 </ol>
                 <button className="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] bg-primary px-5 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-60 sm:w-auto" disabled={isMfaPending} onClick={() => handleStartAuthenticator()} type="button">
                   <ScanQrCode aria-hidden="true" size={19} strokeWidth={2} />
@@ -688,7 +688,7 @@ export function SignatureApprovalSettings({
                     บันทึกรูป QR (SVG)
                   </a>
                 </div>
-                <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-[#f8fafc] p-4">
+                <div className="min-w-0 rounded-[6px] border border-[#d8e1ed] bg-surface-container-low p-4">
                   <h3 className="text-[15px] font-bold">เชื่อมต่อแอป Authenticator</h3>
                   <p className="mt-1 text-[12px] leading-5 text-on-surface-variant">บนมือถือเครื่องนี้ให้เปิดแอปโดยตรง หรือใช้ QR Code เมื่อสแกนจากอุปกรณ์อีกเครื่อง</p>
                   {totpUri ? (
@@ -701,7 +701,7 @@ export function SignatureApprovalSettings({
                   <input
                     autoComplete="one-time-code"
                     autoFocus
-                    className="mt-1 min-h-12 w-full max-w-[280px] rounded-[5px] border border-[#cbd5e1] bg-white px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    className="mt-1 min-h-12 w-full max-w-[280px] rounded-[5px] border border-[#cbd5e1] bg-surface-container-lowest px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
                     id="totp-code"
                     inputMode="numeric"
                     maxLength={6}
@@ -714,7 +714,7 @@ export function SignatureApprovalSettings({
                     <div className="mt-3 text-[12px]">
                       <button className="font-bold text-primary hover:underline" onClick={() => setShowSecret((value) => !value)} type="button">{showSecret ? "ซ่อนรหัสตั้งค่า" : "กรอกรหัสตั้งค่าเอง"}</button>
                       {showSecret ? (
-                        <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#d8e1ed] bg-white p-2">
+                        <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#d8e1ed] bg-surface-container-lowest p-2">
                           <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-slate-800" translate="no">{secret}</code>
                           <button aria-label="คัดลอกรหัสตั้งค่า" className="grid size-9 shrink-0 place-items-center rounded-[4px] border border-[#cbd5e1] text-on-surface-variant hover:border-primary hover:text-primary" onClick={handleCopySecret} type="button">
                             {secretCopied ? <BadgeCheck aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}
@@ -744,11 +744,11 @@ export function SignatureApprovalSettings({
               <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3"><dt className="text-on-surface-variant">การยืนยันตัวตน</dt><dd className="flex items-center gap-1.5 font-bold"><ShieldCheck aria-hidden="true" className="text-emerald-600" size={17} /> TOTP 6 หลัก</dd></div>
               <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3"><dt className="text-on-surface-variant">อัปเดตล่าสุด</dt><dd className="text-right font-bold">{updatedAt}</dd></div>
             </dl>
-            <div className="mt-3 flex items-start gap-2 rounded-[5px] bg-[#f8fafc] p-3 text-[12px] leading-5 text-on-surface-variant">
+            <div className="mt-3 flex items-start gap-2 rounded-[5px] bg-surface-container-low p-3 text-[12px] leading-5 text-on-surface-variant">
               <span className="material-symbols-outlined mt-0.5 text-[18px] text-primary">info</span>
               <p>ระบบจะขอรหัส Authenticator เฉพาะเอกสารที่กำหนดนโยบายยืนยันสองชั้น</p>
             </div>
-            <button className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] border border-[#cbd5e1] bg-white px-4 text-[13px] font-bold text-on-surface hover:border-primary hover:text-primary sm:hidden" onClick={() => setStep(1)} type="button">
+            <button className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-[4px] border border-[#cbd5e1] bg-surface-container-lowest px-4 text-[13px] font-bold text-on-surface hover:border-primary hover:text-primary sm:hidden" onClick={() => setStep(1)} type="button">
               <span className="material-symbols-outlined text-[18px]">draw</span>
               เปลี่ยนลายเซ็น
             </button>
@@ -792,7 +792,7 @@ export function SignatureApprovalSettings({
               </div>
             </div>
           </div>
-          <div className="mt-3 space-y-2 rounded-[5px] border border-[#d8e1ed] bg-[#f8fafc] p-3 text-[12px]">
+          <div className="mt-3 space-y-2 rounded-[5px] border border-[#d8e1ed] bg-surface-container-low p-3 text-[12px]">
             {[
               ["ชื่อผู้ลงนามถูกต้อง", initialData.displayName],
               ["ตำแหน่งถูกต้อง", initialData.positionName],
@@ -808,7 +808,7 @@ export function SignatureApprovalSettings({
         </section>
       </div>
 
-      <section className="mt-4 hidden grid-cols-[.55fr_.7fr_1.3fr] divide-x divide-[#d8e1ed] rounded-[6px] border border-[#d8e1ed] bg-[#f8fafc] px-4 py-3 text-[12px] sm:grid">
+      <section className="mt-4 hidden grid-cols-[.55fr_.7fr_1.3fr] divide-x divide-[#d8e1ed] rounded-[6px] border border-[#d8e1ed] bg-surface-container-low px-4 py-3 text-[12px] sm:grid">
         <div className="flex items-center gap-3 pr-4"><span className="material-symbols-outlined">description</span><span><span className="block text-on-surface-variant">เวอร์ชัน</span><strong>{initialData.version ? `${initialData.version}.0.0` : "ยังไม่บันทึก"}</strong></span></div>
         <div className="flex items-center gap-3 px-4"><span className="material-symbols-outlined">schedule</span><span><span className="block text-on-surface-variant">อัปเดตล่าสุด</span><strong>{updatedAt}</strong><span className="block text-on-surface-variant">โดย {initialData.username}</span></span></div>
         <div className="flex items-center gap-3 pl-4"><span className="material-symbols-outlined">lock</span><span><strong className="block">ข้อมูลลายเซ็นของคุณจะถูกเก็บเป็นความลับ</strong><span className="text-on-surface-variant">ใช้เฉพาะในระบบ KRC ERP เท่านั้น</span></span></div>
@@ -821,7 +821,7 @@ export function SignatureApprovalSettings({
         </button>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#d8e1ed] bg-white p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] sm:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#d8e1ed] bg-surface-container-lowest p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] sm:hidden">
         <button className="flex min-h-12 w-full items-center justify-center gap-2 rounded-[5px] bg-primary px-4 text-[15px] font-bold text-white disabled:opacity-60" disabled={primaryPending || primaryDisabled} onClick={handlePrimaryAction} type="button">
           {primaryLabel}<span className="material-symbols-outlined">{step === 3 ? "check" : "arrow_forward"}</span>
         </button>
@@ -836,13 +836,13 @@ export function SignatureApprovalSettings({
             <div className="px-5 py-5">
               {initialData.authenticatorFactors.length > 1 ? (
                 <label className="mb-4 block text-[12px] font-bold" htmlFor="replacement-factor">Authenticator
-                  <select className="mt-2 min-h-11 w-full rounded-[5px] border border-outline-variant bg-white px-3 text-[13px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" id="replacement-factor" onChange={(event) => setReplacementFactorId(event.target.value)} value={replacementFactorId}>
+                  <select className="mt-2 min-h-11 w-full rounded-[5px] border border-outline-variant bg-surface-container-lowest px-3 text-[13px] font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" id="replacement-factor" onChange={(event) => setReplacementFactorId(event.target.value)} value={replacementFactorId}>
                     {initialData.authenticatorFactors.map((factor) => <option key={factor.id} value={factor.id}>{factor.label}</option>)}
                   </select>
                 </label>
               ) : null}
               <label className="block text-[12px] font-bold" htmlFor="replacement-totp-code">รหัส Authenticator 6 หลัก</label>
-              <input autoComplete="one-time-code" autoFocus className="mt-2 min-h-12 w-full rounded-[5px] border border-outline-variant bg-white px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" id="replacement-totp-code" inputMode="numeric" maxLength={6} onChange={(event) => setReplacementCode(normalizeTotpCode(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter" && isTotpCodeComplete(replacementCode) && !isPending) submitSignature(replacementBlob, replacementCode); }} pattern="[0-9]*" placeholder="000000" value={replacementCode} />
+              <input autoComplete="one-time-code" autoFocus className="mt-2 min-h-12 w-full rounded-[5px] border border-outline-variant bg-surface-container-lowest px-4 text-center font-mono text-[22px] font-bold tracking-[0.35em] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" id="replacement-totp-code" inputMode="numeric" maxLength={6} onChange={(event) => setReplacementCode(normalizeTotpCode(event.target.value))} onKeyDown={(event) => { if (event.key === "Enter" && isTotpCodeComplete(replacementCode) && !isPending) submitSignature(replacementBlob, replacementCode); }} pattern="[0-9]*" placeholder="000000" value={replacementCode} />
               <p className="mt-2 text-[11px] leading-4 text-on-surface-variant">ไม่ต้องสแกน QR Code ใหม่ ใช้รหัสที่กำลังแสดงในแอปเดิมได้เลย</p>
             </div>
             <footer className="flex justify-end gap-3 border-t border-outline-variant px-5 py-3">

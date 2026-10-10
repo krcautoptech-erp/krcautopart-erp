@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveCompanySettingsAction } from "@/app/actions/company-settings";
 import { CompanyDocumentHeader } from "@/components/company-document-header";
+import { useDocumentPreviewScale } from "@/components/document-form";
 import { ToggleSwitch } from "@/components/toggle-switch";
 import { useFormDraft } from "@/components/form-draft";
 import { useUnsavedChanges } from "@/components/unsaved-changes";
@@ -107,12 +108,14 @@ export function CompanySettingsForm({
   const formRef = useRef<HTMLFormElement>(null);
   const lightInputRef = useRef<HTMLInputElement>(null);
   const darkInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [profile, setProfile] = useState<CompanyProfile>(initialData.profile);
   const [documentSettings, setDocumentSettings] =
     useState<CompanyDocumentSettings>(initialData.documentSettings);
   const [lightPreview, setLightPreview] = useState<string | null>(null);
   const [darkPreview, setDarkPreview] = useState<string | null>(null);
+  const [documentPreview, setDocumentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -130,10 +133,10 @@ export function CompanySettingsForm({
         logoDarkPath: initialData.profile.logoDarkPath, logoDarkUrl: initialData.profile.logoDarkUrl,
         logoLightPath: initialData.profile.logoLightPath, logoLightUrl: initialData.profile.logoLightUrl,
         updatedAt: initialData.profile.updatedAt });
-      setDocumentSettings({ ...value.documentSettings, headerFieldOrder: normalizeCompanyHeaderFieldOrder(value.documentSettings.headerFieldOrder) });
+      setDocumentSettings({ ...value.documentSettings, documentLogoUrl: initialData.documentSettings.documentLogoUrl, headerFieldOrder: normalizeCompanyHeaderFieldOrder(value.documentSettings.headerFieldOrder) });
     },
   });
-  useUnsavedChanges(`company-settings:${profile.id}`, hasChanges || (canManage && !success && !!(lightPreview || darkPreview)));
+  useUnsavedChanges(`company-settings:${profile.id}`, hasChanges || (canManage && !success && !!(lightPreview || darkPreview || documentPreview)));
   const provinces = useMemo(() => getThaiProvinces(), []);
   const districts = useMemo(
     () => (profile.province ? getThaiDistricts(profile.province) : []),
@@ -153,6 +156,8 @@ export function CompanySettingsForm({
       if (darkPreview) URL.revokeObjectURL(darkPreview);
     };
   }, [darkPreview, lightPreview]);
+
+  useEffect(() => () => { if (documentPreview) URL.revokeObjectURL(documentPreview); }, [documentPreview]);
 
   const updateProfile = <K extends keyof CompanyProfile>(
     key: K,
@@ -222,11 +227,15 @@ export function CompanySettingsForm({
 
   const chooseLogo = (
     file: File | undefined,
-    variant: "dark" | "light",
+    variant: "dark" | "light" | "document",
   ) => {
     if (!file) return;
     setSuccess(null);
     const previewUrl = URL.createObjectURL(file);
+    if (variant === "document") {
+      setDocumentPreview(previewUrl);
+      return;
+    }
     if (variant === "light") {
       if (lightPreview) URL.revokeObjectURL(lightPreview);
       setLightPreview(previewUrl);
@@ -284,7 +293,7 @@ export function CompanySettingsForm({
       taxId: profile.taxId,
       website: profile.website,
     },
-    documentSettings,
+    documentSettings: { ...documentSettings, documentLogoUrl: documentPreview ?? documentSettings.documentLogoUrl ?? initialData.profile.logoLightUrl },
   };
 
   return (
@@ -614,7 +623,7 @@ export function CompanySettingsForm({
 
             <section>
               <h2 className="mb-3 text-[14px] font-bold text-on-surface">
-                ตัวอย่างโลโก้
+                ตัวอย่างโลโก้ระบบ
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 <div className="border border-outline-variant">
@@ -654,8 +663,9 @@ export function CompanySettingsForm({
 
             <section className="space-y-3 border-t border-outline-variant pt-5">
               <h2 className="text-[14px] font-bold text-on-surface">
-                การตั้งค่าโลโก้
+                การตั้งค่าโลโก้ระบบ
               </h2>
+              <p className="text-[12px] text-secondary">ใช้กับ sidebar, ส่วนหัวระบบ, login และฟอร์มต่าง ๆ ทั้งโหมดสว่างและโหมดมืด ไม่เปลี่ยนโลโก้หัวเอกสาร</p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   className="flex h-9 items-center gap-2 rounded-[3px] border border-primary px-4 text-[12px] font-bold text-primary hover:bg-primary/5 disabled:opacity-50"
@@ -818,9 +828,21 @@ export function CompanySettingsForm({
           activeTab === "documents" ? "grid" : "hidden"
         }`}
       >
+          <aside className="order-first min-w-0 space-y-5 px-3 py-5 sm:order-last sm:px-6">
+            <DocumentPreview context={previewDocumentContext} />
+          </aside>
           <div className="min-w-0 space-y-6 px-3 py-5 sm:px-6">
             <section className="space-y-3">
               <SectionHeading number="01" title="รูปแบบหัวเอกสาร" />
+              <div className="space-y-3 rounded-[4px] border border-outline-variant p-3">
+                <h3 className="text-[13px] font-bold">โลโก้หัวเอกสาร</h3>
+                <p className="text-[12px] text-secondary">ใช้เฉพาะหัวกระดาษ พิมพ์ และ PDF แยกจากโลโก้ sidebar, login และฟอร์มในระบบ</p>
+                {!initialData.documentSettings.documentLogoUrl && <p role="status" className="text-[12px] text-primary">ยังไม่เปิดใช้งาน: ต้องติดตั้ง migration แยกโลโก้หัวเอกสารในฐานข้อมูลก่อน</p>}
+                <input accept="image/png,image/jpeg,image/webp" className="hidden" disabled={!canManage} name="logoDocument" onChange={(event) => chooseLogo(event.target.files?.[0], "document")} ref={documentInputRef} type="file" />
+                <button className="inline-flex h-10 items-center gap-2 rounded-[3px] border border-primary px-4 text-[12px] font-bold text-primary disabled:opacity-50" disabled={!canManage || isPending || !initialData.documentSettings.documentLogoUrl} onClick={() => documentInputRef.current?.click()} type="button"><Upload aria-hidden="true" size={16} />เปลี่ยนโลโก้หัวเอกสาร</button>
+                <p className="text-[11px] text-secondary">PNG, JPG หรือ WebP ไม่เกิน 2 MB · แสดงบนกระดาษพื้นขาว</p>
+                {documentPreview && <p className="text-[12px] text-primary">เลือกโลโก้ใหม่แล้ว กดบันทึกการตั้งค่าเพื่อใช้งาน</p>}
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="รูปแบบหัวเอกสาร">
                   <select
@@ -947,11 +969,6 @@ export function CompanySettingsForm({
             </section>
           </div>
 
-          <aside className="min-w-0 space-y-5 px-3 py-5 sm:px-6">
-            <DocumentPreview
-              context={previewDocumentContext}
-            />
-          </aside>
       </div>
 
       <footer className="flex items-center justify-end gap-3 border-t border-outline-variant px-6 py-3">
@@ -979,13 +996,14 @@ function DocumentPreview({
 }: {
   context: CompanyDocumentContext;
 }) {
+  const [previewRef, scale] = useDocumentPreviewScale(1);
   return (
     <section>
       <h2 className="mb-3 text-[14px] font-bold text-on-surface">
         ตัวอย่างหัวเอกสาร
       </h2>
-      <div className="overflow-x-auto border border-outline-variant bg-white p-5">
-        <div className="w-[195mm] max-w-full">
+      <div ref={previewRef} className="overflow-hidden border border-outline-variant bg-white">
+        <div className="mx-auto w-[210mm] p-5" style={{ zoom: scale }}>
           <CompanyDocumentHeader
             context={context}
             priority

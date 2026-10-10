@@ -2,7 +2,9 @@
 
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { calendarPlacement } from "@/lib/calendar-placement";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from "lucide-react";
 import {
   addDays,
@@ -51,6 +53,7 @@ export function DateRangePicker({
 }: DateRangePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const presetsRef = useRef<HTMLDivElement>(null);
   const activePresetRef = useRef<HTMLButtonElement>(null);
   const popoverId = useId();
@@ -104,6 +107,7 @@ export function DateRangePicker({
   }, [today, yesterday]);
 
   const [isOpen, setIsOpen] = useState(false);
+  const [placement, setPlacement] = useState<ReturnType<typeof calendarPlacement> | null>(null);
   const [draftRange, setDraftRange] = useState<DateRangeValue>(value);
   const [tempStart, setTempStart] = useState<string | null>(null);
   const [hoverDate, setHoverDate] = useState<string | null>(null);
@@ -133,6 +137,30 @@ export function DateRangePicker({
 
   const [viewYear, setViewYear] = useState(initialYearMonth.year);
   const [viewMonth, setViewMonth] = useState(initialYearMonth.month);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const reposition = () => {
+      const trigger = triggerRef.current;
+      const popover = popoverRef.current;
+      if (!trigger || !popover) return;
+      const viewport = window.visualViewport;
+      const next = calendarPlacement(trigger.getBoundingClientRect(), popover.offsetWidth, popover.scrollHeight, viewport?.width ?? window.innerWidth, viewport?.height ?? window.innerHeight);
+      setPlacement(previous => previous && previous.left === next.left && previous.top === next.top && previous.maxHeight === next.maxHeight ? previous : next);
+    };
+    reposition();
+    const observer = new ResizeObserver(reposition);
+    if (popoverRef.current) observer.observe(popoverRef.current);
+    document.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    window.visualViewport?.addEventListener("resize", reposition);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      window.visualViewport?.removeEventListener("resize", reposition);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -168,6 +196,7 @@ export function DateRangePicker({
   // Close handlers
   const handleClose = useCallback(() => {
     setIsOpen(false);
+    setPlacement(null);
     setViewMode("days");
     setTempStart(null);
     setHoverDate(null);
@@ -199,7 +228,8 @@ export function DateRangePicker({
     const handlePointerDown = (event: PointerEvent) => {
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current.contains(event.target as Node) &&
+        !popoverRef.current?.contains(event.target as Node)
       ) {
         closeAndRestoreFocus();
       }
@@ -207,6 +237,7 @@ export function DateRangePicker({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.stopPropagation();
         closeAndRestoreFocus();
       }
     };
@@ -455,7 +486,7 @@ export function DateRangePicker({
         </span>
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <>
           <div
             className={styles.backdrop}
@@ -463,8 +494,10 @@ export function DateRangePicker({
             aria-hidden="true"
           />
           <div
+            ref={popoverRef}
             id={popoverId}
             className={styles.popover}
+            style={{ "--calendar-left": `${placement?.left ?? 12}px`, "--calendar-top": `${placement?.top ?? 12}px`, "--calendar-max-height": `${placement?.maxHeight ?? 600}px`, visibility: placement ? undefined : "hidden" } as CSSProperties}
             role="dialog"
             aria-label="เลือกช่วงวันที่"
           >
@@ -767,7 +800,7 @@ export function DateRangePicker({
               </div>
             </div>
           </div>
-        </>
+        </>, document.body
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
 
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Box, CalendarDays, ChevronDown, ChevronUp, Filter, History, Loader2, LockKeyhole, PackageCheck, RefreshCw, Warehouse } from "lucide-react";
 import {
   getCentralInventoryDetailsAction,
@@ -310,23 +310,6 @@ export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY
   const [isPending, startTransition] = useTransition();
   const firstRun = useRef(true);
   const requestId = useRef(0);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const floatingScrollRef = useRef<HTMLDivElement>(null);
-  const syncingScrollRef = useRef(false);
-  const [floatingScroll, setFloatingScroll] = useState({ visible: false, left: 0, width: 0, scrollWidth: 0 });
-
-  const syncFromFloating = useCallback(() => {
-    if (syncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
-    syncingScrollRef.current = true;
-    tableScrollRef.current.scrollLeft = floatingScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => { syncingScrollRef.current = false; });
-  }, []);
-  const syncFromTable = useCallback(() => {
-    if (syncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
-    syncingScrollRef.current = true;
-    floatingScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => { syncingScrollRef.current = false; });
-  }, []);
 
   const load = (nextPage = page) => {
     const id = ++requestId.current;
@@ -343,22 +326,6 @@ export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY
     // Query state below intentionally drives the debounced server request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, typeId, warehouseId, trackingMethod, state, page]);
-  useEffect(() => {
-    const table = tableScrollRef.current;
-    if (!table) return;
-    const update = () => {
-      const rect = table.getBoundingClientRect();
-      const visible = table.scrollWidth > table.clientWidth + 2 && rect.bottom > window.innerHeight && rect.top < window.innerHeight - 60;
-      setFloatingScroll({ visible, left: rect.left, width: rect.width, scrollWidth: table.scrollWidth });
-      if (visible && floatingScrollRef.current) floatingScrollRef.current.scrollLeft = table.scrollLeft;
-    };
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(table);
-    return () => { window.removeEventListener("scroll", update); window.removeEventListener("resize", update); observer.disconnect(); };
-  }, [rows, summary.canViewCost]);
 
   const toggle = (row: CentralStockRow) => {
     const key = `${row.itemId}:${row.warehouseId}`;
@@ -392,7 +359,7 @@ export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY
     <div className={`relative ${isPending ? "opacity-60" : ""}`} aria-busy={isPending}>{isPending && <Loader2 className="absolute right-3 top-3 z-20 animate-spin text-primary" size={18} />}
       <div className="hidden min-w-0 md:block">
         <div className="erp-data-table-frame max-w-full">
-        <div className="erp-data-table-scroll" onScroll={syncFromTable} ref={tableScrollRef}>
+        <div className="erp-data-table-scroll">
         <table className={`erp-data-table !w-full table-fixed text-[12px] [&_th]:!px-1 [&_td]:!px-1 ${summary.canViewCost ? "min-w-[1110px]" : "min-w-[995px]"}`}>
           <colgroup>
             <col className="w-[40px]" />
@@ -447,7 +414,6 @@ export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY
         </table>
         </div>
         </div>
-        {floatingScroll.visible && <div aria-hidden="true" className="fixed bottom-0 z-40 overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 shadow-[0_-4px_12px_rgba(0,0,0,0.15)] backdrop-blur-md" onScroll={syncFromFloating} ref={floatingScrollRef} style={{ left: floatingScroll.left, width: floatingScroll.width, height: 14 }}><div style={{ width: floatingScroll.scrollWidth, height: 1 }} /></div>}
         <Pagination currentPage={page} disabled={isPending} onPageChange={setPage} pageSize={PAGE_SIZE} totalItems={total} />
       </div>
       <div className="border border-outline-variant bg-surface-container-lowest md:hidden">

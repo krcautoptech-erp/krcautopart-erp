@@ -31,8 +31,9 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
   useListScroll();
   const printRoot = useRef<HTMLDivElement>(null);
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useListState<"summary" | "journal">("view", "summary");
+  const [view, setView] = useListState<"summary" | "journal">("view", "summary", ["summary", "journal"]);
   const [data, setData] = useState(initialData);
+  const [loadedView, setLoadedView] = useState<"summary" | "journal">("summary");
   const [printRows, setPrintRows] = useState<(StockSummaryRow | StockJournalRow)[] | null>(null);
   const [card, setCard] = useState<{ summary: StockSummaryRow; rows: StockJournalRow[]; total: number } | null>(null);
   const [startDate, setStartDate] = useListState("startDate", `${today.slice(0, 7)}-01`);
@@ -43,9 +44,9 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
   const [query, setQuery] = useListState("query", "");
   const [applied, setApplied] = useListState<Applied>("applied", { startDate, endDate, warehouseId, itemTypeId, movementKind, search: query });
   const [page, setPage] = useListState("page", 1);
-  const [pageSize, setPageSize] = useListState("pageSize", 20);
-  const summaries = data.rows as StockSummaryRow[];
-  const journal = data.rows as StockJournalRow[];
+  const [pageSize, setPageSize] = useListState("pageSize", 20, [20, 50, 100]);
+  const summaries = (loadedView === view ? data.rows : []) as StockSummaryRow[];
+  const journal = (loadedView === view ? data.rows : []) as StockJournalRow[];
   const load = (nextView: "summary" | "journal", nextPage: number, nextPageSize = pageSize, filters = applied) => {
     setView(nextView); setPage(nextPage); setPageSize(nextPageSize); setApplied(filters); setCard(null);
   };
@@ -58,6 +59,7 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
       if (cancelled) return;
       if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
       setData(result.data);
+      setLoadedView(view);
     });
     return () => { cancelled = true; };
   }, [view, appliedKey, page, pageSize, card]);
@@ -106,7 +108,7 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
       title: `stock-movement-${card ? "card" : view}-${applied.startDate}-${applied.endDate}`,
       paperSize: "A4",
       orientation: "landscape",
-    }).finally(() => setPrintRows(null));
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้")).finally(() => setPrintRows(null));
   }, [applied.endDate, applied.startDate, card, printRows, view]);
 
   const total = card ? card.total : data.total;

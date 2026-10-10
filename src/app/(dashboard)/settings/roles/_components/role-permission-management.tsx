@@ -92,15 +92,6 @@ export function RolePermissionManagement({
   const [searchQuery, setSearchQuery] = useListState("searchQuery", "");
   const [mobileGroupCode, setMobileGroupCode] = useState<string | null>(null);
   const [mobileGroupSnapshot, setMobileGroupSnapshot] = useState<Set<number> | null>(null);
-  const tableScrollRef = useRef<HTMLDivElement>(null);
-  const floatingScrollRef = useRef<HTMLDivElement>(null);
-  const isSyncingScrollRef = useRef(false);
-  const [floatingScroll, setFloatingScroll] = useState({
-    visible: false,
-    left: 0,
-    width: 0,
-    scrollWidth: 0,
-  });
 
   const selectedRole =
     initialData.roles.find((role) => role.id === selectedRoleId) ?? firstRole;
@@ -122,59 +113,6 @@ export function RolePermissionManagement({
 
   useUnsavedChanges("role-permissions", hasChanges);
 
-  useEffect(() => {
-    const table = tableScrollRef.current;
-    if (!table) return;
-
-    const updateFloatingScroll = () => {
-      const rect = table.getBoundingClientRect();
-      const visible =
-        table.scrollWidth > table.clientWidth + 2 &&
-        rect.top < window.innerHeight - 60 &&
-        rect.bottom > window.innerHeight;
-
-      setFloatingScroll({
-        visible,
-        left: rect.left,
-        width: rect.width,
-        scrollWidth: table.scrollWidth,
-      });
-
-      if (visible && floatingScrollRef.current) {
-        floatingScrollRef.current.scrollLeft = table.scrollLeft;
-      }
-    };
-
-    updateFloatingScroll();
-    document.addEventListener("scroll", updateFloatingScroll, true);
-    window.addEventListener("resize", updateFloatingScroll, { passive: true });
-    const resizeObserver = new ResizeObserver(updateFloatingScroll);
-    resizeObserver.observe(table);
-
-    return () => {
-      document.removeEventListener("scroll", updateFloatingScroll, true);
-      window.removeEventListener("resize", updateFloatingScroll);
-      resizeObserver.disconnect();
-    };
-  }, [visibleGroups.length]);
-
-  const syncTableScroll = () => {
-    if (isSyncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
-    floatingScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false;
-    });
-  };
-
-  const syncFloatingScroll = () => {
-    if (isSyncingScrollRef.current || !tableScrollRef.current || !floatingScrollRef.current) return;
-    isSyncingScrollRef.current = true;
-    tableScrollRef.current.scrollLeft = floatingScrollRef.current.scrollLeft;
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false;
-    });
-  };
 
   const handleRoleSelect = (roleId: number) => {
     if (
@@ -493,7 +431,7 @@ export function RolePermissionManagement({
             เลือกสิทธิ์ดำเนินการ ระบบจะเปิดสิทธิ์ “ดู” ของโมดูลนั้นให้อัตโนมัติ เพื่อให้ผู้ใช้เข้าถึงงานที่ได้รับมอบหมายได้
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto" onScroll={syncTableScroll} ref={tableScrollRef}>
+          <div className="min-h-0 flex-1 overflow-auto">
             <table className="erp-data-table w-[856px] min-w-[856px] table-fixed">
               <colgroup>
                 <col className="w-[240px]" />
@@ -554,22 +492,6 @@ export function RolePermissionManagement({
           </div>
         </section>
       </div>
-
-      {floatingScroll.visible ? (
-        <div
-          aria-hidden="true"
-          className="fixed bottom-0 z-40 overflow-x-auto border-t border-outline-variant/80 bg-surface-container/95 shadow-[0_-4px_12px_rgba(0,0,0,0.15)] backdrop-blur-md"
-          onScroll={syncFloatingScroll}
-          ref={floatingScrollRef}
-          style={{
-            left: floatingScroll.left,
-            width: floatingScroll.width,
-            height: 14,
-          }}
-        >
-          <div style={{ width: floatingScroll.scrollWidth, height: 1 }} />
-        </div>
-      ) : null}
 
       {mobileGroup ? (
         <div className="fixed inset-0 z-[70] flex items-end bg-black/35 lg:hidden" role="presentation">

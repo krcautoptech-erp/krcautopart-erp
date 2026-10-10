@@ -37,6 +37,7 @@ export type CompanyBranch = {
 };
 
 export type CompanyDocumentSettings = {
+  documentLogoUrl?: string;
   footerTextEn: string;
   footerTextTh: string;
   headerFieldOrder: CompanyHeaderField[];
@@ -107,6 +108,7 @@ export const DEFAULT_COMPANY_BRANDING: CompanyBranding = {
 };
 
 export const DEFAULT_DOCUMENT_SETTINGS: CompanyDocumentSettings = {
+  documentLogoUrl: DEFAULT_COMPANY_BRANDING.logoLightUrl,
   footerTextEn: "",
   footerTextTh: "เอกสารจากระบบ KRC ERP",
   headerFieldOrder: [...COMPANY_HEADER_FIELDS],
@@ -147,6 +149,11 @@ export function getCompanyAssetUrl(path: string | null | undefined) {
     .join("/");
 
   return `${baseUrl}/storage/v1/object/public/${COMPANY_ASSET_BUCKET}/${encodedPath}`;
+}
+
+export function getDocumentBranding(context: Pick<CompanyDocumentContext, "branding" | "documentSettings">): CompanyBranding {
+  // Older document snapshots keep the logo captured before separate document branding existed.
+  return { ...context.branding, logoLightUrl: context.documentSettings.documentLogoUrl ?? context.branding.logoLightUrl };
 }
 
 const WINDOWS_1252_BYTES = new Map<number, number>([

@@ -124,7 +124,7 @@
 .document-po-form .document-fields-po .vendor,.document-po-form .document-fields-po .delivery,.document-po-form .document-fields-po .tax,.document-po-form .document-fields-po .address{grid-column:auto;grid-row:auto}
 .document-po-form .document-fields-po .document-field{grid-template-columns:120px minmax(0,1fr)}
 .document-po-form .document-po-table{min-width:1300px!important}
-.document-po-form .document-po-table th{background:#f5f7fa!important}
+.document-po-form .document-po-table th{background:var(--surface-container-low-color)!important}
 .document-po-form .document-po-table th{height:48px!important}
 .document-po-form .document-po-table td{height:52px}
 .document-po-form .document-po-delivery-hint{margin:14px 0 8px;color:#667085;font-size:14px}
@@ -136,8 +136,8 @@
 .document-po-form .document-po-bottom .document-totals{padding:0!important}
 .document-po-form .document-po-bottom .document-totals>div{display:grid;grid-template-columns:1fr auto;gap:12px;padding:4px 8px;border:0;background:transparent}
 .document-po-form .document-po-bottom .document-totals>div>:last-child{padding:0;border:0;background:transparent;border-radius:0;text-align:right}
-.document-po-form .document-po-bottom .document-totals>div:last-child{margin-top:4px;background:#f5f7fa;font-weight:700}
-.document-po-form .document-po-bottom .document-totals>div:last-child span,.document-po-form .document-po-bottom .document-totals>div:last-child strong{color:#17202e;font-size:16px}
+.document-po-form .document-po-bottom .document-totals>div:last-child{margin-top:4px;background:var(--surface-container-low-color);font-weight:700}
+.document-po-form .document-po-bottom .document-totals>div:last-child span,.document-po-form .document-po-bottom .document-totals>div:last-child strong{color:var(--on-surface-color);font-size:16px}
 .document-po-form .document-po-note-count{margin-top:6px;color:#667085;font-size:13px}
 .document-po-form .document-form-footer{border-top:0}
 .document-po-form .document-form-footer .summary,.document-po-form .document-form-footer button:disabled:nth-of-type(2),.document-po-form .document-form-footer button:disabled:nth-of-type(3){display:none}

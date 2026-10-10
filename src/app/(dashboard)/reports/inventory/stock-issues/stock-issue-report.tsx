@@ -41,16 +41,17 @@ const longDate = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory"
 export function StockIssueReport({ documentContext, initialData, printedBy, today }: { documentContext: CompanyDocumentContext; initialData: StockIssueReportResult; printedBy: string; today: string }) {
   useListScroll();
   const [pending, startTransition] = useTransition();
-  const [view, setView] = useListState<StockIssueReportView>("view", "document");
+  const [view, setView] = useListState<StockIssueReportView>("view", "document", ["document", "product", "department"]);
   const [data, setData] = useState(initialData);
+  const [loadedView, setLoadedView] = useState<StockIssueReportView>("document");
   const [startDate, setStartDate] = useListState("startDate", `${today.slice(0, 7)}-01`);
   const [endDate, setEndDate] = useListState("endDate", today);
   const [warehouseId, setWarehouseId] = useListState<number | null>("warehouseId", null);
   const [departmentId, setDepartmentId] = useListState<number | null>("departmentId", null);
-  const [status, setStatus] = useListState<StockIssueReportStatus>("status", "all");
+  const [status, setStatus] = useListState<StockIssueReportStatus>("status", "all", ["all", "posted", "cancelled"]);
   const [query, setQuery] = useListState("query", "");
   const [page, setPage] = useListState("page", 1);
-  const [pageSize, setPageSize] = useListState("pageSize", 20);
+  const [pageSize, setPageSize] = useListState("pageSize", 20, [20, 50, 100]);
   const [detailRow, setDetailRow] = useState<StockIssueReportRow | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailError, setDetailError] = useState("");
@@ -78,6 +79,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
       if (cancelled) return;
       if (!result.data) { toast.error(result.error ?? "ไม่สามารถโหลดรายงานได้"); return; }
       setData(result.data);
+      setLoadedView(view);
     });
     return () => { cancelled = true; };
   }, [view, appliedKey, page, pageSize]);
@@ -125,6 +127,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
   }, [applied.endDate, applied.startDate, printMode, printRows, view]);
 
   const exportUrl = stockIssueReportExportUrl({ view, ...applied });
+  const visibleRows = loadedView === view ? data.rows : [];
   const defaultStartDate = `${today.slice(0, 7)}-01`;
   const activeCount = Number(startDate !== defaultStartDate) + Number(endDate !== today) + Number(warehouseId !== null) + Number(departmentId !== null) + Number(status !== "all");
   const clearFilters = () => {
@@ -175,8 +178,8 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
     </div></form>
     </div>
     <div className={styles.summary}><b>{quantity(data.summary.document_count)} เอกสาร</b><i /><b>{quantity(data.summary.item_count)} รายการ</b><i />เบิกจ่าย <strong>{quantity(data.summary.quantity_total)}</strong> หน่วย{data.canViewCost && <><i />มูลค่า <strong>{money(data.summary.amount_total)}</strong> บาท</>}</div>
-    <div className={styles.desktop}><DataTableFrame>{renderTable(data.rows, view, page, pageSize, data, openDetail)}</DataTableFrame></div>
-    <div className={styles.mobile}>{data.rows.map((row) => <button className={styles.mobileRow} key={row.group_id} onClick={() => openDetail(row)} type="button"><div><b>{row.code || row.name}</b>{view === "document" && <StatusBadge tone={row.status === "cancelled" ? "danger" : "success"}>{row.status === "cancelled" ? "ยกเลิก" : "บันทึกแล้ว"}</StatusBadge>}<ChevronRight size={18} /></div>{view !== "department" && <p>{view === "document" ? row.name : row.name}</p>}<small>{mobileMeta(row, view)}</small><strong>{quantity(row.quantity_total)} {row.unit_name ?? "หน่วย"}{data.canViewCost ? ` · ${money(row.amount_total)} บาท` : ""}</strong></button>)}{data.rows.length === 0 && <p className={styles.empty}>ไม่พบข้อมูลตามตัวกรองที่เลือก</p>}</div>
+    <div className={styles.desktop}><DataTableFrame>{renderTable(visibleRows, view, page, pageSize, data, openDetail)}</DataTableFrame></div>
+    <div className={styles.mobile}>{visibleRows.map((row) => <button className={styles.mobileRow} key={row.group_id} onClick={() => openDetail(row)} type="button"><div><b>{row.code || row.name}</b>{view === "document" && <StatusBadge tone={row.status === "cancelled" ? "danger" : "success"}>{row.status === "cancelled" ? "ยกเลิก" : "บันทึกแล้ว"}</StatusBadge>}<ChevronRight size={18} /></div>{view !== "department" && <p>{view === "document" ? row.name : row.name}</p>}<small>{mobileMeta(row, view)}</small><strong>{quantity(row.quantity_total)} {row.unit_name ?? "หน่วย"}{data.canViewCost ? ` · ${money(row.amount_total)} บาท` : ""}</strong></button>)}{visibleRows.length === 0 && <p className={styles.empty}>{loadedView !== view ? "กำลังโหลด..." : "ไม่พบข้อมูลตามตัวกรองที่เลือก"}</p>}</div>
     <footer className={styles.footer}><label>แสดง <select onChange={(event) => { const size = Number(event.target.value); setPageSize(size); load(view, 1, size); }} value={pageSize}>{[20, 50, 100].map((size) => <option key={size}>{size}</option>)}</select> รายการต่อหน้า</label><Pagination currentPage={page} onPageChange={(next) => load(view, next)} pageSize={pageSize} totalItems={data.total} /></footer>
     {detailRow && <DetailDrawer detail={detail} error={detailError} loading={pending && !detail} onClose={closeDetail} row={detailRow} view={view} />}
     {printRows && <PrintReport applied={applied} context={documentContext} data={data} printedBy={printedBy} rootRef={printRoot} rows={printRows} view={view} />}

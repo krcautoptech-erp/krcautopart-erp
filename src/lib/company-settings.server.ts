@@ -6,6 +6,7 @@ import {
   createCompanyBranding,
   DEFAULT_COMPANY_BRANDING,
   DEFAULT_DOCUMENT_SETTINGS,
+  getCompanyAssetUrl,
   normalizeCompanyHeaderFieldOrder,
   type CompanyBranding,
   type CompanyDocumentContext,
@@ -35,6 +36,7 @@ type CompanyDocumentRow = {
         header_field_order: string[] | null;
         header_style: string | null;
         logo_width_mm: number | null;
+        logo_path?: string | null;
         show_address: boolean | null;
         show_email: boolean | null;
         show_phone: boolean | null;
@@ -47,6 +49,7 @@ type CompanyDocumentRow = {
         header_field_order: string[] | null;
         header_style: string | null;
         logo_width_mm: number | null;
+        logo_path?: string | null;
         show_address: boolean | null;
         show_email: boolean | null;
         show_phone: boolean | null;
@@ -167,18 +170,7 @@ async function loadCompanyDocumentContext(
           logo_dark_path,
           dark_logo_mode,
           updated_at,
-          company_document_settings (
-            header_style,
-            logo_width_mm,
-            footer_text_th,
-            footer_text_en,
-            header_field_order,
-            show_tax_id,
-            show_address,
-            show_phone,
-            show_email,
-            show_website
-          )
+          company_document_settings (*)
       `,
     )
     .eq("is_default", true)
@@ -221,6 +213,7 @@ async function loadCompanyDocumentContext(
           headerStyle:
             settings.header_style === "standard" ? "standard" : "compact",
           logoWidthMm: Number(settings.logo_width_mm ?? 34),
+          documentLogoUrl: Object.hasOwn(settings, "logo_path") ? getCompanyAssetUrl(settings.logo_path) ?? DEFAULT_DOCUMENT_SETTINGS.documentLogoUrl : branding.logoLightUrl,
           showAddress: settings.show_address !== false,
           showEmail: settings.show_email !== false,
           showPhone: settings.show_phone !== false,

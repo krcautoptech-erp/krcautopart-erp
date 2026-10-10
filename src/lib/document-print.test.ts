@@ -40,11 +40,9 @@ test("builds document print CSS with exact physical page rules", () => {
   assert.ok(a5Css.includes("size: A5 landscape"));
 });
 
-test("loads every bundled Sarabun weight before opening the print dialog", () => {
-  const source = readFileSync(new URL("./document-print.ts", import.meta.url), "utf8");
-  assert.match(source, /\[400, 500, 600, 700\]\.map/);
-  assert.match(source, /frameDocument\.fonts\.load/);
-  assert.match(source, /รายงานสรุปยอดซื้อ KRC 0123456789/);
+test("declares real bundled Sarabun weights for PDF rendering", () => {
+  const css = buildStandardFontFaceCss();
+  for (const weight of [400, 500, 600, 700]) assert.ok(css.includes(`font-weight: ${weight}`));
 });
 
 test("enforces Printlogic.md typography and fragmentation standards", () => {
@@ -98,7 +96,9 @@ test("routes every document preview through the responsive shared shell", () => 
 
   assert.ok(previewSources.every((source) => source.includes("DocumentPreviewShell")));
   assert.ok(previewSources.every((source) => !/zoom:\s*0\./.test(source)));
-  assert.match(shellSource, /pointerType !== "touch"/);
+  assert.ok(previewSources.every((source) => source.includes("onPrint=")));
+  assert.ok(previewSources.every((source) => source.includes("onExportPdf=")));
+  assert.doesNotMatch(shellSource, /<iframe/);
   assert.match(shellSource, /window\.addEventListener\("resize", fitToPage\)/);
   assert.match(shellSource, /<PdfExportIcon size=\{27\}/);
   assert.match(shellSource, /<PdfExportIcon size=\{25\}/);
@@ -195,7 +195,7 @@ test("server-pdf renders true PDF buffer using available headless browser", asyn
   const browserPath = findBrowserExecutable();
   assert.ok(browserPath, "Headless browser executable must be found");
 
-  const pdfBuffer = await renderHtmlToPdfBuffer("<html><body><h1>Test PDF</h1></body></html>", {
+  const pdfBuffer = await renderHtmlToPdfBuffer(`<html><head><style>${buildStandardFontFaceCss()}</style></head><body style="font-family:Sarabun"><h1>ทดสอบ PDF 0123456789</h1></body></html>`, {
     paperSize: "A4",
     orientation: "portrait",
   });
@@ -203,4 +203,8 @@ test("server-pdf renders true PDF buffer using available headless browser", asyn
   assert.ok(pdfBuffer.length > 1000);
   // PDF magic number header: %PDF-
   assert.equal(pdfBuffer.subarray(0, 4).toString(), "%PDF");
+  const structure = pdfBuffer.toString("latin1");
+  assert.match(structure, /\/FontFile2/);
+  assert.match(structure, /\/ToUnicode/);
+  assert.match(structure, /\/MediaBox\s*\[0 0 595/);
 });

@@ -1,4 +1,5 @@
 "use client";
+import { CompanyFormLogo } from "@/components/company-logo";
 
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
 
@@ -31,7 +32,7 @@ import { useFormDraft } from "@/components/form-draft";
 import { useUnsavedChanges, useUnsavedChangesContext } from "@/components/unsaved-changes";
 
 const control =
-  "h-9 w-full rounded-[4px] border border-[#d8dde3] bg-white px-2.5 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary/15 disabled:bg-white disabled:text-on-surface disabled:opacity-100";
+  "h-9 w-full rounded-[4px] border border-[#d8dde3] bg-surface-container-lowest px-2.5 text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary focus:ring-1 focus:ring-primary/15 disabled:bg-surface-container-lowest disabled:text-on-surface disabled:opacity-100";
 const sectionBorder = "border-[#d8dde3]";
 const fieldSections: { id: string; title: string; keys: ItemFormFieldKey[] }[] =
   [
@@ -152,7 +153,7 @@ function Section({
   title: string;
 }) {
   return (
-    <section className={`overflow-hidden rounded-[5px] border ${sectionBorder} bg-white`}>
+    <section className={`overflow-hidden rounded-[5px] border ${sectionBorder} bg-surface-container-lowest`}>
       <button
         aria-expanded={open}
         className={`flex h-[44px] w-full items-center gap-2 border-b ${sectionBorder} px-3 text-left`}
@@ -478,7 +479,7 @@ function ItemFormEditor({
             onChange={(e) => update(numberValue(e.target.value))}
           />
           {suffix ? (
-            <span className="grid h-9 place-items-center rounded-r-[3px] border border-l-0 border-[#d8dde3] bg-white px-2.5 text-[11px]">
+            <span className="grid h-9 place-items-center rounded-r-[3px] border border-l-0 border-[#d8dde3] bg-surface-container-lowest px-2.5 text-[11px]">
               {suffix}
             </span>
           ) : null}
@@ -564,7 +565,7 @@ function ItemFormEditor({
         return (
           <Field key={key} label="คำอธิบายเพิ่มเติม" required={req}>
             <textarea
-              className="min-h-[76px] w-full rounded-[4px] border border-[#d8dde3] bg-white p-2.5 text-[13px] outline-none focus:border-primary focus:ring-1 focus:ring-primary/15"
+              className="min-h-[76px] w-full rounded-[4px] border border-[#d8dde3] bg-surface-container-lowest p-2.5 text-[13px] outline-none focus:border-primary focus:ring-1 focus:ring-primary/15"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
             />
@@ -656,7 +657,7 @@ function ItemFormEditor({
         return (
           <Field key={key} label="รูปสินค้า" required={req}>
             {form.primaryImage ? (
-              <div className="flex items-center gap-3 rounded-[4px] border border-[#d8dde3] bg-white p-2.5">
+              <div className="flex items-center gap-3 rounded-[4px] border border-[#d8dde3] bg-surface-container-lowest p-2.5">
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded border border-[#d8dde3] bg-surface-container-low">
                   <img
                     alt="รูปสินค้า"
@@ -686,7 +687,7 @@ function ItemFormEditor({
                 </div>
               </div>
             ) : (
-              <label className="flex h-[76px] cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-dashed border-[#d8dde3] bg-white text-[12px] transition-colors hover:border-primary/60 hover:text-primary">
+              <label className="flex h-[76px] cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-dashed border-[#d8dde3] bg-surface-container-lowest text-[12px] transition-colors hover:border-primary/60 hover:text-primary">
                 <ImageIcon size={18} />
                 คลิกเพื่อเลือกรูปสินค้า
                 <input
@@ -702,7 +703,7 @@ function ItemFormEditor({
       case "attachments":
         return (
           <Field key={key} label="เอกสารแนบ" required={req}>
-            <label className="flex h-[76px] cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-dashed border-[#d8dde3] bg-white text-[12px]">
+            <label className="flex h-[76px] cursor-pointer items-center justify-center gap-2 rounded-[4px] border border-dashed border-[#d8dde3] bg-surface-container-lowest text-[12px]">
               <FileText size={18} />
               {form.attachmentNames.length
                 ? form.attachmentNames.join(", ")
@@ -732,13 +733,11 @@ function ItemFormEditor({
     >
       <div
         ref={editorRef}
-        className="mobile-form-frame flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-[7px] sm:border sm:border-[#d8dde3]"
+        className="mobile-form-frame flex h-full w-full flex-col overflow-hidden bg-surface-container-lowest shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-[7px] sm:border sm:border-[#d8dde3]"
         style={{ maxWidth: 1120 }}
       >
         <header className="flex h-[52px] shrink-0 items-center border-b border-[#d8dde3] px-4">
-          <strong className="text-[17px] text-primary">
-            KRC <span className="text-on-surface">ERP</span>
-          </strong>
+          <CompanyFormLogo />
           <h2 className="flex-1 text-center text-[18px] font-bold">
             {isEdit ? "แก้ไขรายการสินค้า" : "เพิ่มรายการสินค้า"}
           </h2>
@@ -753,7 +752,7 @@ function ItemFormEditor({
         </header>
         {draftPrompt}
         <p className="px-4 pt-2 text-xs text-secondary">ฉบับร่างไม่เก็บรูปและเอกสารที่แนบ หากกู้คืนกรุณาเลือกไฟล์ใหม่อีกครั้ง</p>
-        <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto bg-white p-2 sm:p-3">
+        <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto bg-surface-container-lowest p-2 sm:p-3">
           <div className="mb-2.5 flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="w-full sm:w-[320px]">
               <select
@@ -896,7 +895,7 @@ function ItemFormEditor({
             </p>
           ) : null}
         </div>
-        <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#d8dde3] bg-white px-3 py-2">
+        <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[#d8dde3] bg-surface-container-lowest px-3 py-2">
           <div className="flex w-full items-center gap-2 text-[11px] sm:w-auto sm:text-[12px]">
             <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-600 text-white">
               <Check size={13} />

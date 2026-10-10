@@ -61,6 +61,10 @@ export function inlineLocalAssets(html: string): string {
     "/fonts/NotoSansThai-Bold.ttf": "fonts/NotoSansThai-Bold.ttf",
     "/fonts/Inter-VariableFont_opsz,wght.ttf": "fonts/Inter-VariableFont_opsz,wght.ttf",
     "/fonts/Inter-Italic-VariableFont_opsz,wght.ttf": "fonts/Inter-Italic-VariableFont_opsz,wght.ttf",
+    ...Object.fromEntries(["Light", "Regular", "Medium", "SemiBold", "Bold"].map((weight) => {
+      const font = `fonts/static/Inter_18pt-${weight}.ttf`;
+      return [`/${font}`, font];
+    })),
   };
 
   for (const [urlPath, relPath] of Object.entries(fontMap)) {
@@ -102,7 +106,9 @@ export function inlineLocalAssets(html: string): string {
 
     if (targetPath.startsWith("/")) {
       const localFile = path.join(publicDir, targetPath.replace(/^\//, ""));
-      if (fs.existsSync(localFile)) {
+      const relative = path.relative(publicDir, localFile);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) return match;
+      if (fs.existsSync(localFile) && fs.statSync(localFile).isFile()) {
         const ext = path.extname(localFile).toLowerCase().replace(".", "");
         const mime =
           ext === "svg"
@@ -177,6 +183,7 @@ export async function renderHtmlToPdfBuffer(
 
   try {
     const page = await browser.newPage();
+    await page.setJavaScriptEnabled(false);
     await page.setRequestInterception(true);
     page.on("request", (request) => {
       const requestUrl = request.url();

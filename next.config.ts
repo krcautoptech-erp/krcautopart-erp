@@ -2,6 +2,13 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/documents/pdf": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+      "./public/fonts/**/*.ttf",
+      "./public/logo/**",
+    ],
+  },
   images: {
     remotePatterns: [
       {

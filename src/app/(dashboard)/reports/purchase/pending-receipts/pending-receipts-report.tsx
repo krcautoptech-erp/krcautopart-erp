@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "@/components/toast";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import Link from "next/link";
@@ -91,7 +93,7 @@ export function PendingReceiptsReport({
       paperSize: "A4",
       orientation: "landscape",
       styles: [`.pending-receipts-print-root{display:block!important;position:relative!important;--document-footer-bottom:3mm;--document-page-padding-inline:10mm;width:297mm!important;min-height:210mm!important;margin:0!important;padding:8mm 10mm 12mm!important;background:#fff!important}`],
-    }).finally(() => setIsPrinting(false));
+    }).catch((error: unknown) => toast.error(error instanceof Error ? error.message : "ไม่สามารถสร้าง PDF ได้")).finally(() => setIsPrinting(false));
   }, [isPrinting, todayIso]);
 
   const exportExcel = () => {

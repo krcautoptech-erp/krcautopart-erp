@@ -168,6 +168,7 @@ export type Database = {
       }
       company_document_settings: {
         Row: {
+          logo_path: string | null
           company_id: string
           created_at: string
           footer_text_en: string | null
@@ -184,6 +185,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          logo_path?: string | null
           company_id: string
           created_at?: string
           footer_text_en?: string | null
@@ -200,6 +202,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          logo_path?: string | null
           company_id?: string
           created_at?: string
           footer_text_en?: string | null
