@@ -136,7 +136,7 @@ export function AppShell({
       {/* SideNavBar (Fixed Left) */}
       <aside className={`w-[208px] h-screen fixed left-0 top-0 bg-surface-container-lowest dark:bg-surface-container-lowest border-r border-outline-variant flex flex-col px-2 py-4 z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="mb-5 flex w-full justify-center">
-          <CompanyLogo branding={branding} priority size="sidebar" />
+          <CompanyLogo branding={branding} className="max-w-[96px]" priority size="sidebar" />
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1">

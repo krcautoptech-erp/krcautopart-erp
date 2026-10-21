@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, Download, FileSpreadsheet, History, Paperclip, Settings2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, History, Info, Settings2, Upload, X } from "lucide-react";
 import { DataTable, DataTableEmpty, DataTableFrame } from "@/components/data-table";
 import { ListFilterButton, ListFilterSelect, ListFilterToolbar, ListSearchField, MobileListFilters } from "@/components/list-filters";
 import { Pagination } from "@/components/pagination";
@@ -10,6 +10,7 @@ import { RowActionMenu } from "@/components/row-action-menu";
 import { useHasPermission } from "@/components/permission-context";
 import { StatusBadge } from "@/components/status-badge";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
+import { attachTableTouchScroll } from "@/lib/table-touch-scroll";
 import { scheduleTotal, type DeliverySchedule, type ScheduleArchive } from "@/lib/delivery-schedules";
 import styles from "./schedule-workspace.module.css";
 
@@ -56,6 +57,28 @@ function ImportDialog({ customers, onClose, onSaved }: { customers: Customer[]; 
   </dialog>;
 }
 
+function FileDetailsDialog({ archive, payload, onClose }: { archive: ScheduleArchive; payload: DeliverySchedule | null; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useBodyScrollLock(true);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="schedule-file-details-title" onCancel={onClose}>
+    <header><h2 id="schedule-file-details-title">รายละเอียดไฟล์แผนส่งมอบ</h2><button autoFocus aria-label="ปิดรายละเอียดไฟล์" type="button" onClick={onClose}><X size={21} /></button></header>
+    <div className={styles.dialogBody}>
+      <dl className={styles.fileDetails}>
+        <div><dt>ไฟล์ต้นฉบับ</dt><dd>{archive.filename}</dd></div>
+        <div><dt>ลูกค้า</dt><dd>{archive.customer_name}</dd></div>
+        <div><dt>ผู้ส่งมอบ</dt><dd>{payload?.supplierName || "–"} ({archive.supplier_code})</dd></div>
+        <div><dt>ช่วงเดือน / Revision</dt><dd>{month(archive.period)} · Rev.{archive.revision}</dd></div>
+        <div><dt>จำนวน / ขนาดไฟล์</dt><dd>{number(archive.row_count)} รายการ · {number(Math.ceil(archive.file_size / 1024))} KB</dd></div>
+        <div><dt>อัปโหลดโดย</dt><dd>{archive.imported_by_name}</dd></div>
+        <div><dt>วันที่นำเข้า</dt><dd>{imported(archive.created_at)}</dd></div>
+      </dl>
+      <p>เก็บเพื่อดูย้อนหลัง ไม่สร้างรายการขายหรือเคลื่อนไหวสต็อก</p>
+    </div>
+    <footer><ListFilterButton onClick={onClose}>ปิด</ListFilterButton></footer>
+  </dialog>;
+}
+
 export function ScheduleWorkspace({ archives, initialPayload, initialError, customers }: {
   archives: ScheduleArchive[]; initialPayload: DeliverySchedule | null; initialError: string | null; customers: Customer[];
 }) {
@@ -81,7 +104,10 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const [expanded, setExpanded] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsFocus = useRef<HTMLElement | null>(null);
   const fileTabRef = useRef<HTMLButtonElement>(null);
+  const matrixRef = useRef<HTMLDivElement>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
   const mobile = useSyncExternalStore(subscribeMobile, () => window.matchMedia("(max-width: 767px)").matches, () => false);
   const pageSize = mobile ? 16 : 17;
@@ -102,6 +128,8 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const chooseMode = (value: string) => { setMode(value); try { localStorage.setItem("krc:delivery-schedule-view", value); } catch { /* Preference is optional. */ } };
   const openImport = () => { lastFocus.current = document.activeElement as HTMLElement; setImportOpen(true); };
   const closeImport = () => { setImportOpen(false); lastFocus.current?.focus(); };
+  const openDetails = () => { detailsFocus.current = document.activeElement as HTMLElement; setDetailsOpen(true); };
+  const closeDetails = () => { setDetailsOpen(false); detailsFocus.current?.focus(); };
   const download = async (archive = selected) => {
     if (!archive || busy) return;
     setBusy(true);
@@ -118,7 +146,12 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const dates = payload?.dates ?? [];
   const forecastMonths = payload?.forecastMonths ?? [];
   const extraCols = pack ? 4 : 0;
-  const totalCols = 3 + extraCols + dates.length + (forecast ? forecastMonths.length : 0);
+  const totalCols = 3 + extraCols + Math.max(1, dates.length) + (forecast ? forecastMonths.length : 0);
+  useEffect(() => {
+    if (!mobile || tab !== "table" || mode !== "table" || !payload) return;
+    const scroller = matrixRef.current?.querySelector<HTMLElement>(".erp-data-table-scroll");
+    if (scroller) return attachTableTouchScroll(scroller);
+  }, [mobile, tab, mode, payload, safePage, search, section]);
   const monthSelect = (className = "") => <ListFilterSelect label="เดือนแผนส่งมอบ" className={`${styles.compactSelect} ${className}`} value={selected?.period ?? ""} disabled={!archives.length} onChange={(value) => {
     const next = archives.find((a) => a.period === value && a.customer_id === selected?.customer_id) ?? archives.find((a) => a.period === value);
     if (next) choose(next.id);
@@ -136,18 +169,11 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   return <section className={styles.workspace} aria-label="แผนส่งมอบลูกค้า">
     <div className={styles.desktopHeading}>
       <div><p className={styles.breadcrumb}>หน้าแรก <ChevronRight size={12} /> ข้อมูลแผนส่งมอบ <ChevronRight size={12} /> แผนส่งมอบลูกค้า</p><h1>แผนส่งมอบลูกค้า</h1></div>
-      <div className={styles.actions}>{canImport && <ListFilterButton tone="primary" className={styles.primary} icon={<Upload size={17} />} onClick={openImport}>นำเข้าไฟล์</ListFilterButton>}{canDownload && <ListFilterButton icon={<Download size={17} />} disabled={!selected || busy} onClick={() => void download()}>ดาวน์โหลดต้นฉบับ</ListFilterButton>}</div>
+      <div className={styles.actions}><ListFilterButton icon={<Info size={17} />} disabled={!selected} onClick={openDetails}>รายละเอียดไฟล์</ListFilterButton>{canImport && <ListFilterButton tone="primary" className={styles.primary} icon={<Upload size={17} />} onClick={openImport}>นำเข้าไฟล์</ListFilterButton>}{canDownload && <ListFilterButton icon={<Download size={17} />} disabled={!selected || busy} onClick={() => void download()}>ดาวน์โหลดต้นฉบับ</ListFilterButton>}</div>
     </div>
-    <div className={styles.metadata}>
-      <div className={styles.filename}><small>ไฟล์ต้นฉบับ</small><span title={selected?.filename}><FileSpreadsheet size={19} className={styles.red} />{selected?.filename ?? "ยังไม่มีไฟล์แผนส่งมอบ"}</span></div>
-      <div><small>ลูกค้า</small><span title={selected?.customer_name}>{selected?.customer_name ?? "–"}</span></div>
-      <div><small>รหัสผู้ส่งมอบ (KRC)</small><span>{selected?.supplier_code ?? "–"}</span></div>
-      <div><small>ช่วงเดือน</small><span>{selected ? month(selected.period) : "–"}</span></div>
-      <div><small>Revision</small>{revisionSelect()}</div>
-      <div><small>อัปโหลดโดย</small><span>{selected?.imported_by_name ?? "–"}</span><small>{selected ? imported(selected.created_at) : ""}</small></div>
-    </div>
-    <div className={styles.mobileContext}>{monthSelect()}{revisionSelect()}<button aria-label="ดาวน์โหลดไฟล์ต้นฉบับ" title="ไฟล์ต้นฉบับ" disabled={!selected || !canDownload || busy} onClick={() => void download()}><Paperclip size={22} /></button><button aria-label="ไฟล์และประวัติ" onClick={showFiles}><History size={22} /></button><RowActionMenu contextId="schedule-mobile" actions={[
+    <div className={styles.mobileContext}>{monthSelect()}{revisionSelect()}<button aria-label="รายละเอียดไฟล์" title="รายละเอียดไฟล์" disabled={!selected} onClick={openDetails}><Info size={21} /></button><button aria-label="ไฟล์และประวัติ" onClick={showFiles}><History size={22} /></button><RowActionMenu contextId="schedule-mobile" actions={[
       ...(canImport ? [{ icon: <Upload size={16} />, label: "นำเข้าไฟล์", onSelect: openImport }] : []),
+      ...(canDownload && selected ? [{ icon: <Download size={16} />, label: "ดาวน์โหลดต้นฉบับ", onSelect: () => void download(), disabled: busy }] : []),
       { icon: <History size={16} />, label: "ไฟล์และประวัติ", onSelect: showFiles },
     ]} /></div>
     <div className={styles.tabs}><button aria-pressed={tab === "table"} onClick={() => setTab("table")}>ตารางส่งมอบ</button><button ref={fileTabRef} aria-pressed={tab === "files"} onClick={() => setTab("files")}>ไฟล์และประวัติ ({archives.length})</button></div>
@@ -160,22 +186,26 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
       </tbody></DataTable></DataTableFrame>
     </> : <>
       <ListFilterToolbar className={styles.desktopFilters}>
-        {searchField}<div className={styles.filterField}><span>เดือน</span>{monthSelect()}</div><div className={styles.filterField}><span>ลูกค้า</span>{customerSelect()}</div>
+        {searchField}<div className={styles.filterField}><span>เดือน</span>{monthSelect()}</div><div className={styles.filterField}><span>ลูกค้า</span>{customerSelect()}</div><div className={styles.filterField}><span>Revision</span>{revisionSelect()}</div>
         <div className={styles.columnPicker}><ListFilterButton aria-expanded={columns} icon={<Settings2 size={16} />} onClick={() => setColumns(!columns)}>เลือกคอลัมน์</ListFilterButton>{columns && <div>
           <label className={styles.check}><input type="checkbox" checked={pack} onChange={(e) => setPack(e.target.checked)} />หน่วย / ถุง / กล่อง / STD/JOB</label>
           <ListFilterSelect label="กลุ่มข้อมูล" value={section} onChange={(value) => { setSection(value); setPage(1); }}><option value="parts">ชิ้นส่วน</option><option value="cu">CU — รับเข้า / ส่งกลับ</option></ListFilterSelect>
         </div>}</div>
-        <label className={styles.check}><input type="checkbox" checked={forecast} onChange={(e) => setForecast(e.target.checked)} />แสดง Forecast{forecastMonths.length ? ` (${forecastMonths.map((m) => month(m, true)).join(" / ")})` : ""}</label>
+        <label className={styles.check} title={forecastMonths.map((m) => month(m, true)).join(" / ")}><input type="checkbox" checked={forecast} onChange={(e) => setForecast(e.target.checked)} />แสดง Forecast</label>
       </ListFilterToolbar>
       <div className={styles.mobileToolbar}><MobileListFilters search={searchField} onClear={() => { setSearch(""); setSection("parts"); setForecast(false); setPage(1); }} activeCount={Number(section !== "parts") + Number(forecast)}>{filterFields}</MobileListFilters><div className={styles.mode}><button aria-pressed={mode === "table"} onClick={() => chooseMode("table")}>ตาราง</button><button aria-pressed={mode === "list"} onClick={() => chooseMode("list")}>รายการ</button></div></div>
       {section === "cu" && <p className={styles.notice}>CU — แสดงของรับเข้าและส่งกลับตามต้นฉบับ แยกจากยอดส่งมอบชิ้นส่วน</p>}
       {!payload && selected && !error ? <p role="status" className={styles.loading}>กำลังโหลดข้อมูล…</p> : <>
-        <div className={`${styles.matrixWrap} ${mode === "list" ? styles.mobileHidden : ""}`}>
-          <DataTableFrame><DataTable className={`${styles.matrix} ${forecast ? styles.withForecast : ""}`} style={{ "--desktop-width": `${(pack ? 622 : 366) + dates.length * 44 + (forecast ? forecastMonths.length * 88 : 0)}px`, "--mobile-width": `${228 + dates.length * 40 + (forecast ? forecastMonths.length * 88 : 0)}px` } as React.CSSProperties}>
-            <colgroup><col className={styles.indexCol} /><col className={styles.identityCol} />{pack && <><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /></>}{dates.map((d) => <col className={styles.dayCol} key={d} />)}<col className={styles.totalCol} />{forecast && forecastMonths.map((m) => <col className={styles.forecastCol} key={m} />)}</colgroup>
-            <thead><tr className={styles.monthHeader}><th rowSpan={2} className={styles.index}>ลำดับ</th><th rowSpan={2} className={styles.identity}>Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>{pack && <><th rowSpan={2} className={styles.pack}>หน่วย</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อถุง</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อกล่อง</th><th rowSpan={2} className={styles.pack}>STD/JOB</th></>}<th colSpan={Math.max(1, dates.length)} className={styles.monthTitle}>{selected ? `${month(selected.period)} (จำนวนส่งมอบรายวัน)` : "กำหนดส่งรายวัน"}</th><th rowSpan={2} className={styles.total}>รวม<br />{selected ? `(${month(selected.period, true)})` : "เดือน"}</th>{forecast && <th colSpan={forecastMonths.length} className={styles.forecastTitle}>Forecast</th>}</tr>
+        <div ref={matrixRef} className={`${styles.matrixWrap} ${!dates.length ? styles.emptyMatrixWrap : ""} ${mode === "list" ? styles.mobileHidden : ""}`}>
+          <DataTableFrame><DataTable className={`${styles.matrix} ${!dates.length ? styles.emptyMatrix : ""} ${forecast ? styles.withForecast : ""}`} style={{ "--desktop-width": `${(pack ? 622 : 366) + dates.length * 44 + (forecast ? forecastMonths.length * 88 : 0)}px`, "--mobile-width": `${228 + dates.length * 40 + (forecast ? forecastMonths.length * 88 : 0)}px` } as React.CSSProperties}>
+            <colgroup><col className={styles.indexCol} /><col className={styles.identityCol} />{pack && <><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /></>}{dates.length ? dates.map((d) => <col className={styles.dayCol} key={d} />) : <col className={styles.emptyDateCol} />}<col className={styles.totalCol} />{forecast && forecastMonths.map((m) => <col className={styles.forecastCol} key={m} />)}</colgroup>
+            <thead>{dates.length ? <><tr className={styles.monthHeader}><th rowSpan={2} className={styles.index}>ลำดับ</th><th rowSpan={2} className={styles.identity}>Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>{pack && <><th rowSpan={2} className={styles.pack}>หน่วย</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อถุง</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อกล่อง</th><th rowSpan={2} className={styles.pack}>STD/JOB</th></>}<th colSpan={Math.max(1, dates.length)} className={styles.monthTitle}>{selected ? `${month(selected.period)} (จำนวนส่งมอบรายวัน)` : "กำหนดส่งรายวัน"}</th><th rowSpan={2} className={styles.total}>รวม<br />{selected ? `(${month(selected.period, true)})` : "เดือน"}</th>{forecast && <th colSpan={forecastMonths.length} className={styles.forecastTitle}>Forecast</th>}</tr>
               <tr>{dates.map((d) => <th key={d} className={`${styles.date} ${date(d).getUTCDay() === 0 ? styles.sunday : ""} ${!d.startsWith(payload?.period ?? "") ? styles.outside : ""}`} title={day(d)}>{d.slice(8)}<small>{weekdays[date(d).getUTCDay()]}</small></th>)}{forecast && forecastMonths.map((m) => <th className={styles.forecastCell} key={m}>{month(m, true)}</th>)}</tr>
-            </thead>
+            </> : <tr>
+              <th className={styles.index} scope="col">ลำดับ</th><th className={styles.identity} scope="col">Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>
+              {pack && <><th className={styles.pack} scope="col">หน่วย</th><th className={styles.pack} scope="col">จำนวน<br />ต่อถุง</th><th className={styles.pack} scope="col">จำนวน<br />ต่อกล่อง</th><th className={styles.pack} scope="col">STD/JOB</th></>}
+              <th className={styles.emptyDaily} scope="col">กำหนดส่งรายวัน</th><th className={styles.total} scope="col">รวมเดือน</th>
+            </tr>}</thead>
             <tbody>{visible.map((r, i) => <tr key={r.sourceRow} aria-selected={highlight === r.sourceRow} onClick={() => setHighlight(r.sourceRow)}><td className={styles.index}>{(safePage - 1) * pageSize + i + 1}</td><td className={styles.identity}><button className={styles.identityButton} onClick={() => { setHighlight(r.sourceRow); setExpanded(r.sourceRow); chooseMode("list"); }}><span className={styles.desktopPart}>{r.name} / </span>{r.partNumber}<small className={styles.mobileName}>{r.name}</small><small className={styles.erp}>{r.erpCode}{r.direction ? ` · ${r.direction}` : ""}</small></button></td>{pack && <><td className={styles.pack}>{r.unit}</td><td className={styles.pack}>{number(r.bag)}</td><td className={styles.pack}>{number(r.box)}</td><td className={styles.pack}>{number(r.job)}</td></>}{dates.map((d) => <td className={`${styles.date} ${date(d).getUTCDay() === 0 ? styles.sunday : ""} ${!d.startsWith(payload?.period ?? "") ? styles.outside : ""}`} key={d}>{number(r.deliveries[d])}</td>)}<td className={styles.total}>{number(scheduleTotal(r, selected?.period ?? ""))}</td>{forecast && forecastMonths.map((m) => <td className={styles.forecastCell} key={m}>{number(r.forecasts[m])}</td>)}</tr>)}
               {!visible.length && <DataTableEmpty colSpan={totalCols}>{archives.length ? "ไม่พบรายการที่ค้นหา" : "ยังไม่มีแผนส่งมอบ — นำเข้าไฟล์เพื่อเก็บประวัติ"}</DataTableEmpty>}
             </tbody>
@@ -197,5 +227,6 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
       <div className={styles.tableFooter}><div className={styles.footerNote}><p>ข้อมูลจากไฟล์แผนส่งมอบ ไม่ใช่ยอดขายจริง</p>{payload?.warnings.length ? <details className={styles.warnings}><summary>ข้อสังเกตจากไฟล์ ({payload.warnings.length})</summary><ul>{payload.warnings.map((w) => <li key={w}>{w}</li>)}</ul></details> : null}</div><Pagination currentPage={safePage} onPageChange={setPage} pageSize={pageSize} totalItems={rows.length} /></div>
     </>}
     {importOpen && <ImportDialog customers={customers} onClose={closeImport} onSaved={(id) => { closeImport(); choose(id); router.refresh(); }} />}
+    {detailsOpen && selected && <FileDetailsDialog archive={selected} payload={payload} onClose={closeDetails} />}
   </section>;
 }

@@ -137,7 +137,8 @@ export async function parseDeliverySchedule(bytes: Uint8Array): Promise<Delivery
     rows.push(result);
   }
   const revision = quantity(sheet.getCell("AO4").value, "AO4");
-  const supplierCode = text(sheet.getCell("I4").value);
+  const supplierCode = text(sheet.getCell("I4").value) || text(sheet.getCell("E4").value).match(/^SUPPLIER\s+CODE\s*:\s*(\S+)\s*$/i)?.[1] || "";
+  const supplierName = text(sheet.getCell("I3").value) || text(sheet.getCell("E3").value).match(/^SUPPLIER\s+NAME\s*:\s*(.+)$/i)?.[1]?.trim() || "";
   if (!rows.length || revision === null || !Number.isInteger(revision) || !supplierCode) throw new Error("ข้อมูลรายการ รหัสผู้ส่งมอบ หรือ Revision ในไฟล์ไม่ครบ");
-  return { period, revision, supplierCode, supplierName: text(sheet.getCell("I3").value), sheetName: sheet.name, dates, forecastMonths, rows, warnings: [...warnings] };
+  return { period, revision, supplierCode, supplierName, sheetName: sheet.name, dates, forecastMonths, rows, warnings: [...warnings] };
 }

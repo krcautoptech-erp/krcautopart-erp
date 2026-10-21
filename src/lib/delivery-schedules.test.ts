@@ -26,6 +26,21 @@ test("totals exclude other months and preserve zero vs missing", () => {
   assert.equal(scheduleTotal({ deliveries: { "2026-04-01": 0, "2026-04-02": 10, "2026-05-01": 99 } }, "2026-04"), 10);
 });
 
+test("reads inline supplier metadata used by the October revision", async () => {
+  const bytes = await readFile(new URL("../../docs/KRCA001_October 2026 Rev.5.xlsx", import.meta.url));
+  const plan = await parseDeliverySchedule(bytes);
+  assert.equal(plan.supplierCode, "KRCA001");
+  assert.equal(plan.supplierName, "K.R.C. AUTO PART CO.,LTD.");
+  assert.equal(plan.revision, 5);
+  assert.equal(plan.period, "2026-10");
+  assert.equal(plan.rows.filter((r) => r.section === "parts").length, 169);
+  assert.equal(plan.rows.filter((r) => r.section === "cu").length, 4);
+  assert.equal(plan.dates.length, 31);
+  assert.deepEqual(plan.forecastMonths, ["2026-11", "2026-12", "2027-01"]);
+  assert.equal(plan.rows.filter((r) => r.section === "parts").reduce((sum, row) => sum + scheduleTotal(row, plan.period), 0), 812610);
+  assert.ok(plan.warnings.some((w) => w.includes("ต่างจากผลรวมรายวัน")));
+});
+
 test("rejects empty files and unsupported layouts", async () => {
   const book = new ExcelJS.Workbook();
   book.addWorksheet("Other").getCell("A1").value = "Wrong file";

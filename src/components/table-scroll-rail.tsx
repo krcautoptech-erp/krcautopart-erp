@@ -100,7 +100,7 @@ export function TableScrollRail() {
 
   if (!rail) return null;
   return <div className="table-scroll-rail" style={{ left: rail.left, bottom: `calc(${rail.bottom}px + env(safe-area-inset-bottom))`, width: rail.width, "--rail-thumb": `${rail.thumb}px` } as React.CSSProperties}>
-    <style>{`${rail.selector}::-webkit-scrollbar:horizontal{height:0}${!rail.vertical ? `${rail.selector}{scrollbar-width:none}` : ""}`}</style>
+    <style>{`${rail.selector}{scrollbar-width:${rail.vertical ? "auto" : "none"}}${rail.selector}::-webkit-scrollbar{height:0}@supports not selector(::-webkit-scrollbar){${rail.selector}{scrollbar-width:none}}`}</style>
     <input aria-label="เลื่อนตารางซ้าย–ขวา" type="range" min={0} max={rail.max} step={1} value={rail.value}
       onPointerDown={() => { dragging.current = true; }}
       onPointerUp={() => { dragging.current = false; }}
