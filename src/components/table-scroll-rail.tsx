@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { selectTableRail, tableRailGeometry } from "@/lib/table-scroll-rail";
 
-type Rail = { target: HTMLElement; selector: string; vertical: boolean; left: number; top: number; bottom: number; width: number; max: number; value: number; thumb: number };
+type Rail = { target: HTMLElement; selector: string; vertical: boolean; left: number; top: number; footerHeight: number; height: number; width: number; max: number; value: number; thumb: number };
 
 /** A real control, independent of iPadOS's auto-hiding native scrollbars. */
 export function TableScrollRail() {
@@ -18,6 +18,7 @@ export function TableScrollRail() {
       frame = 0;
       const viewport = window.visualViewport;
       const bottom = (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0);
+      const height = window.matchMedia("(pointer: coarse)").matches ? 44 : 28;
       let footerHeight = 0;
       const scope = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')).filter((node) => node.getBoundingClientRect().height > 0).at(-1) ?? document.querySelector("main");
       const candidates: Rail[] = [];
@@ -30,7 +31,7 @@ export function TableScrollRail() {
         while (node && node !== document.body) {
           if (/(auto|scroll)/.test(getComputedStyle(node).overflowX) && node.scrollWidth > node.clientWidth + 1) {
             const rect = node.getBoundingClientRect();
-            const geometry = tableRailGeometry(rect, window.innerWidth, bottom, node.clientWidth, node.scrollWidth, node === active);
+            const geometry = tableRailGeometry(rect, window.innerWidth, bottom - footerHeight, node.clientWidth, node.scrollWidth, node === active, height);
             if (geometry) {
               // A stylesheet replaces the rail without mutating React-owned DOM during hydration.
               const path: string[] = [];
@@ -38,7 +39,7 @@ export function TableScrollRail() {
                 const index = element.parentElement ? Array.from(element.parentElement.children).indexOf(element) + 1 : 1;
                 path.unshift(`${element.tagName.toLowerCase()}:nth-child(${index})`);
               }
-              candidates.push({ target: node, selector: path.join(" > "), vertical: node.scrollHeight > node.clientHeight + 1, ...geometry, bottom: 8 + footerHeight, value: node.scrollLeft });
+              candidates.push({ target: node, selector: path.join(" > "), vertical: node.scrollHeight > node.clientHeight + 1, ...geometry, footerHeight, height, value: node.scrollLeft });
             }
             break;
           }
@@ -60,7 +61,8 @@ export function TableScrollRail() {
     const resize = new ResizeObserver(schedule);
     resize.observe(document.body);
     const syncScroll = (event: Event) => {
-      if (event.target !== active || dragging.current) return;
+      if (event.target !== active) { schedule(); return; }
+      if (dragging.current) return;
       const value = active?.scrollLeft ?? 0;
       setRail((previous) => previous && previous.value !== value ? { ...previous, value } : previous);
     };
@@ -99,7 +101,7 @@ export function TableScrollRail() {
   }, []);
 
   if (!rail) return null;
-  return <div className="table-scroll-rail" style={{ left: rail.left, bottom: `calc(${rail.bottom}px + env(safe-area-inset-bottom))`, width: rail.width, "--rail-thumb": `${rail.thumb}px` } as React.CSSProperties}>
+  return <div className="table-scroll-rail" style={{ left: rail.left, top: `min(${rail.top}px, calc(100% - ${rail.height + 8 + rail.footerHeight}px - env(safe-area-inset-bottom)))`, height: rail.height, width: rail.width, "--rail-thumb": `${rail.thumb}px` } as React.CSSProperties}>
     <style>{`${rail.selector}{scrollbar-width:${rail.vertical ? "auto" : "none"}}${rail.selector}::-webkit-scrollbar{height:0}@supports not selector(::-webkit-scrollbar){${rail.selector}{scrollbar-width:none}}`}</style>
     <input aria-label="เลื่อนตารางซ้าย–ขวา" type="range" min={0} max={rail.max} step={1} value={rail.value}
       onPointerDown={() => { dragging.current = true; }}

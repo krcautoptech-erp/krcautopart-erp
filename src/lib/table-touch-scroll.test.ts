@@ -122,3 +122,17 @@ test("touch control keeps pinch zoom available and stops coasting when the scrol
   assert.equal(f.frames.size, 0);
   f.detach();
 });
+
+test("a flick continues after release rather than stopping at the last finger position", () => {
+  const f = fixture();
+  f.touch("touchstart", 200, 200, 0);
+  f.touch("touchmove", 160, 202, 16);
+  f.touch("touchmove", 120, 203, 32);
+  const releasedAt = f.element.scrollLeft;
+  f.touch("touchend", 0, 0, 36, 0);
+  for (let i = 0; i < 20; i++) f.tick();
+  assert.ok(f.element.scrollLeft > releasedAt + 200);
+  assert.equal(f.element.scrollTop, 120);
+  assert.equal(f.frames.size, 1);
+  f.detach();
+});

@@ -53,10 +53,10 @@ export function attachTableTouchScroll(element: HTMLElement) {
     const coast = (time: number) => {
       frame = 0;
       if (!element.isConnected) return;
-      const elapsed = Math.min(40, Math.max(0, time - previousTime));
+      const elapsed = Math.min(40, Math.max(1, time - previousTime));
       previousTime = time;
       const distance = moveLeft(element.scrollLeft + velocity * elapsed);
-      velocity *= Math.exp(-elapsed / 220);
+      velocity *= Math.exp(-elapsed / 500);
       if (Math.abs(velocity) >= 0.02 && distance !== 0) frame = view.requestAnimationFrame(coast);
     };
     if (Math.abs(velocity) >= 0.02) frame = view.requestAnimationFrame(coast);

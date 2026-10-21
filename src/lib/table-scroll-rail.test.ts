@@ -19,10 +19,21 @@ test("active rail remains available when its table scrolls vertically out of vie
   assert.equal(tableRailGeometry({ ...rect, top: -800, bottom: -100 }, 1080, 780, 800, 1600, true)?.max, 800);
   assert.equal(tableRailGeometry({ ...rect, width: 0 }, 1080, 780, 800, 1600, true), null);
 });
-test("vertical scrolling never moves rail from viewport bottom to table bottom", () => {
-  for (const bottom of [1200, 800, 780, 600, 500, 110]) {
+test("rail stays at the viewport bottom while the table extends below the screen", () => {
+  for (const bottom of [1200, 800, 780]) {
     assert.equal(tableRailGeometry({ ...rect, top: 50, bottom }, 1080, 780, 800, 900)?.top, 744);
   }
+});
+
+test("rail follows the visible table edge instead of covering pagination", () => {
+  for (const bottom of [700, 600, 500, 110]) {
+    assert.equal(tableRailGeometry({ ...rect, top: 50, bottom }, 1080, 780, 800, 900)?.top, bottom - 14);
+  }
+});
+
+test("touch-sized rail respects table edge and the usable viewport above fixed footers", () => {
+  assert.equal(tableRailGeometry({ ...rect, bottom: 500 }, 1080, 780, 800, 900, false, 44)?.top, 478);
+  assert.equal(tableRailGeometry(rect, 1080, 720, 800, 900, false, 44)?.top, 668);
 });
 test("no rail for nonoverflowing, hidden, offscreen or clipped tables", () => {
   assert.equal(tableRailGeometry(rect, 1080, 780, 800, 800), null);
