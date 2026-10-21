@@ -11,7 +11,7 @@ import { useHasPermission } from "@/components/permission-context";
 import { StatusBadge } from "@/components/status-badge";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { attachTableTouchScroll } from "@/lib/table-touch-scroll";
-import { scheduleTotal, type DeliverySchedule, type ScheduleArchive } from "@/lib/delivery-schedules";
+import { filterScheduleRows, scheduleTotal, type DeliverySchedule, type ScheduleArchive } from "@/lib/delivery-schedules";
 import styles from "./schedule-workspace.module.css";
 
 type Customer = { id: number; customer_name: string };
@@ -98,6 +98,9 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const [search, setSearch] = useState("");
   const [section, setSection] = useState("parts");
   const [forecast, setForecast] = useState(false);
+  const [withDeliveries, setWithDeliveries] = useState(false);
+  const [withForecast, setWithForecast] = useState(false);
+  const [sort, setSort] = useState("source");
   const [columns, setColumns] = useState(false);
   const [pack, setPack] = useState(true);
   const [page, setPage] = useState(1);
@@ -140,7 +143,9 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const currentFamily = archives.filter((a) => a.customer_id === selected?.customer_id && a.period === selected?.period && a.supplier_code === selected?.supplier_code);
   const periods = [...new Set(archives.map((a) => a.period))];
   const archiveCustomers = [...new Map(archives.map((a) => [a.customer_id, a.customer_name])).entries()];
-  const rows = (payload?.rows ?? []).filter((r) => r.section === section && `${r.partNumber} ${r.name} ${r.erpCode} ${r.direction}`.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim()));
+  const rows = filterScheduleRows(payload?.rows ?? [], { period: payload?.period ?? "", section, search, withDeliveries, withForecast, sort });
+  const activeFilters = Number(section !== "parts") + Number(withDeliveries) + Number(withForecast) + Number(sort !== "source");
+  const clearFilters = () => { setSearch(""); setSection("parts"); setWithDeliveries(false); setWithForecast(false); setSort("source"); setForecast(false); setPage(1); };
   const safePage = Math.min(page, Math.max(1, Math.ceil(rows.length / pageSize)));
   const visible = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const dates = payload?.dates ?? [];
@@ -151,7 +156,7 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
     if (tab !== "table" || (mobile && mode !== "table") || !payload) return;
     const scroller = matrixRef.current?.querySelector<HTMLElement>(".erp-data-table-scroll");
     if (scroller) return attachTableTouchScroll(scroller);
-  }, [mobile, tab, mode, payload, safePage, search, section]);
+  }, [mobile, tab, mode, payload, safePage, search, section, withDeliveries, withForecast, sort]);
   const monthSelect = (className = "") => <ListFilterSelect label="เดือนแผนส่งมอบ" className={`${styles.compactSelect} ${className}`} value={selected?.period ?? ""} disabled={!archives.length} onChange={(value) => {
     const next = archives.find((a) => a.period === value && a.customer_id === selected?.customer_id) ?? archives.find((a) => a.period === value);
     if (next) choose(next.id);
@@ -160,7 +165,13 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
   const customerSelect = () => <ListFilterSelect label="ลูกค้า" className={styles.compactSelect} value={selected ? String(selected.customer_id) : ""} disabled={!selected} onChange={(value) => { const next = archives.find((a) => a.customer_id === Number(value) && a.period === selected?.period) ?? archives.find((a) => a.customer_id === Number(value)); if (next) choose(next.id); }}>
     {!selected && <option value="">เลือกลูกค้า</option>}{archiveCustomers.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</ListFilterSelect>;
   const searchField = <ListSearchField placeholder="ค้นหาด้วย Part No. หรือชื่อสินค้า" value={search} onChange={(s) => { setSearch(s); setPage(1); }} />;
+  const deliveryFilters = <>
+    <label className={styles.deliveryCheck}><input type="checkbox" checked={withDeliveries} onChange={(e) => { setWithDeliveries(e.target.checked); setPage(1); }} /><span>เฉพาะรายการที่มียอดส่งมอบเดือนนี้<small>ยอดรวมเดือนมากกว่า 0 ไม่รวม Forecast</small></span></label>
+    <label className={styles.check}><input type="checkbox" checked={withForecast} onChange={(e) => { setWithForecast(e.target.checked); setPage(1); }} />เฉพาะรายการที่มี Forecast</label>
+    <ListFilterSelect label="เรียงตาม" value={sort} onChange={(value) => { setSort(value); setPage(1); }}><option value="source">ลำดับในไฟล์</option><option value="quantity">ยอดส่งมอบมาก → น้อย</option><option value="part">Part No.</option></ListFilterSelect>
+  </>;
   const filterFields = <>
+    {deliveryFilters}
     <div className={styles.filterField}><span>ลูกค้า</span>{customerSelect()}</div>
     <ListFilterSelect label="กลุ่มข้อมูล" value={section} onChange={(value) => { setSection(value); setPage(1); }}><option value="parts">ชิ้นส่วน</option><option value="cu">CU — รับเข้า / ส่งกลับ</option></ListFilterSelect>
     <label className={styles.check}><input type="checkbox" checked={forecast} onChange={(e) => setForecast(e.target.checked)} />แสดง Forecast</label>
@@ -187,22 +198,24 @@ export function ScheduleWorkspace({ archives, initialPayload, initialError, cust
     </> : <>
       <ListFilterToolbar className={styles.desktopFilters}>
         {searchField}<div className={styles.filterField}><span>เดือน</span>{monthSelect()}</div><div className={styles.filterField}><span>ลูกค้า</span>{customerSelect()}</div><div className={styles.filterField}><span>Revision</span>{revisionSelect()}</div>
-        <div className={styles.columnPicker}><ListFilterButton aria-expanded={columns} icon={<Settings2 size={16} />} onClick={() => setColumns(!columns)}>เลือกคอลัมน์</ListFilterButton>{columns && <div>
+        <div className={styles.columnPicker}><ListFilterButton aria-expanded={columns} icon={<Settings2 size={16} />} onClick={() => setColumns(!columns)}>ตัวกรอง / คอลัมน์{activeFilters ? ` (${activeFilters})` : ""}</ListFilterButton>{columns && <div>
+          {deliveryFilters}
           <label className={styles.check}><input type="checkbox" checked={pack} onChange={(e) => setPack(e.target.checked)} />หน่วย / ถุง / กล่อง / STD/JOB</label>
           <ListFilterSelect label="กลุ่มข้อมูล" value={section} onChange={(value) => { setSection(value); setPage(1); }}><option value="parts">ชิ้นส่วน</option><option value="cu">CU — รับเข้า / ส่งกลับ</option></ListFilterSelect>
+          <ListFilterButton onClick={clearFilters}>ล้างค่า</ListFilterButton>
         </div>}</div>
         <label className={styles.check} title={forecastMonths.map((m) => month(m, true)).join(" / ")}><input type="checkbox" checked={forecast} onChange={(e) => setForecast(e.target.checked)} />แสดง Forecast</label>
       </ListFilterToolbar>
-      <div className={styles.mobileToolbar}><MobileListFilters search={searchField} onClear={() => { setSearch(""); setSection("parts"); setForecast(false); setPage(1); }} activeCount={Number(section !== "parts") + Number(forecast)}>{filterFields}</MobileListFilters><div className={styles.mode}><button aria-pressed={mode === "table"} onClick={() => chooseMode("table")}>ตาราง</button><button aria-pressed={mode === "list"} onClick={() => chooseMode("list")}>รายการ</button></div></div>
+      <div className={styles.mobileToolbar}><MobileListFilters search={searchField} onClear={clearFilters} activeCount={activeFilters} resultLabel={`แสดง ${number(rows.length)} รายการ`}>{filterFields}</MobileListFilters><div className={styles.mode}><button aria-pressed={mode === "table"} onClick={() => chooseMode("table")}>ตาราง</button><button aria-pressed={mode === "list"} onClick={() => chooseMode("list")}>รายการ</button></div></div>
       {section === "cu" && <p className={styles.notice}>CU — แสดงของรับเข้าและส่งกลับตามต้นฉบับ แยกจากยอดส่งมอบชิ้นส่วน</p>}
       {!payload && selected && !error ? <p role="status" className={styles.loading}>กำลังโหลดข้อมูล…</p> : <>
         <div ref={matrixRef} className={`${styles.matrixWrap} ${!dates.length ? styles.emptyMatrixWrap : ""} ${mode === "list" ? styles.mobileHidden : ""}`}>
           <DataTableFrame><DataTable className={`${styles.matrix} ${!dates.length ? styles.emptyMatrix : ""} ${forecast ? styles.withForecast : ""}`} style={{ "--desktop-width": `${(pack ? 612 : 356) + dates.length * 44 + (forecast ? forecastMonths.length * 88 : 0)}px`, "--mobile-width": `${220 + dates.length * 40 + (forecast ? forecastMonths.length * 88 : 0)}px` } as React.CSSProperties}>
             <colgroup><col className={styles.indexCol} /><col className={styles.identityCol} />{pack && <><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /><col className={styles.packCol} /></>}{dates.length ? dates.map((d) => <col className={styles.dayCol} key={d} />) : <col className={styles.emptyDateCol} />}<col className={styles.totalCol} />{forecast && forecastMonths.map((m) => <col className={styles.forecastCol} key={m} />)}</colgroup>
-            <thead>{dates.length ? <><tr className={styles.monthHeader}><th rowSpan={2} className={styles.index}>ลำดับ</th><th rowSpan={2} className={styles.identity}>Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>{pack && <><th rowSpan={2} className={styles.pack}>หน่วย</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อถุง</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อกล่อง</th><th rowSpan={2} className={styles.pack}>STD/JOB</th></>}<th colSpan={Math.max(1, dates.length)} className={styles.monthTitle}>{selected ? `${month(selected.period)} (จำนวนส่งมอบรายวัน)` : "กำหนดส่งรายวัน"}</th><th rowSpan={2} className={styles.total}>รวม<br />{selected ? `(${month(selected.period, true)})` : "เดือน"}</th>{forecast && <th colSpan={forecastMonths.length} className={styles.forecastTitle}>Forecast</th>}</tr>
+            <thead>{dates.length ? <><tr className={styles.monthHeader}><th rowSpan={2} className={styles.index}>{mobile ? "#" : "ลำดับ"}</th><th rowSpan={2} className={styles.identity}>Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>{pack && <><th rowSpan={2} className={styles.pack}>หน่วย</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อถุง</th><th rowSpan={2} className={styles.pack}>จำนวน<br />ต่อกล่อง</th><th rowSpan={2} className={styles.pack}>STD/JOB</th></>}<th colSpan={Math.max(1, dates.length)} className={styles.monthTitle}>{selected ? `${month(selected.period)} (จำนวนส่งมอบรายวัน)` : "กำหนดส่งรายวัน"}</th><th rowSpan={2} className={styles.total}>รวม<br />{selected ? `(${month(selected.period, true)})` : "เดือน"}</th>{forecast && <th colSpan={forecastMonths.length} className={styles.forecastTitle}>Forecast</th>}</tr>
               <tr>{dates.map((d) => <th key={d} className={`${styles.date} ${date(d).getUTCDay() === 0 ? styles.sunday : ""} ${!d.startsWith(payload?.period ?? "") ? styles.outside : ""}`} title={day(d)}>{d.slice(8)}<small>{weekdays[date(d).getUTCDay()]}</small></th>)}{forecast && forecastMonths.map((m) => <th className={styles.forecastCell} key={m}>{month(m, true)}</th>)}</tr>
             </> : <tr>
-              <th className={styles.index} scope="col">ลำดับ</th><th className={styles.identity} scope="col">Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>
+              <th className={styles.index} scope="col">{mobile ? "#" : "ลำดับ"}</th><th className={styles.identity} scope="col">Part No. / ชื่อสินค้า<small>รหัสสินค้า (ERP)</small></th>
               {pack && <><th className={styles.pack} scope="col">หน่วย</th><th className={styles.pack} scope="col">จำนวน<br />ต่อถุง</th><th className={styles.pack} scope="col">จำนวน<br />ต่อกล่อง</th><th className={styles.pack} scope="col">STD/JOB</th></>}
               <th className={styles.emptyDaily} scope="col">กำหนดส่งรายวัน</th><th className={styles.total} scope="col">รวมเดือน</th>
             </tr>}</thead>

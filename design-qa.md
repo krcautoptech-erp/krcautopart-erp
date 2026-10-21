@@ -55,3 +55,19 @@ Scope: the selected eight-item A5 landscape mockup, rendered from the production
 - Authenticated GR preview/print/export could not be exercised: the KRC app on port 3000 requires login, and port 3001 currently serves another project. User login was requested without requesting credentials.
 - Physical printer output and unusually large uploaded company logos were not tested on hardware.
 - A4 retains its existing layout; this change implements the selected A5 mockup only.
+
+
+## Delivery schedule mobile filters — 2026-10-21
+
+final result: passed
+
+- Source: C:/Users/Riew/.codex/generated_images/01a15f23-9dd7-7481-80f9-ef0a078177cd/exec-85b22ed9-ea81-4388-901e-2c573dd092f2.png (854 x 1844 raster, nominal 390 x 844 CSS mobile concept).
+- User override: preserve shared controls and table; sheet content-sized with maximum half the viewport, footer buttons remain outside its scrollable body.
+- Implementation: docs/delivery-schedules/mobile-filter-half-sheet.jpg and mobile-filter-final.jpg (390 x 844 requested CSS viewport; native screenshot density). Source and implementation were opened together in the same comparison input, each scaled proportionally to mobile width; scoped comparison covers filter toolbar and open sheet rather than generated source data.
+- Typography: existing Sarabun family, shared label hierarchy, readable secondary monthly-total explanation. Filter badge has explicit 10px type and tabular numeral in a fixed 18 x 18 box.
+- Spacing/layout: shared rounded top corners and existing grid controls retained. Open sheet 422px at viewport height 844, 300px at height 600. Footer bottom equals viewport bottom in both states. Only inner body scrolls, measured scrollTop 73px while footer stayed at 844px.
+- Colors/assets: existing ERP semantic red, white surface, Lucide icons; no new raster assets. Mobile daily/forecast table headers use white surface as requested; cell geometry retained.
+- Content: monthly deliveries > 0 exclude forecasts and out-of-month deliveries. Real October archive reduces 169 parts to 72. Forecast-only and day-window filters remain independent; source order, quantity descending and Part No. sorting available. Real count replaces illustrative 84.
+- Interaction checks: open/close, clear, monthly filter, sort, inner-body scroll, uncompressed badge, desktop entry visibility; shared /items sheet also content-sizes to 257px with footer at 844px. No captured browser console errors. 13 relevant tests, lint and production build passed.
+- Comparison history: source near-full-screen shared sheet and clipped numeric badge were corrected; post-fix screenshots and geometry above confirm the requested changes. Extra existing customer/section/display-Forecast controls remain below the fold inside the scrollable body to preserve functionality.
+- Residual gap: no repeat physical iPad/Safari or Android touch run in this change; responsive browser checks do not certify hardware scroll physics.

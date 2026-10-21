@@ -42,6 +42,16 @@
 }
 
 .workspace .matrixWrap :global(.erp-data-table-scroll){overscroll-behavior:none}
+.deliveryCheck{display:flex!important;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4}
+.deliveryCheck input{width:16px;height:16px;flex-shrink:0;margin-top:3px;accent-color:var(--color-primary)}
+.deliveryCheck small{display:block;font-size:11px;color:var(--schedule-muted);margin-top:3px}
+@media(max-width:767px){
+ .mobileToolbar :global(button[aria-label="เปิดตัวกรอง"]){overflow:visible}
+ .mobileToolbar :global(.mobile-filter-label){display:none}
+ .mobileToolbar :global(.mobile-filter-sheet) .deliveryCheck{display:flex;gap:8px}
+ .mobileToolbar :global(.mobile-filter-sheet) input[type=checkbox]{padding:0;flex-shrink:0}
+ .workspace .matrix thead th,.workspace .matrix .forecastCell,.workspace .matrix .forecastTitle{background:var(--color-surface-container-lowest)!important}
+}
 .workspace .matrixWrap :global(.erp-data-table-scroll){scrollbar-width:none!important}
 .workspace .matrixWrap :global(.erp-data-table-scroll)::-webkit-scrollbar{width:0!important;height:0!important}
 @media(max-width:767px){.workspace .matrix tfoot td{font-size:10px!important;padding:5px 3px!important;white-space:normal;overflow-wrap:anywhere;line-height:1.25!important}.workspace .matrix tfoot .total{font-size:12px!important}}

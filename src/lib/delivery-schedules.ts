@@ -44,6 +44,20 @@ export function scheduleTotal(row: Pick<ScheduleRow, "deliveries">, period: stri
   return Object.entries(row.deliveries).reduce((sum, [date, quantity]) => sum + (date.startsWith(`${period}-`) ? quantity : 0), 0);
 }
 
+export function filterScheduleRows(rows: ScheduleRow[], filters: {
+  period: string; section: string; search: string; withDeliveries: boolean; withForecast: boolean;
+  sort: string;
+}) {
+  const query = filters.search.trim().toLocaleLowerCase();
+  const result = rows.filter((row) => row.section === filters.section
+    && `${row.partNumber} ${row.name} ${row.erpCode} ${row.direction}`.toLocaleLowerCase().includes(query)
+    && (!filters.withDeliveries || scheduleTotal(row, filters.period) > 0)
+    && (!filters.withForecast || Object.values(row.forecasts).some((quantity) => (quantity ?? 0) > 0)));
+  if (filters.sort === "quantity") result.sort((a, b) => scheduleTotal(b, filters.period) - scheduleTotal(a, filters.period) || a.sourceRow - b.sourceRow);
+  if (filters.sort === "part") result.sort((a, b) => a.partNumber.localeCompare(b.partNumber, "en", { numeric: true }) || a.sourceRow - b.sourceRow);
+  return result;
+}
+
 function cached(value: CellValue): CellValue {
   if (value && typeof value === "object" && ("formula" in value || "sharedFormula" in value)) return value.result ?? null;
   return value;

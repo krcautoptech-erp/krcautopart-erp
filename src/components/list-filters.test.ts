@@ -70,8 +70,8 @@ test("mobile filter submits its linked report form before the sheet closes", asy
 test("central mobile filters fit phone and tablet viewports safely", async () => {
   const source = await readFile("src/components/list-filters.tsx", "utf8");
 
-  assert.match(source, /h-\[calc\(100dvh-8px\)\]/);
-  assert.match(source, /sm:max-h-\[88dvh\]/);
+  assert.match(source, /max-h-\[60dvh\]/);
+  assert.match(source, /min-h-0 flex-1 overscroll-contain overflow-y-auto/);
   assert.match(source, /env\(safe-area-inset-bottom\)/);
   assert.match(source, /lockBodyScroll\(\)/);
   assert.match(source, /unlockBodyScroll\(\)/);

@@ -2,7 +2,21 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ExcelJS from "exceljs";
-import { parseDeliverySchedule, scheduleTotal } from "./delivery-schedules.ts";
+import { filterScheduleRows, parseDeliverySchedule, scheduleTotal, type ScheduleRow } from "./delivery-schedules.ts";
+
+test("schedule filters distinguish monthly deliveries and forecasts without mutating source rows", () => {
+  const make = (sourceRow: number, deliveries: Record<string, number>, forecasts: Record<string, number | null> = {}): ScheduleRow => ({ sourceRow, section: "parts", partNumber: `P${sourceRow}`, name: "BRKT", erpCode: "ERP", direction: "", unit: "ชิ้น", bag: null, box: null, job: null, deliveries, forecasts });
+  const rows = [make(1, { "2026-11-01": 99 }, { "2026-11": 20 }), make(2, { "2026-10-02": 10 }), make(3, { "2026-10-20": 30 }, { "2026-11": 0 }), make(4, { "2026-10-02": 0 }, { "2026-11": null })];
+  const filters = { period: "2026-10", section: "parts", search: "", withDeliveries: true, withForecast: false, sort: "source" };
+  const ids = (options = {}) => filterScheduleRows(rows, { ...filters, ...options }).map((row) => row.sourceRow);
+  assert.deepEqual(ids(), [2, 3]);
+  assert.deepEqual(ids({ sort: "quantity" }), [3, 2]);
+  assert.deepEqual(ids({ withDeliveries: false, withForecast: true }), [1]);
+  assert.deepEqual(ids({ withForecast: true }), []);
+  assert.deepEqual(ids({ withDeliveries: false, search: " p3 " }), [3]);
+  assert.deepEqual(ids({ withDeliveries: false }), [1, 2, 3, 4]);
+  assert.deepEqual(rows.map((row) => row.sourceRow), [1, 2, 3, 4]);
+});
 
 test("archives the actual KRC workbook without treating forecasts or CU as sales", async () => {
   const bytes = await readFile(new URL("../../docs/KRCA001_Apr 2026 Rev.2.xlsx", import.meta.url));
