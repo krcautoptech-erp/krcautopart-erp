@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { Pencil, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
@@ -263,8 +265,8 @@ function TH({ children, className = "" }: { children: ReactNode; className?: str
 function TD({ children, className = "" }: { children: ReactNode; className?: string }) { return <td className={`px-3 text-[14px] font-medium ${className}`}>{children}</td>; }
 function ErrorBox({ children }: { children: ReactNode }) { return <div className="border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-bold text-red-700">{children}</div>; }
 
-function exportWarehouses(items: WarehouseRecord[]) { const rows = [["ลำดับ", "รหัสคลัง", "ชื่อคลัง", "ประเภทคลัง", "สาขา/ที่ตั้ง", "ผู้รับผิดชอบ", "สถานะ"], ...items.map((item, index) => [index + 1, item.code, item.name, item.typeName, item.locationName, item.responsibleName ?? "", item.status === "active" ? "ใช้งาน" : "ระงับใช้งาน"])]; const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n")}`; const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `warehouses-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url); }
-function exportWarehouseTypes(items: WarehouseTypeRecord[]) { const rows = [["ลำดับ", "รหัสประเภท", "ชื่อประเภทคลัง", "จำนวนคลัง", "สถานะ"], ...items.map((item, index) => [index + 1, item.code, item.name, item.warehouseCount, item.status === "active" ? "ใช้งาน" : "ระงับใช้งาน"])]; const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n")}`; const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = `warehouse-types-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url); }
+function exportWarehouses(items: WarehouseRecord[]) { const rows = [["ลำดับ", "รหัสคลัง", "ชื่อคลัง", "ประเภทคลัง", "สาขา/ที่ตั้ง", "ผู้รับผิดชอบ", "สถานะ"], ...items.map((item, index) => [index + 1, item.code, item.name, item.typeName, item.locationName, item.responsibleName ?? "", item.status === "active" ? "ใช้งาน" : "ระงับใช้งาน"])]; const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n")}`; void exportSpreadsheetFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), `warehouses-${new Date().toISOString().slice(0, 10)}.csv`); }
+function exportWarehouseTypes(items: WarehouseTypeRecord[]) { const rows = [["ลำดับ", "รหัสประเภท", "ชื่อประเภทคลัง", "จำนวนคลัง", "สถานะ"], ...items.map((item, index) => [index + 1, item.code, item.name, item.warehouseCount, item.status === "active" ? "ใช้งาน" : "ระงับใช้งาน"])]; const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n")}`; void exportSpreadsheetFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), `warehouse-types-${new Date().toISOString().slice(0, 10)}.csv`); }
 
 const controlClass = "h-10 w-full rounded-[4px] border border-outline-variant bg-surface-container-lowest px-3 text-[14px] font-medium text-on-surface outline-none placeholder:text-secondary focus:border-primary dark:[color-scheme:dark]";
 const outlineButton = "inline-flex h-10 items-center justify-center gap-2 rounded-[4px] border border-outline-variant bg-surface-container-lowest px-4 text-[14px] font-bold text-on-surface hover:bg-surface-container-low disabled:opacity-50";

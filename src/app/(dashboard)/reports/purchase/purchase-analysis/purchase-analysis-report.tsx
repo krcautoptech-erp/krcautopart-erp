@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetUrl } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -139,7 +141,7 @@ export function PurchaseAnalysisReport({ documentContext, initialData, printedBy
       </MobileListFilters>
     </form>
     <MobileReportActions actions={[
-      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => window.open(exportUrl, "_self") },
+      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => void exportSpreadsheetUrl(exportUrl) },
       { disabled: pending, icon: <Printer size={18} />, label: "พิมพ์ A4", onSelect: preparePrint },
     ]} />
     <div className="hidden min-[901px]:block">
@@ -151,7 +153,7 @@ export function PurchaseAnalysisReport({ documentContext, initialData, printedBy
         <ListSearchField className={styles.query} onChange={setQuery} placeholder={view === "vendor" ? "ค้นหารหัสผู้ขาย ชื่อผู้ขาย..." : "ค้นหารหัสสินค้า ชื่อสินค้า..."} value={query} />
         <p className={styles.mobileSummary}>ผู้ขาย: {optionVendor} · กลุ่มสินค้า: {optionGroup}</p>
         <ListFilterButton className={styles.searchButton} disabled={pending} icon={<Search size={18} />} tone="primary" type="submit">ค้นหา</ListFilterButton>
-        <ExcelExportButton className={styles.export} disabled={pending} onClick={() => window.open(exportUrl, "_self")} />
+        <ExcelExportButton className={styles.export} disabled={pending} onClick={() => void exportSpreadsheetUrl(exportUrl)} />
         <button className={styles.printButton} disabled={pending} onClick={preparePrint} type="button"><Printer size={18} />พิมพ์ A4</button>
       </div>
     </form>

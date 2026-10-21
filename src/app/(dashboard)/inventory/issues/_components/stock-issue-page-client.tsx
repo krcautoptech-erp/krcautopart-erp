@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import "./stock-issue-theme.css";
@@ -154,11 +156,7 @@ export function StockIssuePageClient({ documentContext, initialIssues, initialQu
       ["เลขที่ใบเบิก", "วันที่", "ผู้เบิก", "แผนก", "งาน / จุดใช้งาน", "คลังจ่าย", "จำนวนรายการ", "สถานะ"],
       ...filtered.map((item) => [item.issueNumber, item.documentDate, item.requesterName, item.departmentName, item.workPoint, item.warehouseName, item.itemCount, item.status === "posted" ? "บันทึกแล้ว" : "ยกเลิก"]),
     ];
-    const blob = new Blob(["\uFEFF" + rows.map((row) => row.join("\t")).join("\n")], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url; link.download = `Stock_Issues_${startDate}_${endDate}.xls`; link.click();
-    URL.revokeObjectURL(url);
+    void exportExcelFile(rows, `Stock_Issues_${startDate}_${endDate}.xlsx`, "ใบเบิก");
   };
 
   return (
@@ -232,7 +230,7 @@ export function StockIssuePageClient({ documentContext, initialIssues, initialQu
         .issue-filter select, .issue-filter input { min-width: 0; flex: 1; background: transparent; font-size: 12px; font-weight: 600; outline: none; }
         .issue-page-shell input, .issue-page-shell select, .issue-list-frame, .issue-mobile-card { border-color: var(--issue-border); }
         .issue-list-frame .erp-data-table th, .issue-list-frame .erp-data-table td { border-color: var(--issue-border); padding-left: 10px; padding-right: 10px; }
-        .issue-page-actions > button:not(:first-child) { border-color: var(--issue-border) !important; color: var(--color-on-surface) !important; }
+        .issue-page-actions > button:not(.bg-primary) { border-color: var(--issue-border) !important; color: var(--color-on-surface) !important; }
       `}</style>
     </section>
   );

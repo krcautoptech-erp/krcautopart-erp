@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import React, { useEffect, useMemo, useState, useTransition } from "react";
@@ -165,19 +167,8 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function escapeSpreadsheetXml(value: string | number) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
-function buildExcelWorksheet(
-  config: CategoryConfig,
-  records: VendorSettingRecord[],
-) {
+function buildExcelWorksheet(config: CategoryConfig, records: VendorSettingRecord[]) {
   const headers = [
     config.codeLabel,
     config.nameLabel,
@@ -186,17 +177,8 @@ function buildExcelWorksheet(
     "สถานะ",
     "วันที่แก้ไขล่าสุด",
   ];
-
-  const headerRow = headers
-    .map(
-      (header) =>
-        `<Cell ss:StyleID="header"><Data ss:Type="String">${escapeSpreadsheetXml(header)}</Data></Cell>`,
-    )
-    .join("");
-
-  const bodyRows = records
-    .map((record) => {
-      const values: Array<string | number> = [
+  return [headers, ...records.map((record) => {
+    const values: Array<string | number> = [
         record.code,
         record.name,
         ...(config.extraField
@@ -210,35 +192,8 @@ function buildExcelWorksheet(
         record.status,
         formatDate(record.updated_at),
       ];
-
-      return `<Row>${values
-        .map((value) => {
-          const type = typeof value === "number" ? "Number" : "String";
-          return `<Cell><Data ss:Type="${type}">${escapeSpreadsheetXml(value)}</Data></Cell>`;
-        })
-        .join("")}</Row>`;
-    })
-    .join("");
-
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="header">
-      <Font ss:Bold="1"/>
-      <Interior ss:Color="#F3F3F3" ss:Pattern="Solid"/>
-    </Style>
-  </Styles>
-  <Worksheet ss:Name="${escapeSpreadsheetXml(config.title)}">
-    <Table>
-      <Row>${headerRow}</Row>
-      ${bodyRows}
-    </Table>
-  </Worksheet>
-</Workbook>`;
+    return values;
+  })];
 }
 
 function VendorSettingsActionButton({
@@ -460,20 +415,8 @@ export function VendorSettingsPanel({
   };
 
   const handleExportExcel = () => {
-    const workbookXml = buildExcelWorksheet(config, filteredRecords);
-    const blob = new Blob(["\uFEFF", workbookXml], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
     const date = new Date().toISOString().slice(0, 10);
-
-    link.href = url;
-    link.download = `krc-partner-settings-${activeCategory}-${date}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    void exportExcelFile(buildExcelWorksheet(config, filteredRecords), `krc-partner-settings-${activeCategory}-${date}.xlsx`, config.title);
   };
 
   return (

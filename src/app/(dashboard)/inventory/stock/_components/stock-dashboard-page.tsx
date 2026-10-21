@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { lockBodyScroll, unlockBodyScroll } from "@/lib/use-body-scroll-lock";
 
 import { useListState, useListScroll } from "@/lib/use-list-state";
@@ -27,7 +29,6 @@ import { Pagination } from "@/components/pagination";
 import { StatusBadge } from "@/components/status-badge";
 import { ExcelExportButton } from "@/components/excel-export-button";
 import { ItemTypeBadge } from "@/components/item-type-badge";
-import { toast } from "@/components/toast";
 import { ListFilterSelect, ListFilterToolbar, ListSearchField, MobileListFilters } from "@/components/list-filters";
 
 type Props = {
@@ -335,9 +336,7 @@ export function StockDashboardPage({ initialRows, initialSummary = EMPTY_SUMMARY
   const exportRows = () => {
     const includeCost = summary.canExportCost;
     const lines = [["รหัสสินค้า", "ชื่อสินค้า", "ประเภท", "คลัง", "คงเหลือ", "หน่วย", ...(includeCost ? ["มูลค่าคงเหลือ (FIFO)"] : [])], ...rows.map((row) => [row.itemCode, row.itemName, row.typeCode, row.warehouseName, row.onHandQty, row.unitSymbol, ...(includeCost ? [row.inventoryValue ?? ""] : [])])];
-    const blob = new Blob(["\uFEFF" + lines.map((line) => line.join("\t")).join("\n")], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "Central_Inventory.xls"; anchor.click(); URL.revokeObjectURL(url);
-    toast.success("ส่งออกรายงานสต็อกสินค้าเรียบร้อย");
+    void exportExcelFile(lines, "Central_Inventory.xlsx", "สต็อก");
   };
   const filterFields = <>
     <ListFilterSelect label="ประเภทสินค้า" value={typeId} onChange={(value) => { setTypeId(value); setPage(1); }}><option value="">ทั้งหมด</option>{itemTypes.map((type) => <option key={type.id} value={type.id}>{type.code} · {type.name}</option>)}</ListFilterSelect>

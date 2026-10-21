@@ -80,12 +80,8 @@ export async function readSpreadsheet(file: File): Promise<SpreadsheetData> {
   return { headers, rows };
 }
 
-export function downloadCsvTemplate(filename: string, rows: string[][]) {
+export async function downloadCsvTemplate(filename: string, rows: string[][]) {
   const csv = rows.map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n");
-  const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  const { exportSpreadsheetFile } = await import("./spreadsheet-delivery");
+  await exportSpreadsheetFile(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), filename);
 }

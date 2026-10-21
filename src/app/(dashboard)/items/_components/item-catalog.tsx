@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetFile } from "@/lib/spreadsheet-delivery";
+
 import { useRememberedListUrl } from "@/lib/use-list-state";
 
 import {
@@ -479,13 +481,7 @@ export function ItemCatalog({
         )
         .join("\r\n")}`;
 
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(
-        new Blob([csv], { type: "text/csv;charset=utf-8" }),
-      );
-      link.download = `item-master-${type.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      await exportSpreadsheetFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), `item-master-${type.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err) {
       console.error("Export error:", err);
     } finally {

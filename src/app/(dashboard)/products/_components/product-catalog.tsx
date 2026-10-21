@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import React, {
@@ -145,54 +147,9 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function escapeSpreadsheetXml(value: string | number) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 function buildExcelWorksheet(products: ProductRecord[]) {
-  const headerRow = EXPORT_COLUMNS.map(
-    (column) =>
-      `<Cell ss:StyleID="header"><Data ss:Type="String">${escapeSpreadsheetXml(column.header)}</Data></Cell>`,
-  ).join("");
-
-  const bodyRows = products
-    .map((product, index) => {
-      const cells = EXPORT_COLUMNS.map((column) => {
-        const rawValue = column.value(product, index);
-        const cellType =
-          typeof rawValue === "number" && Number.isFinite(rawValue) ? "Number" : "String";
-
-        return `<Cell><Data ss:Type="${cellType}">${escapeSpreadsheetXml(rawValue)}</Data></Cell>`;
-      }).join("");
-
-      return `<Row>${cells}</Row>`;
-    })
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="header">
-      <Font ss:Bold="1"/>
-      <Interior ss:Color="#F3F4F6" ss:Pattern="Solid"/>
-    </Style>
-  </Styles>
-  <Worksheet ss:Name="Product Master">
-    <Table>
-      <Row>${headerRow}</Row>
-      ${bodyRows}
-    </Table>
-  </Worksheet>
-</Workbook>`;
+  return [EXPORT_COLUMNS.map((column) => column.header), ...products.map((product, index) => EXPORT_COLUMNS.map((column) => column.value(product, index)))];
 }
 
 function buildImportTemplateWorksheet() {
@@ -215,39 +172,7 @@ function buildImportTemplateWorksheet() {
       "ใช้งาน",
     ],
   ];
-
-  const rows = sampleRows
-    .map(
-      (row, rowIndex) =>
-        `<Row>${row
-          .map(
-            (cell) =>
-              `<Cell${rowIndex === 0 ? ' ss:StyleID="header"' : ""}><Data ss:Type="String">${escapeSpreadsheetXml(
-                cell,
-              )}</Data></Cell>`,
-          )
-          .join("")}</Row>`,
-    )
-    .join("");
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="header">
-      <Font ss:Bold="1"/>
-      <Interior ss:Color="#F3F4F6" ss:Pattern="Solid"/>
-    </Style>
-  </Styles>
-  <Worksheet ss:Name="Product Import Template">
-    <Table>
-      ${rows}
-    </Table>
-  </Worksheet>
-</Workbook>`;
+  return sampleRows;
 }
 
 function mapImportRow(headers: string[], rowValues: string[]) {
@@ -459,36 +384,12 @@ export function ProductCatalog({
       return;
     }
 
-    const workbookXml = buildExcelWorksheet(filteredProducts);
-    const blob = new Blob(["\uFEFF", workbookXml], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
     const date = new Date().toISOString().slice(0, 10);
-
-    link.href = url;
-    link.download = `krc-product-master-${date}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    void exportExcelFile(buildExcelWorksheet(filteredProducts), `krc-product-master-${date}.xlsx`, "Product Master");
   };
 
   const handleDownloadTemplate = () => {
-    const workbookXml = buildImportTemplateWorksheet();
-    const blob = new Blob(["\uFEFF", workbookXml], {
-      type: "application/vnd.ms-excel;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = "krc-product-import-template.xls";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    void exportExcelFile(buildImportTemplateWorksheet(), "krc-product-import-template.xlsx", "Product Import Template");
   };
 
   const handleImportButtonClick = () => {

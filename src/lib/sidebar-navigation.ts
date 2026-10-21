@@ -66,6 +66,7 @@ export const SIDEBAR_NAV_GROUPS: readonly SidebarNavGroup[] = [
     title: "งานหลัก",
     icon: "workspaces",
     items: [
+      { label: "แผนส่งมอบลูกค้า", href: "/delivery-schedules", icon: "local_shipping", permission: "delivery_schedule.view" },
       { label: "การผลิต", href: "#", icon: "factory" },
     ],
   },

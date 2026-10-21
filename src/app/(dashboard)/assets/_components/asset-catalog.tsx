@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -191,13 +193,7 @@ export function AssetCatalog({
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Asset_Register_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void exportSpreadsheetFile(blob, `Asset_Register_${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   return (

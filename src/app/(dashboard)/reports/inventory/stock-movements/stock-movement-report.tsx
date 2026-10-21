@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetUrl } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -143,7 +145,7 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
       </MobileListFilters>
     </form>}
     <MobileReportActions actions={[
-      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => window.open(exportUrl, "_self") },
+      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => void exportSpreadsheetUrl(exportUrl) },
       { disabled: pending, icon: <Printer size={18} />, label: "พิมพ์ A4", onSelect: preparePrint },
     ]} />
     <div className="hidden min-[901px]:block">
@@ -153,7 +155,7 @@ export function StockMovementReport({ documentContext, initialData, printedBy = 
       {!card && <><ListFilterSelect label={view === "summary" ? "กลุ่มสินค้า" : "ประเภทการเคลื่อนไหว"} onChange={(value) => view === "summary" ? setItemTypeId(value ? Number(value) : null) : setMovementKind(value || null)} value={String(view === "summary" ? itemTypeId ?? "" : movementKind ?? "")}><option value="">ทั้งหมด</option>{view === "summary" ? data.options.groups.map((row) => <option key={row.id} value={row.id}>{row.name}</option>) : Object.entries(kinds).map(([id, meta]) => <option key={id} value={id}>{meta.label}</option>)}</ListFilterSelect><ListSearchField className={styles.searchField} onChange={setQuery} placeholder="รหัส ชื่อสินค้า หรือเลขที่เอกสาร..." value={query} /></>}
       <ListFilterButton className={styles.searchButton} disabled={pending} icon={<Search size={19} />} tone="primary" type="submit">ค้นหา</ListFilterButton>
       <button className={styles.printButton} disabled={pending} onClick={preparePrint} type="button"><Printer size={17} />พิมพ์ A4</button>
-      <ExcelExportButton className={styles.export} disabled={pending} onClick={() => window.open(exportUrl, "_self")} />
+      <ExcelExportButton className={styles.export} disabled={pending} onClick={() => void exportSpreadsheetUrl(exportUrl)} />
     </form>
     </div>
     {card && <div className={styles.stockStrip}><div className={styles.stockIdentity}><h2>{card.summary.item_code}</h2><p>{card.summary.item_name}</p><dl className={styles.stockMeta}><div><dt>คลังสินค้า</dt><dd>{card.summary.warehouse_name}</dd></div><div><dt>หน่วยนับ</dt><dd>{card.summary.unit_name}</dd></div></dl></div><div className={styles.totals}>{[["ยอดยกมา", card.summary.opening, ""], ["รับเข้า", card.summary.received, styles.positive], ["จ่ายออก", card.summary.issued, styles.negative], ["ปรับปรุง", card.summary.adjustment, ""], ["คงเหลือปลายงวด", card.summary.closing, ""]].map(([label, value, cls]) => <div key={label}><span>{label}</span><b className={String(cls)}>{number(Number(value))}</b></div>)}</div></div>}

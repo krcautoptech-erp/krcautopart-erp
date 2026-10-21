@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetFile } from "@/lib/spreadsheet-delivery";
+
 import { useRememberedListUrl } from "@/lib/use-list-state";
 
 import { useMemo, useState } from "react";
@@ -149,12 +151,7 @@ export function AuditLogManagement({ filters, initialData }: { filters: AuditLog
       ...initialData.records.map((record) => [dateTime(record.occurredAt), record.actorName, record.actorRole ?? "", displayModule(record), record.actionLabel, entityText(record), outcomeText(record.outcome), record.requestId ?? ""]),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    void exportSpreadsheetFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), `audit-log-${new Date().toISOString().slice(0, 10)}.csv`);
     setExporting(false);
   }
 

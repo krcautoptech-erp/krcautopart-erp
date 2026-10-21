@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { toast } from "@/components/toast";
 
 import { useListState, useListScroll } from "@/lib/use-list-state";
@@ -99,13 +101,7 @@ export function PendingReceiptsReport({
   const exportExcel = () => {
     const header = ["สถานะ", "กำหนดส่ง", "เลขที่ PO", "ผู้ขาย", "รหัสสินค้า", "ชื่อสินค้า", "ค้างรับ", "สั่งซื้อ", "รับแล้ว", "มูลค่าค้างรับ", "ผู้ซื้อ", "ผู้ติดต่อผู้ขาย", "รับล่าสุด"];
     const body = filtered.map((row) => [pendingReceiptStatus(row.deliveryDate, row.sentAt, todayIso).label, row.deliveryDate, row.poNumber, row.vendorName, row.itemCode, row.itemName, row.pendingQty, row.orderedQty, row.receivedQty, row.pendingAmount, row.buyerName, `${row.contactName} ${row.contactPhone}`, row.lastReceiptDate ?? "-"]);
-    const blob = new Blob([`\uFEFF${[header, ...body].map((line) => line.join("\t")).join("\n")}`], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `pending-receipts-${todayIso}.xls`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    void exportExcelFile([header, ...body], `pending-receipts-${todayIso}.xlsx`, "สินค้าค้างรับ");
   };
 
   return (

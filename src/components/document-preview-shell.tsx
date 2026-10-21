@@ -18,7 +18,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -87,6 +86,7 @@ export function DocumentPreviewShell({
   const canvasRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const extraActionsRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
   const dragRef = useRef<{ left: number; top: number; x: number; y: number } | null>(null);
@@ -132,12 +132,15 @@ export function DocumentPreviewShell({
   const fitToPage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const mobile = window.matchMedia("(max-width: 760px)").matches;
-    const horizontalPadding = mobile ? 24 : 56;
-    const verticalPadding = mobile ? 40 : 48;
+    const canvasStyle = window.getComputedStyle(canvas);
+    const horizontalPadding = parseFloat(canvasStyle.paddingLeft) + parseFloat(canvasStyle.paddingRight);
+    const actions = extraActionsRef.current;
+    const actionsStyle = actions ? window.getComputedStyle(actions) : null;
+    const actionsHeight = actions && actionsStyle ? actions.offsetHeight + parseFloat(actionsStyle.marginTop) + parseFloat(actionsStyle.marginBottom) : 0;
+    const verticalPadding = parseFloat(canvasStyle.paddingTop) + parseFloat(canvasStyle.paddingBottom) + actionsHeight;
     const widthScale = (canvas.clientWidth - horizontalPadding) / (paperWidthMm * PX_PER_MM);
     const heightScale = (canvas.clientHeight - verticalPadding) / (paperHeightMm * PX_PER_MM);
-    const nextScale = clampScale(Math.min(widthScale, heightScale, mobile ? 0.72 : 0.82));
+    const nextScale = Math.max(0.01, Math.min(widthScale, heightScale, 1));
     fitScaleRef.current = nextScale;
     scaleRef.current = nextScale;
     setScale(nextScale);
@@ -326,7 +329,7 @@ export function DocumentPreviewShell({
         onPointerUp={releasePointer}
         ref={canvasRef}
       >
-        {extraActions ? <div className={styles.extraActions}>{extraActions}</div> : null}
+        {extraActions ? <div className={styles.extraActions} ref={extraActionsRef}>{extraActions}</div> : null}
         {statusDescription ? <p className={styles.srOnly}>{statusDescription}</p> : null}
         <div
           className={styles.documentStage}
@@ -336,10 +339,7 @@ export function DocumentPreviewShell({
           <div
             className={styles.documentContent}
             ref={contentRef}
-            style={{
-              "--preview-scale": scale,
-              transform: `scale(${scale})`,
-            } as CSSProperties}
+            style={{ zoom: scale }}
           >
             {children}
           </div>

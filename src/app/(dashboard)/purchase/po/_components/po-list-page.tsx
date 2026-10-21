@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { useRememberedListUrl } from "@/lib/use-list-state";
 
 import {
@@ -168,20 +170,7 @@ export function PoListPage({
       row.grand_total,
       PURCHASE_ORDER_STATUS_META[row.status].label,
     ]);
-    const content = [header, ...body]
-      .map((line) =>
-        line.map((cell) => String(cell).replaceAll("\t", " ")).join("\t"),
-      )
-      .join("\n");
-    const blob = new Blob([`\uFEFF${content}`], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `purchase-orders-${documentDate}.xls`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    void exportExcelFile([header, ...body], `purchase-orders-${documentDate}.xlsx`, "ใบสั่งซื้อ");
   };
 
   const openPrintPreview = async (purchaseOrderId: number) => {

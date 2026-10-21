@@ -1,5 +1,7 @@
 "use client";
 
+import { exportExcelFile } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { useMemo, useState, useTransition, type ComponentProps } from "react";
@@ -142,9 +144,7 @@ export function ReceiptListPage({ initialGoodsReceipts, pendingPOs, warehouses, 
       ["ลำดับ", "เลขที่ GR", "อ้างอิง PO", "ผู้ขาย", "เอกสารผู้ขาย", "วันที่เอกสาร", "วันที่รับ", "จำนวนรายการ", "สถานะ"],
       ...rows.map((item, index) => [index + 1, item.gr_number, item.po_number, item.vendor_name, `${supplierDocumentTypeLabel(item.supplier_document_type)} ${item.delivery_note_no ?? "-"}`, item.supplier_document_date ?? "-", item.document_date, item.item_count ?? "-", GR_STATUS_META[item.status]?.label ?? item.status]),
     ];
-    const blob = new Blob(["\uFEFF" + lines.map((line) => line.join("\t")).join("\n")], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url; link.download = `Goods_Receipts_${startDate}_${endDate}.xls`; link.click(); URL.revokeObjectURL(url);
+    void exportExcelFile(lines, `Goods_Receipts_${startDate}_${endDate}.xlsx`, "ใบรับสินค้า");
   };
 
   return (

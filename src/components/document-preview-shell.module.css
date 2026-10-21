@@ -174,17 +174,7 @@
 }
 
 .documentContent {
-  --preview-hairline: max(0.2mm, calc(1px / var(--preview-scale)));
   width: max-content;
-  transform-origin: top left;
-  will-change: transform;
-}
-
-/* Keep document rules visible after fitting a full physical page on a phone. */
-.documentContent :global(table),
-.documentContent :global(th),
-.documentContent :global(td) {
-  border-width: var(--preview-hairline) !important;
 }
 
 .extraActions {
@@ -332,8 +322,5 @@
   .rail, .header, .mobileDock, .extraActions { display: none !important; }
   .canvas { display: contents !important; }
   .documentStage { display: block !important; width: auto !important; height: auto !important; margin: 0 !important; }
-  .documentContent { width: auto !important; transform: none !important; }
-  .documentContent :global(table),
-  .documentContent :global(th),
-  .documentContent :global(td) { border-width: revert !important; }
+  .documentContent { width: auto !important; zoom: 1 !important; }
 }

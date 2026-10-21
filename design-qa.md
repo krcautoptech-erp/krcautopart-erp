@@ -1,48 +1,57 @@
-# Opening stock design QA — 2026-10-08
+# GR A5 compact layout — design QA
 
-Status: PASS for selected import-editor visual changes; BLOCKED for full database workflow sign-off. Not claimed pixel-perfect.
-
-Reference: codex-clipboard-54d5d16d-06ae-48e3-92df-346eb725568f.png, preserving actual KRC shell.
-
-Latest comparison: desktop 1488×1056, mobile 390×844. Evidence: output/opening-stock/desktop.jpg and mobile.jpg. Reused DataTable/DataTableFrame and Pagination. White inputs, neutral borders, Excel artwork, separate uploaded-file strip, four summary metrics, compact table and error text under status. Desktop footer no longer overlays pagination. Mobile uses expandable product/Lot groups; document width and scroll width both 384px.
-
-Intentional differences: real company navigation remains unchanged; migration safety warning and disabled save/review remain visible. Real calculation gives 2 products and ฿18,150.00 for fixture rows, not the inconsistent example figures. Mobile sticky footer appears midway in full-page capture because it follows the viewport; normal scrolling retains access to the rows.
-
-Verified authenticated editor at localhost:3001, desktop 1440×1000 and mobile 390×844: shared item picker, full product names, grouped expandable Lots, adding multiple Lots, validation, calculated value, draft recovery. Mobile document width 384px equals scroll width 384px (no horizontal overflow).
-
-Database used by app has not applied opening-stock migration. Save/review/post/reversal screens and populated register drawer cannot be verified against real application data yet. No production stock was changed for visual testing.
-
-Remaining: compare populated register and immutable document states against references after user runs migration; real mobile keyboard and touch verification. Local fixture SQL checks are separate functional evidence, not visual sign-off.
-
-## Shared mobile document forms — selected option 3
-
-Source visual truth: `C:/Users/Riew/AppData/Local/Temp/codex-clipboard-a95b184f-6bef-41df-a740-78e4d0402272.png` (853 × 1844 pixels).
-
-Implementation evidence directory: `C:/Users/Riew/.codex/visualizations/2026/10/01/01a0f862-909b-70e1-a8ec-bccccfbbf050/`.
-Captures: `pr-shared-mobile.jpg`, `pr-shared-desktop.jpg`, `po-shared-mobile.jpg`, `gr-shared-mobile.jpg`, `issue-shared-mobile.jpg`, `pr-shared-dark.jpg`, `adjustment-shared-dark.jpg`.
-
-Comparison: source and final PR capture opened together in one tool result. Requested viewport 393 × 852, observed CSS viewport 394 × 852; implementation JPEG is 393 × 852 pixels (verified from the saved file), approximately 1 screenshot pixel per CSS pixel. Source evaluated at 853/393 = 2.17 source pixels per comparison pixel. Same light theme, item tab, RM002 quantity 1 and RM003 quantity 3, with the same second-row note. The source is a design image, not evidence of a particular browser font or native select implementation.
-
-Fidelity surfaces:
-
-- Typography: retained KRC font and brand assets; full product names, 16px entry text and inputs, strong code hierarchy. No ellipsis in product names. Existing draft-safety status is intentionally retained above tabs.
-- Rhythm: thin neutral-bordered white cards, paired quantity/unit, label above full-width note, compact tools, collapsible purpose and fixed footer. Small differences in logo/card padding are P3 refinements; no blocking layout drift in the selected pattern.
-- Colors: white light-mode fields/cards, filled red type badge, red actions and active tab. Dark-mode surfaces use system tokens with lighter red action labels.
-- Assets: reused actual company logo and installed icon library; no approximated brand artwork.
-- Copy/content: actual product codes/names and database units retained. Units are read-only rather than the mock's dropdown because these document lines do not authorize unit changes. GR Lot controls, PO source-PR references, costs, permissions and issue allocations remain intact.
-
-Comparison history:
-
-1. Initial PO browser capture showed desktop 52px cell heights producing excess gaps and overlapping price hints (P2). Removed those heights only on mobile. Revised `po-shared-mobile.jpg` shows correctly sized header, reference, paired values and unobscured price hints.
-2. Initial GR capture showed a squeezed unit field and redundant desktop instructions (P2). Stretched the paired unit field and hid the desktop-only instruction heading on mobile. Revised `gr-shared-mobile.jpg` preserves both quantity and Lot controls.
-3. Initial issue capture showed disabled print/next actions using footer space (P2). Hid unavailable actions only on mobile and paired cancel/save; revised issue capture verifies the footer.
-4. Initial adjustment dark capture showed a desktop width rule leaving side gaps (P2). Added a mobile-specific width override; revised dark capture verifies the full-width surface.
-5. Final PR reference/capture comparison: white cards, paired fields, note label on its own line, tools and footer verified after fixes.
-
-Interactions checked: PR multi-item selection, quantity/note edits, tab round-trip retaining quantity 3, search filtering, purpose expansion, local draft recovery; PO approved-PR selection and four-item addition; GR PO selection and review; issue warehouse context and item selection; adjustment document/items tabs and empty state. Desktop PR remains a table and hides mobile navigation. At 320px, browser assertions verified no document/button overflow and retained quantity. Browser console error list was empty at the final PR capture.
-
-Code verification: 320 tests passed, TypeScript check and targeted ESLint passed. No document submitted, no stock posted or deleted during UI checks.
-
-Remaining: physical iPhone/iPad keyboard, Safari touch/scroll calibration and committed-document transaction tests were not run. Other non-document forms have not been forcibly converted; the reusable components are available to their appropriate callers. Prior opening-stock database blockers above are unchanged.
+## A4 selected compact ledger implementation
 
 final result: passed
+
+This additional pass covers the production JSX/CSS layout fixture, not authenticated end-to-end PDF delivery.
+
+- Source: `C:/Users/Riew/.codex/generated_images/01a0f862-909b-70e1-a8ec-bccccfbbf050/exec-3b92745e-d1c8-41d2-93c9-656a8b3fb5a4.png` (1054 × 1492 pixels).
+- Implementation: `C:/Users/Riew/AppData/Local/Temp/gr-receipt-layout-A4.png` (1588 × 2246 pixels; 794 × 1123 CSS viewport, density 2).
+- Full-view comparison: `C:/Users/Riew/AppData/Local/Temp/gr-a4-comparison.png`; both pages normalized to 620 × 877 without distorting their aspect ratios.
+- State: A4 portrait, 24 populated lines, supplier/reference information, totals, notes and signatures.
+- Typography: reused Sarabun/system document fonts, 9.5pt item descriptions, bold black received quantities, smaller Lot details. Inspected the full-size capture for Thai marks, table labels and signature readability.
+- Layout: shared company header retained; borderless supplier/references with a divider, compact gray grid with red top rule, totals, unboxed notes/signatures. First comparison prompted increasing row height to 7.15mm and body size to 9.5pt; the revised comparison shows all 24 rows inside the page.
+- Colors: white paper, black content, gray grid, restrained red rules/headings. No red received-quantity emphasis remains.
+- Assets: original logo and shared header/footer, not a generated replacement. Header proportions intentionally follow existing configurable company branding, so raster mockup glyphs/logo size are not claimed pixel-identical.
+- Content: source mockup total 276 is arithmetically inconsistent with its quantities; the fixture correctly shows 272 for the displayed lines. Real totals always derive from receipt data, separately by unit.
+- Behavior: 49 lines paginate 24 / 24 / 1; long names trigger reduced page capacity for both A4 and A5 rather than clipping. Per the subsequent user request, A4 pads missing items with blank rows to preserve the full-height grid; totals count only actual items.
+- Remaining gap: authenticated web preview, delivered PDF and physical printer output have not been verified in this pass. No database or receipt data was modified.
+- Verification: full lint and final production build passed. Final full test rerun passed 348/348; the preceding concurrent build/test run timed out in the two browser-layout tests at their 15-second limit. No timeout limit was increased to hide this intermittent load-related failure.
+
+---
+
+final result: passed
+
+Scope: the selected eight-item A5 landscape mockup, rendered from the production GR article JSX and stylesheet with representative document data. This result covers layout fixtures, not an authenticated end-to-end GR workflow.
+
+## Visual evidence
+
+- Selected source: `C:/Users/Riew/.codex/generated_images/01a0f862-909b-70e1-a8ec-bccccfbbf050/exec-72f87d8e-fa2b-4449-a986-78d2e7ca06fe.png`
+- Implementation screenshot: `C:/Users/Riew/AppData/Local/Temp/gr-a5-eight-rows.png`
+- Side-by-side comparison: `C:/Users/Riew/AppData/Local/Temp/gr-a5-comparison.png`
+- Both images were compared at a common 760 × 536 display area. The source raster has a slightly different aspect ratio from physical A5; exact pixel equality is not asserted.
+- The browser fixture also visibly showed all eight rows, totals, notes and signatures inside the 210 × 148 mm page.
+
+## Review and fixes
+
+- Preserved the shared company header/footer instead of reproducing the raster header as a separate component.
+- Matched the borderless supplier/reference sections, six-column grid, black received quantities, total row and three unboxed signatures.
+- Corrected the collapsed table's top border so the selected red rule remains visible.
+- Retained the shared footer's print timestamp. Actual system font metrics, configurable company branding and real data may differ from the generated mockup.
+- No remaining overlap or clipping was observed in the representative eight-row screen/print fixture.
+
+## Behavioral evidence
+
+- Seventeen items paginate as 8 / 8 / 1 without losing items.
+- Long descriptions trigger the production font-ready measurement and reduce capacity instead of hiding text.
+- Quantity totals keep different units separate.
+- If even one item cannot fit A5, printing/export is blocked with a request to use A4.
+- All 344 automated tests passed; the four focused GR tests passed again after the final border adjustment.
+- Full ESLint and production build passed after the final CSS-only border adjustment.
+
+## Limits
+
+- Authenticated GR preview/print/export could not be exercised: the KRC app on port 3000 requires login, and port 3001 currently serves another project. User login was requested without requesting credentials.
+- Physical printer output and unusually large uploaded company logos were not tested on hardware.
+- A4 retains its existing layout; this change implements the selected A5 mockup only.

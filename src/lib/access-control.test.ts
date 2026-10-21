@@ -13,6 +13,7 @@ test("covers every current secured page with its view permission", () => {
     ["/items", "items.view"],
     ["/assets", "assets.view"],
     ["/partners", "partners.view"],
+    ["/delivery-schedules", "delivery_schedule.view"],
     ["/purchase/pr", "pr.view"],
     ["/purchase/po", "po.view"],
     ["/purchase/receipts", "inventory.view"],

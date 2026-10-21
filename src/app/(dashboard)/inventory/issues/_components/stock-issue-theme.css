@@ -171,7 +171,7 @@
 .issue-request-print-root { box-sizing: border-box; width: 210mm; height: 148mm; margin: 0 auto; background: #fff; padding: 5mm; box-shadow: 0 8px 30px rgba(0,0,0,.3); transform-origin: top center; }
 .issue-request-page { box-sizing: border-box; display: flex; flex-direction: column; width: 200mm; height: 138mm; overflow: hidden; background: white; padding: 0 4mm 2mm; color: #111; font-family: var(--font-inter), "Sarabun", "Noto Sans Thai", sans-serif; }
 .issue-request-page.issue-request-exporting { box-shadow: none; }
-.issue-request-page > header { --document-logo-width: 28mm !important; height: 18mm !important; max-height: none; column-gap: 2mm !important; overflow: visible; border-bottom-width: .5mm !important; padding-bottom: 1.5mm !important; }
+.issue-request-page > header { --document-logo-width: 28mm !important; flex: none; min-height: 0; height: 18mm !important; max-height: none; column-gap: 2mm !important; overflow: visible; border-bottom-width: .5mm !important; padding-bottom: 1.5mm !important; }
 .issue-request-page > header [class*="__logo"] { max-height: 15mm !important; }
 .issue-request-page > header [class*="__identity"] { gap: .35mm !important; }
 .issue-request-page > header [class*="__identity"] strong { font-size: 9pt !important; line-height: 1.25 !important; }

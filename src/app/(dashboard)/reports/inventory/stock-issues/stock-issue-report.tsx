@@ -1,5 +1,7 @@
 "use client";
 
+import { exportSpreadsheetUrl } from "@/lib/spreadsheet-delivery";
+
 import { useListState, useListScroll } from "@/lib/use-list-state";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -160,7 +162,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
       </MobileListFilters>
     </form>
     <MobileReportActions actions={[
-      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => window.open(exportUrl, "_self") },
+      { disabled: pending, icon: <FileSpreadsheet size={18} />, label: "ส่งออก Excel", onSelect: () => void exportSpreadsheetUrl(exportUrl) },
       { disabled: pending, icon: canSharePdf ? <Share2 size={18} /> : <FileText size={18} />, label: canSharePdf ? "แชร์ PDF" : "บันทึก PDF", onSelect: () => preparePrint(true) },
       { disabled: pending, icon: <Printer size={18} />, label: "พิมพ์ A4", onSelect: () => preparePrint() },
     ]} />
@@ -172,7 +174,7 @@ export function StockIssueReport({ documentContext, initialData, printedBy, toda
       <ListFilterSelect className={styles.status} label="สถานะ" onChange={(value) => setStatus(value as StockIssueReportStatus)} value={status}><option value="all">ทั้งหมด</option><option value="posted">บันทึกแล้ว</option><option value="cancelled">ยกเลิก</option></ListFilterSelect>
       <ListSearchField className={styles.search} onChange={setQuery} placeholder="เลขที่ใบเบิก ชื่อผู้เบิก สินค้า..." value={query} />
       <ListFilterButton className={styles.searchButton} disabled={pending} icon={<Search size={18} />} tone="primary" type="submit">ค้นหา</ListFilterButton>
-      <ExcelExportButton className={styles.exportButton} disabled={pending} onClick={() => window.open(exportUrl, "_self")} />
+      <ExcelExportButton className={styles.exportButton} disabled={pending} onClick={() => void exportSpreadsheetUrl(exportUrl)} />
       <PdfExportButton className={styles.pdfButton} disabled={pending} label="ส่งออก PDF" onClick={() => preparePrint(true)} title="ดาวน์โหลดไฟล์ PDF" />
       <button className={styles.printButton} disabled={pending} onClick={() => preparePrint()} type="button"><Printer size={18} />พิมพ์ A4</button>
     </div></form>
